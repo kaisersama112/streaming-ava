@@ -4,3 +4,5 @@
 /.codebuddy/
 /MANIFEST.in
 /docs/
+**/__pycache__
+/.idea
