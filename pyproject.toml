@@ -1,0 +1,35 @@
+[project]
+name = "streaming-avatarchat-backend"
+version = "0.1.0"
+description = "Backend-first real-time voice assistant service skeleton"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0,<1.0.0",
+  "openai>=2.26.0,<3.0",
+  "uvicorn>=0.30.0,<1.0.0",
+  "pyyaml>=6.0.0,<7.0.0",
+  "sympy>=1.13.0,<2.0.0",
+  "lark>=1.2.0,<2.0.0",
+  "huggingface-hub (<1.0)",
+  "pydantic (==2.12.2)",
+  "streamlit (>=1.56.0,<2.0.0)",
+  "antlr4-python3-runtime (==4.11)",
+  "openai-agents (>=0.14.7,<0.15.0)",
+]
+
+[project.optional-dependencies]
+tts = [
+  "cosyvoice",
+  "dashscope>=1.24.5",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ava*", "config*"]

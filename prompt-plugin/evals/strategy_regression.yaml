@@ -1,0 +1,471 @@
+cases:
+  - id: edu_lesson_recap
+    branch: education
+    user_text: 上课讲到这里我听不懂，帮我总结一下重点
+    session_scene: education
+    expected_strategy_id: education.explain.general.explain_careful
+    expected_policy_id: lesson.contextual_explainer
+    expected_module: explain
+    notes: 课中总结应命中 lesson recap
+
+  - id: edu_study_plan
+    branch: education
+    user_text: 帮我安排今晚数学和英语的复习计划
+    session_scene: education
+    expected_strategy_id: education.qa.general.explain_careful
+
+  - id: edu_review_drill
+    branch: education
+    user_text: 考考我这一章，不要直接给答案
+    session_scene: education
+    expected_strategy_id: education.drill.general.direct
+    expected_policy_id: practice.exercise_generation
+    expected_module: drill
+    expected_frame:
+      primary_action: generate_exercise_set
+      object_scope: exercise_set
+
+  - id: edu_error_review
+    branch: education
+    user_text: 这道错题我到底错在哪
+    session_scene: education
+    expected_strategy_id: education.explain.general.explain_careful
+    expected_policy_id: practice.error_diagnosis
+    expected_module: explain
+    expected_frame:
+      primary_action: diagnose_error
+      object_scope: knowledge_gap
+
+  - id: edu_self_qa
+    branch: education
+    user_text: 什么是二次函数顶点式
+    session_scene: education
+    expected_strategy_id: education.explain.math.explain_careful
+    expected_policy_id: concept.intuition_first
+    expected_module: explain
+    expected_frame:
+      primary_scenario: concept
+      primary_action: explain_concept
+      object_scope: concept_unit
+
+  - id: edu_math_method_first
+    branch: education
+    user_text: 这道题不会做，你带我讲一下
+    session_scene: education
+    education_state:
+      subject: 数学
+    expected_strategy_id: education.solve.math.hint_only
+    expected_policy_id: practice.guided_solving
+
+  - id: edu_math_hint_only
+    branch: education
+    user_text: 我做到这里了，后面不会，下一步怎么做
+    session_scene: education
+    education_state:
+      subject: 数学
+    expected_strategy_id: education.solve.math.hint_only
+
+  - id: edu_math_confirm
+    branch: education
+    user_text: 我这样列式对吗
+    session_scene: education
+    education_state:
+      subject: 数学
+    expected_strategy_id: education.check.math.direct
+    expected_policy_id: practice.solution_check
+    expected_module: check
+    expected_frame:
+      primary_action: check_solution
+
+  - id: edu_english_oral
+    branch: education
+    user_text: 我怕读错，你帮我听一下
+    session_scene: education
+    education_state:
+      subject: 英语
+    artifacts:
+      - kind: audio
+        name: oral.wav
+        mime_type: audio/wav
+    expected_strategy_id: education.qa.english.explain_careful
+
+  - id: edu_writing_feedback
+    branch: education
+    user_text: 帮我看下这篇作文结构有没有问题
+    session_scene: education
+    expected_strategy_id: education.check.chinese.explain_careful
+    expected_policy_id: practice.solution_check
+    expected_module: check
+    expected_frame:
+      primary_action: check_solution
+      object_scope: student_solution
+
+  - id: edu_physics_experiment
+    branch: education
+    user_text: 为什么这个实验会这样变化
+    session_scene: education
+    education_state:
+      subject: 物理
+    expected_strategy_id: education.qa.physics.explain_careful
+
+  - id: edu_visual_question
+    branch: education
+    user_text: 帮我讲一下这道题
+    session_scene: education
+    artifacts:
+      - kind: image
+        name: problem.png
+        mime_type: image/png
+    expected_strategy_id: education.solve.general.hint_only
+
+  - id: edu_english_visual_question_short_text
+    branch: education
+    user_text: 这个题咋做
+    session_scene: education
+    artifacts:
+      - kind: image
+        name: english_problem.png
+        mime_type: image/png
+        summary: 英语选择题截图，包含题干和 A/B/C/D 四个选项
+    expected_strategy_id: education.solve.english.hint_only
+
+  - id: edu_english_visual_question_should_not_inherit_math
+    branch: education
+    user_text: 这个题咋做
+    session_scene: education
+    education_state:
+      subject: 数学
+      stage: 讲解
+    artifacts:
+      - kind: image
+        name: english_problem.png
+        mime_type: image/png
+        summary: 英语阅读理解截图，题干为英文句子并附四个选项
+    expected_strategy_id: education.solve.english.hint_only
+
+  - id: edu_math_visual_question_short_text
+    branch: education
+    user_text: 这个题咋做
+    session_scene: education
+    artifacts:
+      - kind: image
+        name: math_problem.png
+        mime_type: image/png
+        summary: 数学函数题截图，包含坐标系、函数解析式和求最值问题
+    expected_strategy_id: education.solve.math.hint_only
+
+  - id: edu_math_visual_question_should_not_inherit_english
+    branch: education
+    user_text: 这题怎么做
+    session_scene: education
+    education_state:
+      subject: 英语
+      stage: 讲解
+    artifacts:
+      - kind: image
+        name: math_geometry.png
+        mime_type: image/png
+        summary: 数学几何题截图，包含三角形、角度标注和辅助线
+    expected_strategy_id: education.solve.math.hint_only
+
+  - id: edu_physics_visual_question_short_text
+    branch: education
+    user_text: 这个图怎么分析
+    session_scene: education
+    artifacts:
+      - kind: image
+        name: physics_experiment.png
+        mime_type: image/png
+        summary: 物理实验图截图，包含电路连接、滑动变阻器和电流表示意
+    expected_strategy_id: education.qa.physics.explain_careful
+
+  - id: edu_english_visual_question_option_style
+    branch: education
+    user_text: 选哪个
+    session_scene: education
+    artifacts:
+      - kind: image
+        name: english_option_question.png
+        mime_type: image/png
+        summary: 英语单选题截图，题干为英文句子并附 A. B. C. D. 四个选项
+    expected_strategy_id: education.solve.english.hint_only
+
+  - id: edu_history_visual_question
+    branch: education
+    user_text: 这个题咋做
+    session_scene: education
+    artifacts:
+      - kind: image
+        name: history_problem.png
+        mime_type: image/png
+        summary: 历史选择题截图，题干讨论《左传》的体例，选项含编年体、纪传体、国别体、记事本末体
+    expected_strategy_id: education.solve.history.hint_only
+    expected_subject: history
+    expected_frame:
+      primary_scenario: practice
+      primary_action: solve_current_problem
+      object_scope: whole_problem
+
+  - id: edu_sub_problem_followup
+    branch: education
+    user_text: 第一小问，我都没有做。
+    session_scene: education
+    education_state:
+      subject: 数学
+      previous_strategy_state:
+        previous_branch: education
+        previous_strategy_id: education.solve.math.hint_only
+        previous_policy_id: practice.guided_solving
+        previous_subject: math
+        previous_primary_scenario: practice
+        previous_primary_action: solve_current_problem
+        previous_learning_objects: [problem]
+        previous_object_scope: whole_problem
+        previous_object_continuity: same
+        previous_answer_boundary: hint_first
+    expected_strategy_id: education.solve.math.hint_only
+    expected_frame:
+      primary_action: solve_current_subproblem
+      object_scope: sub_problem
+      question_kind: sub_problem_solving
+
+  - id: edu_new_attachment_breaks_fast_path
+    branch: education
+    user_text: 这个题呢 我做对了吗
+    session_scene: education
+    education_state:
+      subject: 数学
+      previous_strategy_state:
+        previous_branch: education
+        previous_strategy_id: education.solve.math.hint_only
+        previous_policy_id: practice.guided_solving
+        previous_subject: math
+        previous_primary_scenario: practice
+        previous_primary_action: solve_current_problem
+        previous_learning_objects: [problem]
+        previous_object_scope: whole_problem
+        previous_object_continuity: same
+        previous_answer_boundary: hint_first
+    turn_records:
+      - user_text: 这个题咋做
+        multimodal_summary: "用户文本: 这个题咋做"
+        artifacts:
+          - kind: image
+            name: math_problem.png
+            mime_type: image/png
+            summary: 数学函数题截图，包含坐标系、函数解析式和求最值问题
+        assistant_text: 先看函数关系。
+        strategy:
+          branch: education
+          strategy_id: education.solve.math.hint_only
+          policy_id: practice.guided_solving
+          module: solve
+          subject: math
+          style: hint_only
+          analysis:
+            education_turn_frame:
+              primary_scenario: practice
+              learning_objects: [problem]
+              object_scope: whole_problem
+              object_continuity: new
+              primary_action: solve_current_problem
+              secondary_actions: []
+              evidence_sources: [text, image]
+              scenario_policy:
+                preserve_current_scenario: false
+                allow_scene_switch: false
+                answer_boundary: hint_first
+            continuity:
+              object_continuity: new
+    artifacts:
+      - kind: image
+        name: math_answer.png
+        mime_type: image/png
+        summary: 数学极限题学生作答截图，包含演算步骤和最终答案
+    expected_strategy_id: education.check.math.direct
+    expected_policy_id: practice.solution_check
+    expected_module: check
+    expected_continuity:
+      object_continuity: new
+      allow_fast_path: false
+
+  - id: edu_deictic_new_image_should_drop_history
+    branch: education
+    user_text: 这个。
+    session_scene: education
+    education_state:
+      subject: general
+      learning_scenario: practice
+      learning_objects: [problem]
+      object_scope: whole_problem
+      object_continuity: new
+      primary_action: solve_current_problem
+      answer_boundary: hint_first
+      previous_strategy_state:
+        previous_branch: education
+        previous_strategy_id: education.solve.general.hint_only
+        previous_policy_id: practice.guided_solving
+        previous_subject: general
+        previous_primary_scenario: practice
+        previous_primary_action: solve_current_problem
+        previous_learning_objects: [problem]
+        previous_object_scope: whole_problem
+        previous_object_continuity: new
+        previous_answer_boundary: hint_first
+    turn_records:
+      - user_text: 我选对了吗
+        multimodal_summary: "用户文本: 我选对了吗"
+        artifacts:
+          - kind: image
+            name: old_problem.png
+            mime_type: image/png
+            summary: 英语选择题截图，题干为英文句子并附四个选项
+        assistant_text: 你选对了。
+        strategy:
+          branch: education
+          strategy_id: education.solve.general.hint_only
+          policy_id: practice.guided_solving
+          module: solve
+          subject: general
+          style: hint_only
+          analysis:
+            education_turn_frame:
+              primary_scenario: practice
+              learning_objects: [problem]
+              object_scope: whole_problem
+              object_continuity: new
+              primary_action: solve_current_problem
+              secondary_actions: []
+              evidence_sources: [text, image]
+              scenario_policy:
+                preserve_current_scenario: false
+                allow_scene_switch: false
+                answer_boundary: hint_first
+    artifacts:
+      - kind: image
+        name: new_problem.png
+        mime_type: image/png
+        summary: ""
+        metadata:
+          artifact_role: problem_material
+          subject_hint: ""
+          task_hint: ""
+          ocr_text: ""
+          contains_student_work: false
+          contains_lesson_context: false
+          contains_sub_problem: false
+          contains_problem_statement: false
+          problem_count_hint: 0
+    expected_strategy_id: education.solve.general.hint_only
+    expected_frame:
+      object_continuity: new
+      scenario_policy.preserve_current_scenario: false
+    expected_continuity:
+      object_continuity: new
+      artifact_continuity: new
+      allow_fast_path: false
+    expected_analysis:
+      prompt_context_policy.include_recent_history_summary: false
+
+  - id: qa_fact_reason
+    branch: general_qa
+    user_text: 为什么手机会发烫
+    expected_strategy_id: general_qa.reasoned
+
+  - id: qa_fact_short
+    branch: general_qa
+    user_text: 高铁一般提前多久检票
+    expected_strategy_id: general_qa.fact
+
+  - id: qa_howto
+    branch: general_qa
+    user_text: 怎么连接蓝牙耳机
+    expected_strategy_id: general_qa.howto
+
+  - id: qa_troubleshoot
+    branch: general_qa
+    user_text: 蓝牙耳机为什么连不上
+    expected_strategy_id: general_qa.troubleshoot
+
+  - id: qa_compare
+    branch: general_qa
+    user_text: 平板和学习机哪个好
+    expected_strategy_id: general_qa.compare
+
+  - id: qa_multimodal
+    branch: general_qa
+    user_text: 这张图是什么意思
+    artifacts:
+      - kind: image
+        name: chart.png
+        mime_type: image/png
+    expected_strategy_id: general_qa.visual
+
+  - id: qa_confirm
+    branch: general_qa
+    user_text: 我这样理解对吗
+    expected_strategy_id: general_qa.confirm
+
+  - id: chat_smalltalk
+    branch: casual_chat
+    user_text: 你好呀
+    expected_strategy_id: casual_chat.smalltalk
+
+  - id: chat_warm
+    branch: casual_chat
+    user_text: 今天有点累
+    expected_strategy_id: casual_chat.companion
+
+  - id: chat_humor
+    branch: casual_chat
+    user_text: 这题也太离谱了吧
+    expected_strategy_id: casual_chat.humor
+
+  - id: chat_praise
+    branch: casual_chat
+    user_text: 谢谢你，讲得很清楚
+    expected_strategy_id: casual_chat.praise
+
+  - id: chat_backchannel
+    branch: casual_chat
+    user_text: 在吗
+    expected_strategy_id: casual_chat.backchannel
+
+  - id: chat_multimodal
+    branch: casual_chat
+    user_text: 你看看
+    artifacts:
+      - kind: image
+        name: selfie.png
+        mime_type: image/png
+    expected_strategy_id: casual_chat.reaction
+
+  - id: clarify_missing_material
+    branch: clarify
+    user_text: 帮我看看这道题
+    expected_strategy_id: clarify.missing_material
+
+  - id: clarify_missing_reference
+    branch: clarify
+    user_text: 这个我不懂
+    expected_strategy_id: clarify.missing_reference
+
+  - id: clarify_answer_mode
+    branch: clarify
+    user_text: 你讲一下
+    expected_strategy_id: clarify.answer_mode
+
+  - id: clarify_multimodal_focus
+    branch: clarify
+    user_text: 帮我看一下
+    artifacts:
+      - kind: image
+        name: whiteboard.png
+        mime_type: image/png
+    expected_strategy_id: clarify.focus
+
+  - id: clarify_subject
+    branch: clarify
+    user_text: 我这是数学题还是物理实验现象
+    session_scene: general
+    expected_strategy_id: clarify.subject
