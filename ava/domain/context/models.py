@@ -27,5 +27,4 @@ class ContextSnapshot:
     context_profile: str = "full"
     reference_artifacts_inherited: bool = False
     router_artifact_brief: dict[str, Any] = field(default_factory=dict)
-    router_text_brief: dict[str, Any] = field(default_factory=dict)
     router_plan: dict[str, Any] = field(default_factory=dict)

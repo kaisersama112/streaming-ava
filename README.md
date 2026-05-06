@@ -262,7 +262,6 @@ Prompt 根目录为 `prompt-plugin/`。
 
 - `server`
 - `openai_config`
-- `bigmodel_config`
 - `voice_config`
 - `asr_config`
 - `runtime`
@@ -283,7 +282,6 @@ Prompt 根目录为 `prompt-plugin/`。
 - `STREAMING_AVA_OPENAI_API_KEY`
 - `STREAMING_AVA_TTS_API_KEY`
 - `STREAMING_AVA_ASR_API_KEY`
-- `STREAMING_AVA_BIGMODEL_API_KEY`
 
 ---
 

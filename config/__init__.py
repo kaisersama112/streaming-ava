@@ -29,17 +29,6 @@ class OpenAIConfig(BaseModel):
     intent_timeout: int = Field(8, description="意图理解模型超时时间（秒）")
 
 
-class BigModelConfig(BaseModel):
-    api_base: str = Field(
-        "https://open.bigmodel.cn/api/paas/v4",
-        description="BigModel 兼容 OpenAI 的基础 URL",
-    )
-    api_key: str = Field("", description="BigModel 接口密钥")
-    model: str = Field("glm-4.6v-flash", description="BigModel 多模态模型名称")
-    timeout: int = Field(15, description="BigModel 超时时间（秒）")
-    enabled: bool = Field(False, description="是否启用 BigModel 任务解释器慢路径")
-
-
 class VoiceConfig(BaseModel):
     api_base: str = Field(
         "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer",
@@ -163,7 +152,6 @@ class SpeechPostprocessConfig(BaseModel):
 class Config(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     openai_config: OpenAIConfig = Field(default_factory=OpenAIConfig)
-    bigmodel_config: BigModelConfig = Field(default_factory=BigModelConfig)
     voice_config: VoiceConfig = Field(default_factory=VoiceConfig)
     asr_config: ASRConfig = Field(default_factory=ASRConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
@@ -189,7 +177,6 @@ def _apply_env_overrides(cfg: Config) -> None:
     可以避免在 `config/config.yaml` 中明文保存密钥。
     """
     cfg.openai_config.api_key = cfg.openai_config.api_key or os.getenv("STREAMING_AVA_OPENAI_API_KEY", "")
-    cfg.bigmodel_config.api_key = cfg.bigmodel_config.api_key or os.getenv("STREAMING_AVA_BIGMODEL_API_KEY", "")
     cfg.voice_config.api_key = cfg.voice_config.api_key or os.getenv("STREAMING_AVA_TTS_API_KEY", "")
     cfg.asr_config.api_key = cfg.asr_config.api_key or os.getenv("STREAMING_AVA_ASR_API_KEY", "")
 

@@ -5,7 +5,6 @@
 它回答的是：
 
 - 怎么调 OpenAI-compatible LLM
-- 怎么调 GLM 慢路径
 - 怎么调流式 / 非流式 TTS
 - 怎么调 ASR
 - 怎么把音频送进 WebRTC 播放桥
@@ -15,7 +14,6 @@
 
 - `llm/`
   - 主 responder 与 router 的 OpenAI-compatible client
-  - 教育慢路径的 GLM client
 - `tts/`
   - 流式 TTS SDK
   - 非流式 TTS REST 调用
@@ -48,7 +46,6 @@
 ### LLM
 
 - [llm/client.py](/app/streaming-ava/ava/infrastructure/llm/client.py)
-- [llm/bigmodel_client.py](/app/streaming-ava/ava/infrastructure/llm/bigmodel_client.py)
 
 ### TTS
 

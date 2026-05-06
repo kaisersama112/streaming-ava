@@ -9,9 +9,6 @@
 - `voice_chat.py`
   - 单轮对话服务
   - 负责：state、router、turn plan、reply、speech_text、TTS 文件生成
-- `voice_interaction.py`
-  - 语音交互相关应用服务
-  - 主要用于语音侧流程封装与集成
 
 ## 与其他 application 子模块区别
 

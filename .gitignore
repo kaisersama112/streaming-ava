@@ -5,4 +5,8 @@
 /MANIFEST.in
 /docs/
 **/__pycache__
+*.py[cod]
 /.idea
+/state/*.json
+/state/*.jsonl
+!/state/.gitkeep

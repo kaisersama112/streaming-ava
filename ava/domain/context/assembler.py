@@ -186,6 +186,5 @@ def assemble_context(
         context_profile=profile,
         reference_artifacts_inherited=bool(reference_artifacts),
         router_artifact_brief=artifact_brief,
-        router_text_brief={},
         router_plan={},
     )

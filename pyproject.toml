@@ -12,7 +12,6 @@ dependencies = [
   "lark>=1.2.0,<2.0.0",
   "huggingface-hub (<1.0)",
   "pydantic (==2.12.2)",
-  "streamlit (>=1.56.0,<2.0.0)",
   "antlr4-python3-runtime (==4.11)",
   "openai-agents (>=0.14.7,<0.15.0)",
 ]

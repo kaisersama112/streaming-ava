@@ -29,7 +29,6 @@ def _compact_snapshot_trace(snapshot: ContextSnapshot) -> dict[str, object]:
         "artifacts_count": len(getattr(snapshot, "artifacts", ()) or ()),
         "reference_artifacts_count": len(getattr(snapshot, "reference_artifacts", ()) or ()),
         "router_artifact_brief": sanitize_value(getattr(snapshot, "router_artifact_brief", {}) or {}),
-        "router_text_brief": sanitize_value(getattr(snapshot, "router_text_brief", {}) or {}),
         "router_plan": sanitize_value(getattr(snapshot, "router_plan", {}) or {}),
     }
 
@@ -70,7 +69,6 @@ def build_turn_plan(
             snapshot = replace(
                 snapshot,
                 router_artifact_brief=dict(getattr(previous_snapshot, "router_artifact_brief", {}) or {}),
-                router_text_brief=dict(getattr(previous_snapshot, "router_text_brief", {}) or {}),
                 router_plan=dict(getattr(previous_snapshot, "router_plan", {}) or {}),
             )
     strategy = build_strategy_from_model_plan(prompt_center, decision, snapshot)

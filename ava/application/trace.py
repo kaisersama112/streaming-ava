@@ -131,7 +131,6 @@ def sanitize_context_snapshot(snapshot: Any) -> dict[str, Any]:
             [artifact.to_prompt_dict() for artifact in (getattr(snapshot, "reference_artifacts", ()) or ())]
         ),
         "router_artifact_brief": sanitize_value(getattr(snapshot, "router_artifact_brief", {}) or {}),
-        "router_text_brief": sanitize_value(getattr(snapshot, "router_text_brief", {}) or {}),
     }
 
 
