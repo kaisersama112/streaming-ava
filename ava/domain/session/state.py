@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from collections import deque
 from datetime import datetime
@@ -35,6 +36,7 @@ class ConversationState:
         self.multimodal_context_summary: str = "无"
         self.session_scene: str = "general"
         self.turn_scene: str = "general_qa"
+        self.artifact_analysis_cache: dict[str, dict[str, Any]] = {}
 
         self.education_state: dict[str, Any] = self._empty_education_state()
 
@@ -77,6 +79,7 @@ class ConversationState:
         self.multimodal_context_summary = "无"
         self.session_scene = "general"
         self.turn_scene = "general_qa"
+        self.artifact_analysis_cache = {}
         self.education_state = self._empty_education_state()
 
     def _session_payload(self) -> dict[str, Any]:
@@ -92,6 +95,7 @@ class ConversationState:
             "multimodal_context_summary": self._summarize_turn_records(self.turn_records[-self.memory_size :]),
             "session_scene": self.session_scene,
             "turn_scene": self.turn_scene,
+            "artifact_analysis_cache": self.artifact_analysis_cache,
             "education_state": self.education_state,
             "updated_at": datetime.now().isoformat(timespec="seconds"),
         }
@@ -256,11 +260,167 @@ class ConversationState:
         self.multimodal_context_summary = self._summarize_turn_records(self.turn_records[-self.memory_size :])
         self.session_scene = data.get("session_scene", "general")
         self.turn_scene = data.get("turn_scene", "general_qa")
+        self.artifact_analysis_cache = self._normalize_artifact_analysis_cache(data.get("artifact_analysis_cache", {}))
         self.education_state = data.get("education_state", self._empty_education_state())
         self._normalize_loaded_route_state()
         if not self.turn_records and self.history:
             self.turn_records = self._rebuild_turn_records_from_history(self.history)
             self.multimodal_context_summary = self._summarize_turn_records(self.turn_records[-self.memory_size :])
+
+    @staticmethod
+    def _normalize_artifact_analysis_cache(cache: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+        normalized: dict[str, dict[str, Any]] = {}
+        for key, value in dict(cache or {}).items():
+            cache_key = str(key or "").strip()
+            if not cache_key or not isinstance(value, dict):
+                continue
+            normalized[cache_key] = {str(item_key): item_value for item_key, item_value in value.items()}
+        return normalized
+
+    @staticmethod
+    def _artifact_source_token(artifact: MediaArtifact | dict[str, Any]) -> str:
+        if isinstance(artifact, MediaArtifact):
+            ref = artifact.data_url or artifact.uri or artifact.name
+            kind = artifact.kind
+            name = artifact.name
+            summary = artifact.summary
+        else:
+            ref = artifact.get("data_url") or artifact.get("uri") or artifact.get("name") or ""
+            kind = str(artifact.get("kind", "") or "")
+            name = str(artifact.get("name", "") or "")
+            summary = str(artifact.get("summary", "") or "")
+        digest = hashlib.sha256(str(ref).encode("utf-8", errors="ignore")).hexdigest()[:16]
+        return f"{kind}:{name}:{digest}:{summary[:32]}"
+
+    def artifact_bundle_key(self, artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact] | list[dict[str, Any]]) -> str:
+        parts = [self._artifact_source_token(artifact) for artifact in list(artifacts or [])]
+        return "|".join(parts[:4])
+
+    @staticmethod
+    def _truncate_text(value: str, limit: int) -> str:
+        text = str(value or "").strip()
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + "..."
+
+    def _metadata_artifact_analysis(self, artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact]) -> dict[str, Any]:
+        items = list(artifacts or [])
+        if not items:
+            return {}
+        first = items[0]
+        metadata = dict(first.metadata or {})
+        return {
+            "summary": self._truncate_text(first.summary or first.name or "附件内容", 120),
+            "question_summary": self._truncate_text(first.summary or first.name or "附件内容", 120),
+            "subject_hint": str(metadata.get("subject_hint") or "unknown").strip() or "unknown",
+            "task_hint": str(metadata.get("task_hint") or "unknown").strip() or "unknown",
+            "contains_student_work": bool(metadata.get("contains_student_work")),
+            "contains_lesson_context": bool(metadata.get("contains_lesson_context")),
+            "contains_sub_problem": bool(metadata.get("contains_sub_problem")),
+            "contains_problem_statement": bool(metadata.get("contains_problem_statement")),
+            "education_relevance": "medium" if metadata.get("artifact_role") in {"problem_material", "answer_sheet", "lesson_clip"} else "weak",
+            "followup_requires_visual_reread": bool(metadata.get("contains_student_work")),
+            "confidence": 0.45,
+            "source": "metadata",
+        }
+
+    def cached_artifact_analysis(
+        self,
+        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+    ) -> dict[str, Any]:
+        cache_key = self.artifact_bundle_key(artifacts)
+        if not cache_key:
+            return {}
+        cached = self.artifact_analysis_cache.get(cache_key)
+        if cached:
+            return dict(cached)
+        return {}
+
+    def cached_or_metadata_artifact_analysis(
+        self,
+        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+    ) -> dict[str, Any]:
+        cached = self.cached_artifact_analysis(artifacts)
+        if cached:
+            return cached
+        return self._metadata_artifact_analysis(artifacts)
+
+    def remember_artifact_analysis(
+        self,
+        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        analysis: dict[str, Any],
+    ) -> None:
+        cache_key = self.artifact_bundle_key(artifacts)
+        if not cache_key or not analysis:
+            return
+        if len(self.artifact_analysis_cache) >= 64 and cache_key not in self.artifact_analysis_cache:
+            oldest_key = next(iter(self.artifact_analysis_cache))
+            self.artifact_analysis_cache.pop(oldest_key, None)
+        self.artifact_analysis_cache[cache_key] = {
+            str(key): value for key, value in dict(analysis or {}).items()
+        }
+
+    def _derive_artifact_analysis_from_turn(
+        self,
+        *,
+        turn_input: TurnInput,
+        assistant_text: str,
+        decision: dict[str, Any] | None,
+        strategy: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if not turn_input.artifacts:
+            return {}
+        strategy_payload = self._compact_strategy_payload(strategy or {})
+        analysis = dict(strategy_payload.get("analysis") or {})
+        frame = dict(analysis.get("education_turn_frame") or analysis.get("task_frame") or {})
+        first = turn_input.artifacts[0]
+        metadata = dict(first.metadata or {})
+        subject_hint = str(
+            strategy_payload.get("subject")
+            or analysis.get("subject_axis")
+            or analysis.get("subject")
+            or metadata.get("subject_hint")
+            or "unknown"
+        ).strip() or "unknown"
+        module = str(strategy_payload.get("module") or "").strip()
+        task_hint_map = {
+            "solve": "solve_problem",
+            "check": "check_solution",
+            "explain": "concept_explain",
+            "drill": "exercise_generation",
+            "qa": "concept_explain",
+        }
+        summary_text = assistant_text.split("\n\n", 1)[0].strip() or assistant_text.strip()
+        question_summary = turn_input.normalized_text() or first.summary or first.name or "附件内容"
+        contains_student_work = bool(metadata.get("contains_student_work")) or module == "check"
+        confidence = float((decision or {}).get("confidence", 0.0) or 0.0)
+        return {
+            "summary": self._truncate_text(summary_text or question_summary, 180),
+            "question_summary": self._truncate_text(question_summary, 140),
+            "subject_hint": subject_hint,
+            "task_hint": task_hint_map.get(module, str(metadata.get("task_hint") or "unknown").strip() or "unknown"),
+            "contains_student_work": contains_student_work,
+            "contains_lesson_context": bool(metadata.get("contains_lesson_context")),
+            "contains_sub_problem": bool(metadata.get("contains_sub_problem")),
+            "contains_problem_statement": bool(metadata.get("contains_problem_statement")) or True,
+            "education_relevance": "strong" if str((decision or {}).get("turn_scene") or "") == "education" else "medium",
+            "primary_action": str(frame.get("primary_action") or analysis.get("primary_action") or "").strip(),
+            "learning_objects": [
+                str(item).strip()
+                for item in (frame.get("learning_objects") or analysis.get("learning_objects") or [])
+                if str(item).strip()
+            ],
+            "object_scope": str(frame.get("object_scope") or analysis.get("object_scope") or "").strip(),
+            "answer_boundary": str(
+                (frame.get("scenario_policy") or {}).get("answer_boundary")
+                or analysis.get("answer_boundary")
+                or ""
+            ).strip(),
+            "followup_requires_visual_reread": contains_student_work or module == "check",
+            "confidence": max(0.55, round(confidence, 2)),
+            "source": "turn_result",
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        }
 
     def _last_decision_payload_from_turn_records(self) -> tuple[dict[str, Any], dict[str, Any]]:
         for record in reversed(self.turn_records):
@@ -532,6 +692,14 @@ class ConversationState:
         """Persist a structured turn record alongside chat history."""
         self.turn_count += 1
         self.intent_counter[intent] = self.intent_counter.get(intent, 0) + 1
+        derived_artifact_analysis = self._derive_artifact_analysis_from_turn(
+            turn_input=turn_input,
+            assistant_text=assistant_text,
+            decision=decision,
+            strategy=strategy,
+        )
+        if derived_artifact_analysis:
+            self.remember_artifact_analysis(turn_input.artifacts, derived_artifact_analysis)
 
         user_history_text = turn_input.history_text()
         self.recent_topics.append(user_history_text[:24])
@@ -631,6 +799,14 @@ class ConversationState:
 
         if intent:
             self.intent_counter[intent] = self.intent_counter.get(intent, 0) + 1
+        derived_artifact_analysis = self._derive_artifact_analysis_from_turn(
+            turn_input=turn_input,
+            assistant_text=assistant_text,
+            decision=decision,
+            strategy=strategy,
+        )
+        if derived_artifact_analysis:
+            self.remember_artifact_analysis(turn_input.artifacts, derived_artifact_analysis)
 
         record["assistant_text"] = assistant_text
         record["intent"] = intent

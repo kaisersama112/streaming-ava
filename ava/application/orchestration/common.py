@@ -17,6 +17,12 @@ def _should_attach_reference_artifacts(snapshot: ContextSnapshot, strategy: Bran
     if snapshot.artifacts or not snapshot.reference_artifacts:
         return False
 
+    artifact_brief = dict(getattr(snapshot, "router_artifact_brief", {}) or {})
+    if artifact_brief:
+        if bool(artifact_brief.get("followup_requires_visual_reread", False)):
+            return True
+        return False
+
     analysis = dict(getattr(strategy, "analysis", {}) or {})
     continuity = dict(analysis.get("continuity", {}) or {})
     education_turn_frame = dict(analysis.get("education_turn_frame", {}) or {})
@@ -60,6 +66,13 @@ def build_responder_messages(
             block = artifact.to_message_block()
             if block:
                 user_content.append(block)
+    elif snapshot.reference_artifacts and snapshot.router_artifact_brief:
+        user_content.append(
+            {
+                "type": "text",
+                "text": "请直接基于之前题图的结构化理解和最近对话继续回答，不要要求我重新上传同一张图片。",
+            }
+        )
 
     if not user_content:
         user_content.append({"type": "text", "text": snapshot.multimodal_summary or snapshot.user_text})

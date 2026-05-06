@@ -95,6 +95,22 @@ class RuntimeConfig(BaseModel):
     prompt_dir: str = Field("prompt-plugin", description="提示词中心目录")
     router_model: str = Field("", description="路由模型名称，默认跟随 openai_config.model")
     router_timeout: int = Field(30, description="路由模型超时时间（秒）")
+    agents_sdk_enabled: bool = Field(False, description="是否启用 OpenAI Agents SDK 作为执行层")
+    agents_sdk_realtime_enabled: bool = Field(False, description="是否在 realtime 主链启用 Agents SDK 流式执行")
+    agents_sdk_tracing_enabled: bool = Field(False, description="是否启用 Agents SDK tracing")
+    agents_sdk_timeout: int = Field(45, description="Agents SDK 执行超时时间（秒）")
+    agents_sdk_max_turns: int = Field(6, description="Agents SDK 单次运行允许的最大内部轮次")
+    agents_sdk_model: str = Field("", description="Agents SDK 文本模型名称，默认跟随 openai_config.model")
+    agents_sdk_multimodal_model: str = Field("", description="Agents SDK 多模态模型名称，默认跟随 openai_config.multimodal_model")
+    agents_sdk_session_db: str = Field("state/agents_sessions.json", description="Agents SDK 会话存储路径")
+    agents_sdk_branches: list[str] = Field(
+        default_factory=lambda: ["education", "general_qa", "clarify"],
+        description="允许切换到 Agents SDK 执行层的 branch 列表",
+    )
+    agents_sdk_education_modules: list[str] = Field(
+        default_factory=lambda: ["solve", "check", "explain", "answer", "qa"],
+        description="教育分支允许切换到 Agents SDK 执行层的 module 列表",
+    )
     debug_audio_dump: bool = Field(False, description="是否启用调试音频转储")
     realtime_audio_frame_ms: int = Field(60, description="PCM 推流分帧时长（毫秒）")
     realtime_audio_max_lead_seconds: float = Field(0.05, description="音频播放允许超前的最大秒数")

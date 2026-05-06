@@ -323,6 +323,8 @@ def _shared_context_block(snapshot: ContextSnapshot, strategy: BranchStrategy) -
             blocks.append(f"- 最近轮摘要: {_compact_text(snapshot.recent_turns_summary, 280)}")
     if policy["include_multimodal_summary"] and snapshot.multimodal_summary and not _has_direct_media_blocks(snapshot):
         blocks.append(f"- 多模态摘要: {_compact_text(snapshot.multimodal_summary, 240)}")
+    if snapshot.router_artifact_brief:
+        blocks.append(f"- 附件结构化理解: {json.dumps(snapshot.router_artifact_brief, ensure_ascii=False)}")
     if policy["include_facts"] and snapshot.facts:
         blocks.append(f"- facts: {json.dumps(snapshot.facts, ensure_ascii=False)}")
     if snapshot.education_state:

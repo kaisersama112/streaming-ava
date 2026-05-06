@@ -40,6 +40,9 @@ const multimodalSummaryEl = el("multimodalSummary");
 const artifactTextViewEl = el("artifactTextView");
 const memorySummaryEl = el("memorySummary");
 const historySummaryEl = el("historySummary");
+const historyMessageCountEl = el("historyMessageCount");
+const historyTurnCountEl = el("historyTurnCount");
+const historyFocusEl = el("historyFocus");
 const factsViewEl = el("factsView");
 const promptViewEl = el("promptView");
 const timelineViewEl = el("timelineView");
@@ -63,6 +66,7 @@ const btnCopyStrategyContext = el("btnCopyStrategyContext");
 const TARGET_SAMPLE_RATE = 16000;
 const MAX_LOG_CHARS = 12000;
 const SESSION_STORAGE_KEY = "ava.realtime.session_id";
+const STATIC_ASSET_VERSION = "20260429-mic-fix-1";
 
 let ws = null;
 let connectPromise = null;
@@ -86,6 +90,7 @@ let activeAssistantTurnId = null;
 let partialDraftId = null;
 let pendingAttachments = [];
 const interruptedAssistantTurns = new Set();
+let isMicTransitioning = false;
 
 const assistantNodes = new Map();
 const userMessageKeys = new Set();
@@ -218,6 +223,47 @@ function compactValue(value, fallback = "-") {
   return value && String(value).trim() ? String(value).trim() : fallback;
 }
 
+function firstMeaningfulText(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (!text || text === "-") continue;
+    return text;
+  }
+  return "-";
+}
+
+function formatMessageTime(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    return "--:--";
+  }
+  return date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function updateHistoryPanelSummary() {
+  if (!transcriptEl) return;
+  const nodes = [...transcriptEl.querySelectorAll(".message")].filter(
+    (node) => node.dataset.key !== "partial-draft"
+  );
+  if (historyMessageCountEl) {
+    historyMessageCountEl.textContent = String(nodes.length);
+  }
+  if (historyTurnCountEl) {
+    const assistantCount = nodes.filter((node) => node.classList.contains("assistant")).length;
+    historyTurnCountEl.textContent = String(assistantCount);
+  }
+  if (historyFocusEl) {
+    historyFocusEl.textContent = firstMeaningfulText(
+      currentStrategyNameEl?.textContent,
+      currentStrategyEl?.textContent,
+      currentBranchEl?.textContent
+    );
+  }
+}
+
 function getAttachmentPreviewSource(item) {
   const candidate = item.preview_url || item.data_url || item.uri || "";
   return typeof candidate === "string" ? candidate : "";
@@ -260,7 +306,7 @@ function appendAttachmentPreviews(container, attachments = []) {
 function updateAttachmentState() {
   if (!stagedAttachmentStateEl) return;
   if (!pendingAttachments.length) {
-    stagedAttachmentStateEl.textContent = "未选择附件。上传后，这批文件会固定挂载在当前会话上，直到你手动移除。";
+    stagedAttachmentStateEl.textContent = "未选择附件。";
     return;
   }
   const isOpen = !!ws && ws.readyState === WebSocket.OPEN;
@@ -274,32 +320,38 @@ function renderMessageMeta(container, meta = {}) {
   container.innerHTML = "";
   const items = [
     ["branch", meta.branch],
-    ["strategy", meta.strategy_id],
-    ["name", meta.strategy_name],
-    ["mode", meta.delivery_mode],
-    ["ui", meta.ui_mode],
+    ["strategy", meta.strategy_name || meta.strategy_id],
     ["follow-up", meta.user_followup_type],
-    ["template", meta.render_template],
-    ["source", meta.strategy_source],
   ];
+  let count = 0;
   for (const [label, value] of items) {
     if (!value || !String(value).trim()) continue;
     const chip = document.createElement("span");
     chip.className = "message-chip";
     chip.innerHTML = `<strong>${label}</strong><span>${String(value).trim()}</span>`;
     container.appendChild(chip);
+    count += 1;
   }
+  container.hidden = count === 0;
 }
 
-function createMessageNode(role, key, text = "", attachments = [], meta = null) {
+function createMessageNode(role, key, text = "", attachments = [], meta = null, timestamp = null) {
   const article = document.createElement("article");
   article.className = `message ${role}`;
   article.dataset.key = key;
 
+  const headEl = document.createElement("div");
+  headEl.className = "message-head";
   const roleEl = document.createElement("div");
   roleEl.className = "message-role";
   roleEl.textContent = role === "user" ? "User" : role === "assistant" ? "AVA" : "System";
-  article.appendChild(roleEl);
+  headEl.appendChild(roleEl);
+
+  const timeEl = document.createElement("div");
+  timeEl.className = "message-time";
+  timeEl.textContent = formatMessageTime(timestamp);
+  headEl.appendChild(timeEl);
+  article.appendChild(headEl);
 
   if (attachments.length) {
     const attachmentBlock = document.createElement("div");
@@ -316,6 +368,7 @@ function createMessageNode(role, key, text = "", attachments = [], meta = null) 
 
   const metaEl = document.createElement("div");
   metaEl.className = "message-meta";
+  metaEl.hidden = true;
   article.appendChild(metaEl);
   if (meta) {
     messageMetaStore.set(key, { ...(messageMetaStore.get(key) || {}), ...meta });
@@ -324,6 +377,7 @@ function createMessageNode(role, key, text = "", attachments = [], meta = null) 
 
   transcriptEl.appendChild(article);
   scrollTranscriptToBottom();
+  updateHistoryPanelSummary();
   return article;
 }
 
@@ -341,7 +395,14 @@ function addMessage(role, text, options = {}) {
     }
     userMessageKeys.add(key);
   }
-  const node = createMessageNode(role, key, text, options.attachments || [], options.meta || null);
+  const node = createMessageNode(
+    role,
+    key,
+    text,
+    options.attachments || [],
+    options.meta || null,
+    options.timestamp || Date.now()
+  );
   if (options.interrupted) {
     node.classList.add("interrupted");
   }
@@ -355,7 +416,7 @@ function ensureAssistantMessage(turnId) {
   const key = String(turnId || `assistant-${Date.now()}`);
   let node = assistantNodes.get(key);
   if (!node) {
-    node = createMessageNode("assistant", key, "", [], messageMetaStore.get(key) || null);
+    node = createMessageNode("assistant", key, "", [], messageMetaStore.get(key) || null, Date.now());
     assistantNodes.set(key, node);
   }
   activeAssistantTurnId = key;
@@ -371,6 +432,7 @@ function setMessageMeta(key, patch = {}) {
   if (!node) return;
   const metaEl = node.querySelector(".message-meta");
   renderMessageMeta(metaEl, merged);
+  updateHistoryPanelSummary();
 }
 
 function appendAssistantToken(turnId, token) {
@@ -429,12 +491,15 @@ function clearTranscript() {
   activeAssistantTurnId = null;
   partialDraftId = null;
   transcriptEl.innerHTML = "";
+  updateHistoryPanelSummary();
 }
 
 function resetCallTimer() {
   callStartedAt = null;
   callAccumulatedMs = 0;
-  callTimerEl.textContent = "00:00";
+  if (callTimerEl) {
+    callTimerEl.textContent = "00:00";
+  }
 }
 
 function formatElapsed(ms) {
@@ -446,7 +511,9 @@ function formatElapsed(ms) {
 
 function updateCallTimerDisplay() {
   const runningMs = callStartedAt ? Date.now() - callStartedAt : 0;
-  callTimerEl.textContent = formatElapsed(callAccumulatedMs + runningMs);
+  if (callTimerEl) {
+    callTimerEl.textContent = formatElapsed(callAccumulatedMs + runningMs);
+  }
 }
 
 function startCallTimer() {
@@ -612,8 +679,18 @@ function updateConnectButton() {
 }
 
 function updateMicButton() {
+  if (isMicTransitioning) {
+    btnMic.textContent = "麦克风启动中...";
+    btnMic.className = "btn-warning";
+    btnMic.disabled = true;
+    btnMic.setAttribute("aria-busy", "true");
+    setPillValue(micStateEl, "启动中", "warn");
+    return;
+  }
   btnMic.textContent = isMicActive ? "关闭麦克风" : "开启麦克风";
   btnMic.className = isMicActive ? "btn-live" : "btn-accent";
+  btnMic.disabled = false;
+  btnMic.setAttribute("aria-busy", "false");
   btnMic.setAttribute("aria-pressed", isMicActive ? "true" : "false");
   setPillValue(micStateEl, isMicActive ? "采集中" : "未开启", isMicActive ? "ok" : "muted");
 }
@@ -857,6 +934,7 @@ function renderHello(msg) {
         key: item.key || `${item.role}-${Date.now()}-${localMessageSeq++}`,
         attachments: item.artifacts || [],
         meta: item.meta || null,
+        timestamp: item.ts || item.timestamp || Date.now(),
       });
     }
 
@@ -873,6 +951,7 @@ function renderHello(msg) {
       setCodeText(currentRenderTemplateEl, latestMeta.render_template || "-");
       setCodeText(currentStrategySourceEl, latestMeta.strategy_source || "-");
     }
+    updateHistoryPanelSummary();
   }
   if (Array.isArray(msg.staged_attachments) && msg.staged_attachments.length && !pendingAttachments.length) {
     pendingAttachments = msg.staged_attachments.map((item) => ({
@@ -913,7 +992,11 @@ function handleEvent(msg) {
     const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
     if (text || attachments.length) {
       const key = `user-final-${msg.ts || Date.now()}-${text || attachments.map((item) => item.name || "").join("-")}`;
-      addMessage("user", text || attachmentSummary(attachments), { key, attachments });
+      addMessage("user", text || attachmentSummary(attachments), {
+        key,
+        attachments,
+        timestamp: msg.ts || Date.now(),
+      });
     }
     return;
   }
@@ -1012,6 +1095,7 @@ function handleEvent(msg) {
     if (msg.strategy_name) {
       log(`strategy: ${msg.strategy_id} (${msg.strategy_name})`);
     }
+    updateHistoryPanelSummary();
     return;
   }
   if (msg.type === "debug_context") {
@@ -1072,6 +1156,7 @@ function handleEvent(msg) {
       }
       stopPlaybackQueue();
     }
+    updateHistoryPanelSummary();
     return;
   }
   if (msg.type === "error") {
@@ -1160,6 +1245,8 @@ async function ensureConnected() {
 
 async function startMicrophone() {
   if (isMicActive) return;
+  isMicTransitioning = true;
+  updateMicButton();
   await ensureConnected();
   await ensurePlaybackContext();
 
@@ -1174,7 +1261,7 @@ async function startMicrophone() {
   });
 
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  await audioCtx.audioWorklet.addModule("/static/audio-worklet.js");
+  await audioCtx.audioWorklet.addModule(`/static/audio-worklet.js?v=${STATIC_ASSET_VERSION}`);
 
   const source = audioCtx.createMediaStreamSource(mediaStream);
   analyserNode = audioCtx.createAnalyser();
@@ -1205,6 +1292,7 @@ async function startMicrophone() {
   startLevelMeter();
   startCallTimer();
   isMicActive = true;
+  isMicTransitioning = false;
   updateMicButton();
   log(`Mic start: AudioContext sampleRate=${audioCtx.sampleRate}`);
 }
@@ -1236,6 +1324,7 @@ async function stopMicrophone() {
       mediaStream = null;
     }
   } finally {
+    isMicTransitioning = false;
     isMicActive = false;
     updateMicButton();
     stopCallTimer();
@@ -1284,6 +1373,9 @@ async function applySessionSwitch() {
 }
 
 async function toggleMicrophone() {
+  if (isMicTransitioning) {
+    return;
+  }
   try {
     if (isMicActive) {
       await stopMicrophone();
@@ -1519,3 +1611,4 @@ setMetricValue(metricFirstAudioLatencyEl, null);
 setMetricValue(metricInterruptCountEl, 0, (value) => `${Number(value || 0)}`);
 setLevel(0);
 updateAttachmentState();
+updateHistoryPanelSummary();

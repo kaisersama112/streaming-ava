@@ -62,6 +62,24 @@ runtime:
   prompt_dir: "prompt-plugin"
   router_model: ""
   router_timeout: 30
+  agents_sdk_enabled: true
+  agents_sdk_realtime_enabled: true
+  agents_sdk_tracing_enabled: false
+  agents_sdk_timeout: 45
+  agents_sdk_max_turns: 6
+  agents_sdk_model: ""
+  agents_sdk_multimodal_model: ""
+  agents_sdk_session_db: "state/agents_sessions.json"
+  agents_sdk_branches:
+    - "education"
+    - "general_qa"
+    - "clarify"
+  agents_sdk_education_modules:
+    - "solve"
+    - "check"
+    - "explain"
+    - "answer"
+    - "qa"
   debug_audio_dump: false
   realtime_audio_frame_ms: 60
   realtime_audio_max_lead_seconds: 0.05

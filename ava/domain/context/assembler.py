@@ -111,6 +111,18 @@ def _should_inherit_reference_artifacts(
     return False
 
 
+def _artifact_brief_for_context(
+    state: ConversationState,
+    *,
+    current_artifacts,
+    reference_artifacts,
+) -> dict[str, object]:
+    target_artifacts = current_artifacts or reference_artifacts
+    if not target_artifacts:
+        return {}
+    return state.cached_or_metadata_artifact_analysis(target_artifacts)
+
+
 def assemble_context(
     state: ConversationState,
     turn_input: TurnInput | str,
@@ -151,6 +163,11 @@ def assemble_context(
     reference_artifacts = ()
     if allow_reference_artifacts and not turn_input.artifacts:
         reference_artifacts = state.recent_reference_artifacts(current_turn_id=current_turn_id, limit_turns=1)
+    artifact_brief = _artifact_brief_for_context(
+        state,
+        current_artifacts=turn_input.artifacts,
+        reference_artifacts=reference_artifacts,
+    )
     return ContextSnapshot(
         turn_input=turn_input,
         user_text=user_text,
@@ -168,7 +185,7 @@ def assemble_context(
         turn_records=turn_records,
         context_profile=profile,
         reference_artifacts_inherited=bool(reference_artifacts),
-        router_artifact_brief={},
+        router_artifact_brief=artifact_brief,
         router_text_brief={},
         router_plan={},
     )

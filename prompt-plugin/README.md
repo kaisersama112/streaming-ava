@@ -1,51 +1,81 @@
 # Prompt Plugin
 
-本文档描述当前 `prompt-plugin/` Prompt 资产模块的真实结构、Markdown schema 和维护规则。
+`prompt-plugin/` 是当前系统的 Prompt 资产层。
 
-当前系统已经完成重构，并且教育分支的策略选择已经升级为：
+它负责两件事：
 
-- 不再使用旧文档里的 `prompt-management/assets/`
-- Prompt 内容资产统一使用结构化 Markdown
-- `router` 一次模型调用直接决定当前轮使用哪个 prompt 资产
-- `education` 直接落到 `module / subject / style`
-- `general_qa`、`casual_chat`、`clarify` 直接落到 `mode`
-- prompt 运行时不再承担第二轮 selector 判定
-- 运行时链路统一为：
+1. 用结构化 Markdown 保存不同场景下的提示词资产。
+2. 把这些资产稳定地装配成最终的 system prompt。
+
+它不负责两件事：
+
+1. 不负责顶层意图判断。
+2. 不负责在主链里再次本地选择 `module / subject / style / mode`。
+
+当前真实主链是：
 
 ```text
-Markdown Asset
--> Parser
--> Structured Spec
--> ResolvedPromptSpec
--> Renderer
--> Final Prompt
+用户输入 / 附件 / 历史
+-> Router 单次模型规划
+-> route + router_plan
+-> model_plan_builder 校验并落地为 BranchStrategy
+-> prompt-plugin 装配 Prompt 资产
+-> renderer 产出 system prompt
+-> responder 生成回答
 ```
 
-## 1. 设计原则
+这份文档要回答 4 个问题：
 
-Prompt 内容资产不是直接拼给模型的最终 Prompt。
+1. 这个板块到底怎么工作的。
+2. 为什么要这样设计。
+3. 这样设计的好处是什么。
+4. 教育场景下，Prompt 应该怎么写才有效。
 
-正确方式是：
+## 1. 先说结论
 
-1. 先把 Markdown 解析成结构化对象
-2. 再把结构化对象灌进 renderer
-3. 最后产出 system prompt
+`prompt-plugin/` 不是“写一堆 prompt 文案”的目录，而是一个分层的教学策略资产系统。
 
-当前约束：
+它把一轮回答拆成 5 个层次：
 
-- 内容资产只用 Markdown
-- 不再保留内容资产 YAML 兼容
-- `education` 使用 `plugin -> module -> subject -> style`
-- `general_qa`、`casual_chat`、`clarify` 使用 `plugin -> mode`
-- 当前轮使用哪个 `module / subject / style / mode` 由 Router 单次模型规划决定
-- prompt runtime 负责解析和装配资产，不负责再次判断用户意图
+1. `branch`
+   决定走 `education / general_qa / casual_chat / clarify` 哪条大分支。
+2. `module`
+   决定当前这一轮要做什么教学动作，比如 `solve / check / explain / qa`。
+3. `subject`
+   决定当前学科的证据顺序、讲法和易错点，比如 `math / english / cs / physics`。
+4. `style`
+   决定这一轮讲多深、讲多快、讲多完整，比如 `hint_only / step_by_step / explain_careful / direct`。
+5. `renderer`
+   把以上资产和当前上下文拼成模型真正看到的 system prompt。
 
-补充约束：
+在当前架构里，Router 已经直接给出这轮要用哪个资产。`prompt-plugin/` 的职责不再是“选”，而是“把被选中的东西讲对、讲稳、讲一致”。
 
-- `prompt-plugin/` 当前保存的是内容资产与资产边界语义，不再承担主链热路径里的第二轮本地选择
-- 文档里如果提到旧 selector，应理解为历史设计，或者理解为 runtime 仍保留的辅助解析能力，而不是当前 turn 主链
+## 2. 为什么不再把选择逻辑塞进 Prompt 资产
 
-## 2. 目录结构
+旧思路的问题是：既想让 Router 判断意图，又想让 prompt runtime 再用一轮规则重判一次。
+
+这种双重判断会带来 3 个问题：
+
+1. 上下文容易断裂。
+   Router 认为这是教育追问，runtime 又可能因为本地规则把它拐回通用答复。
+2. 责任边界不清。
+   回答效果差时，不知道是路由错了，还是 Prompt 写差了。
+3. 维护成本高。
+   一次改动要同时改模型 prompt、规则表、分支代码，最后还不一定一致。
+
+现在的设计把职责收口了：
+
+1. Router 负责“这一轮是什么意图，应该用什么 plan”。
+2. `model_plan_builder` 负责“把 plan 变成可执行策略，并兜底非法 id”。
+3. `prompt-plugin` 负责“把策略写成清晰、稳定、可维护的 system prompt”。
+
+这样做的直接好处是：问题定位会简单很多。
+
+- 选错 `module / subject / style`：先看 Router。
+- 选对了但讲法不对：改 prompt 资产。
+- system prompt 结构乱：改 renderer 或 contract。
+
+## 3. 目录是怎么分层的
 
 ```text
 prompt-plugin/
@@ -63,39 +93,114 @@ prompt-plugin/
 │   │   └── mode_renderer.md
 │   └── router/
 │       └── router_prompt.md
-├── plugins/
-│   ├── education/
-│   │   ├── plugin.md
-│   │   └── modules/
-│   │       ├── solve/
-│   │       │   ├── module.md
-│   │       │   ├── subjects/
-│   │       │   └── styles/
-│   │       ├── answer/
-│   │       └── qa/
-│   ├── general_qa/
-│   │   ├── plugin.md
-│   │   └── modes/
-│   ├── casual_chat/
-│   │   ├── plugin.md
-│   │   └── modes/
-│   └── clarify/
-│       ├── plugin.md
-│       └── modes/
-└── evals/
-    └── strategy_regression.yaml
+└── plugins/
+    ├── education/
+    │   ├── plugin.md
+    │   └── modules/
+    │       ├── solve/
+    │       ├── check/
+    │       ├── explain/
+    │       ├── answer/
+    │       ├── qa/
+    │       └── drill/
+    ├── general_qa/
+    ├── casual_chat/
+    └── clarify/
 ```
 
-说明：
+每层的职责如下。
 
-- `core/` 放跨分支共用资产
-- `plugins/` 放各分支自己的结构化内容资产
-- `evals/` 放历史样例与评估数据
-- 教育分支已不再保留 `selectors/` 目录；如果要表达资产适用边界，统一写在对应 Markdown 资产里
+### 3.1 `core/base`
 
-## 3. 运行时抽象
+放全局都适用的底层原则。
 
-当前运行时主要使用这些结构：
+- `persona.md`
+  定义助手的总体身份、基本行为边界。
+- `multimodal_rules.md`
+  定义图片、材料、附件这类跨分支通用的处理要求。
+
+为什么这么拆：
+
+- 这些原则不应该散落在每个学科文件里重复写。
+- 一旦全局行为要调整，只改一处。
+
+### 3.2 `core/contracts`
+
+按输出形态补充约束。
+
+- `speech_only.md`
+- `speech_brief.md`
+- `speech_ui_dual.md`
+
+为什么要有 contract：
+
+- 同样的教学内容，在语音场景和图文场景里，回答长度、句式、信息密度都不一样。
+- 把“怎么说”里和交付渠道强相关的部分抽出来，能避免每个 module 都重复写一遍。
+
+### 3.3 `core/renderer`
+
+renderer 决定最终 system prompt 的组织顺序。
+
+- `education_renderer.md`
+  负责教育分支。
+- `mode_renderer.md`
+  负责非教育分支。
+
+为什么 renderer 很关键：
+
+- 资产写得再好，如果 system prompt 组织顺序错了，模型照样会跑偏。
+- 教育场景尤其依赖顺序：先锁定对象，再判断诉求，再锁定回答边界，再给证据和讲法。
+
+### 3.4 `core/router`
+
+- `router_prompt.md`
+
+这里描述的是 Router 的系统提示词，不是 responder 的提示词。
+
+为什么放在 `prompt-plugin/` 里：
+
+- 顶层 plan 选择和下游资产体系必须使用同一套概念名词。
+- 比如 `module / subject / style / primary_scenario / primary_action / answer_boundary`，必须在上游和下游保持一致。
+
+### 3.5 `plugins/*`
+
+每个分支自己维护自己的内容资产。
+
+- `education`
+  用 `plugin -> module -> subject -> style`
+- `general_qa / casual_chat / clarify`
+  用 `plugin -> mode`
+
+为什么教育要比其他分支更细：
+
+- 教育回答不仅有“回答什么”，还有“按什么教学动作回答”“按什么学科证据回答”“讲到多深”。
+- `mode` 一层对教育来说不够表达这些差异。
+
+## 4. 当前运行时到底怎么装配 Prompt
+
+代码上的真实链路是：
+
+1. Router 输出 `route + router_plan`
+2. `model_plan_builder.py` 读取 plan 里的 `module / subject / style`
+3. `ComposedPromptRuntime` 加载对应 Markdown 资产
+4. 运行时组出 `ResolvedPromptSpec`
+5. `prompt_builder.py` 把 `base + contract + renderer + shared_context` 拼成 system prompt
+
+可以理解成：
+
+```text
+Markdown Asset
+-> Typed Spec
+-> BranchStrategy
+-> ResolvedPromptSpec
+-> Final System Prompt
+```
+
+这里有两个实现细节很重要。
+
+### 4.1 资产先变成结构化对象，再渲染
+
+Markdown 不是直接拼给模型，而是先解析成：
 
 - `PluginSpec`
 - `ModuleSpec`
@@ -103,467 +208,345 @@ prompt-plugin/
 - `StyleSpec`
 - `ModeSpec`
 - `ResolvedPromptSpec`
-- `ScenarioPolicy`
 
-对应代码：
+这样做的好处：
 
-- 解析与渲染入口：[ava/infrastructure/prompts/loader.py](/app/streaming-ava/ava/infrastructure/prompts/loader.py)
-- schema 运行时：[ava/infrastructure/prompts/runtime.py](/app/streaming-ava/ava/infrastructure/prompts/runtime.py)
-- 模型规划落地：[ava/application/orchestration/model_plan_builder.py](/app/streaming-ava/ava/application/orchestration/model_plan_builder.py)
-- prompt 拼装：[ava/infrastructure/prompts/prompt_builder.py](/app/streaming-ava/ava/infrastructure/prompts/prompt_builder.py)
+1. 写法更稳定。
+   文件是内容资产，不是自由散文。
+2. 程序可校验。
+   缺字段、字段错名、id 不存在，能在运行时发现。
+3. renderer 更简单。
+   renderer 只消费结构化对象，不用从自由文本里猜字段。
 
-## 4. Core 资产
+### 4.2 system prompt 不再重复塞满历史原文
 
-### 4.1 `core/base/`
+当前 responder 的原始历史问答会直接进入 `messages`。
+因此 system prompt 里只保留短摘要和约束，不再把长历史全文重复展开。
 
-- `persona.md`：全局助手身份与总原则
-- `multimodal_rules.md`：跨分支的多模态处理规则
+这样做的好处：
 
-### 4.2 `core/contracts/`
+1. 避免历史信息重复注入。
+2. system prompt 更短、更稳。
+3. 模型更容易把注意力放在“这轮该怎么答”，而不是消耗在重复上下文上。
 
-按 `delivery_mode` 注入输出约束：
+## 5. 教育场景为什么要拆成 `plugin / module / subject / style`
 
-- `speech_only.md`
-- `speech_brief.md`
-- `speech_ui_dual.md`
+教育回答最容易失败的地方，不是“语气不老师”，而是这 4 件事没分开：
 
-### 4.3 `core/renderer/`
+1. 当前对象是什么。
+2. 这一轮动作是什么。
+3. 该按哪门学科的证据讲。
+4. 该讲多深。
 
-- `education_renderer.md`：education 模块式 renderer
-- `mode_renderer.md`：非教育 mode renderer
+所以教育资产必须拆层。
 
-### 4.4 `core/router/`
+### 5.1 `plugin.md` 解决“跨教育场景都该守什么底线”
 
-- `router_prompt.md`：Router 的 system prompt
-
-## 5. 运行时职责边界
-
-当前主链里：
-
-1. Router 一次模型调用输出 `route + plan`
-2. `plan` 直接给出当前轮该用哪个 `module / subject / style / mode`
-3. `model_plan_builder.py` 校验这些 id 是否存在
-4. prompt runtime 只负责把对应 Markdown 资产解析成结构化 spec
-
-这意味着：
-
-- `prompt-plugin/` 不再承担主链热路径里的本地 selector 判定
-- `prompt-plugin/` 的重点是内容表达、输出结构和交互约束
-- 如果回答质量不对，先判断是 Router 选错资产，还是资产本身写得不好
-- `runtime.py` 里虽然仍保留了规则表格/YAML 的解析能力，但当前 `dispatcher.py` 主链不会逐条执行这些规则来选 module / subject / style
-
-## 6. Education 插件
-
-### 6.1 当前资产落地顺序
-
-`education` 的资产组织仍然是：
-
-```text
-plugin -> module -> subject -> style
-```
-
-当前运行时已经不是“本地 selector 逐层判定”，而是：
-
-```text
-Router(route + plan)
--> model_plan_builder
--> plugin / module / subject / style asset
--> BranchStrategy
-```
-
-其中：
-
-- Router 已经直接给出当前轮该用哪个 `module / subject / style`
-- `model_plan_builder` 只做校验、补默认值和资产装配
-- 最终 responder prompt 仍然来自这些 Markdown 资产本身
-
-当前 module：
-
-- `solve`
-- `check`
-- `drill`
-- `explain`
-- `answer`
-- `qa`
-
-最终策略 ID 仍然保持：
-
-```text
-education.{module}.{subject}.{style}
-```
+`plugins/education/plugin.md` 应该只写跨教育场景都成立的规则。
 
 例如：
 
-- `education.solve.math.step_by_step`
-- `education.answer.math.direct`
-- `education.qa.english.explain_careful`
+- 当前对象优先级
+- 新题与旧题如何区分
+- 先判断学生诉求再回答
+- 回答边界要服从 `hint_first / full_solution / direct_explain / targeted_answer`
+- 多模态题先看当前素材
 
-### 6.2 目录职责
+为什么这些规则要放在 plugin 层：
 
-`plugins/education/plugin.md`
+- 它们不属于某一门学科，也不属于某一种教学动作。
+- 它们是整个教育分支都必须一致遵守的“教学操作系统”。
 
-- 教育插件级目标和通用规则
-- 可选地补充 module 选择语义，帮助资产作者把适用边界写清楚
+### 5.2 `module.md` 解决“这一轮要做什么动作”
 
-`plugins/education/modules/<module>/module.md`
+`module` 是教育 Prompt 里最重要的一层。
 
-- 定义该 module 的目标、适用范围、回答结构、互动规则和默认输出参数
-- 可选地补充该 module 的 `Subject Selection Rules` 与 `Style Selection Rules`
-- 也可在 frontmatter 中声明 `capabilities`、`supports_modalities`、`supports_question_kinds`
-- 是该 module 的“内容规则单一事实源”
+它定义的是当前动作，而不是当前学科。
 
-`plugins/education/modules/<module>/subjects/*.md`
+例如：
 
-- 定义该 module 下的学科差异
-- 可在 frontmatter 中声明 `capabilities`、`supports_artifacts`
+- `solve`
+  当前重点是推进求解。
+- `check`
+  当前重点是判断对错、定位问题。
+- `explain`
+  当前重点是解释原因、方法、概念。
+- `qa`
+  当前重点是局部答疑或短答确认。
+- `drill`
+  当前重点是生成练习和巩固。
 
-`plugins/education/modules/<module>/styles/*.md`
+`module.md` 里最值得写清楚的是：
 
-- 定义该 module 下的表达风格
-- 可在 frontmatter 中声明 `style_traits`
+1. `Goal`
+   这一类回答真正要完成什么。
+2. `Applies To`
+   适用在哪些场景。
+3. `Response Structure`
+   回答顺序是什么。
+4. `Global Rules`
+   这类动作最重要的教学边界是什么。
+5. `Interaction Policy`
+   用户追问时应该如何延续。
+6. `Output Defaults`
+   默认是语音优先还是图文双模、是否直接给答案、最多讲几层。
 
-### 6.3 Education Markdown Schema
+为什么 `module` 是核心：
 
-#### `plugin.md`
+- 教学失败很多时候不是学科错，而是动作错。
+- 比如用户明明在验题，你却按讲题来答；或者用户只问局部原因，你却整题重讲。
 
-必填 frontmatter：
+### 5.3 `subject.md` 解决“按哪门学科的证据和讲法回答”
 
-- `id = education`
-- `type = plugin`
-- `version = 1`
-- `plugin_kind = education`
+同样是 `solve`，数学、英语、计算机、物理的讲法完全不同。
 
-必填 section：
+`subject` 负责定义：
 
-- `## Name`
-- `## Purpose`
-- `## Rules`
+1. 这门学科的关注点
+2. 证据优先级
+3. 解释顺序
+4. 常见误区
+5. 这门学科最需要避免的错误迁移
 
-其中：
+为什么不把这些写在 `module`：
 
-- `Rules` 使用 Markdown 列表
-- `Module Selection Rules` 当前是推荐保留的可选 section，用来表达 module 适用边界；它不是当前 turn 主链里的强制执行入口
+- `module` 解决的是动作。
+- `subject` 解决的是领域证据。
+- 把两者混在一起，会让文件越来越大，而且很难维护。
 
-#### `module.md`
+### 5.4 `style.md` 解决“讲多深、讲多快、讲多完整”
 
-必填 frontmatter：
+`style` 不该承载学科规则，它只管表达深度和呈现节奏。
 
-- `id = solve`
-- `type = module`
-- `version = 1`
-- `module_kind = education`
+例如：
 
-必填 section：
+- `hint_only`
+  只推进下一步，不偷跑到整题终局。
+- `step_by_step`
+  分步讲清，每步有依据。
+- `explain_careful`
+  重点解释原因和局部卡点。
+- `direct`
+  结论优先，最小必要依据。
 
-- `## Name`
-- `## Goal`
-- `## Applies To`
-- `## Response Structure`
-- `## Global Rules`
-- `## Interaction Policy`
-- `## Output Defaults`
-- `## Instructions`
+为什么要单独拆 style：
 
-其中：
+- 同一个 `solve.math`，有时只该给提示，有时需要完整展开。
+- 如果不拆 style，就会被迫在同一个 subject 或 module 里写互相冲突的指令。
 
-- `Applies To`、`Response Structure`、`Global Rules`、`Interaction Policy`、`Instructions` 使用 Markdown 列表
-- `Output Defaults` 使用 Markdown 键值列表：`- key = value`
-- `Subject Selection Rules`、`Style Selection Rules` 当前是推荐保留的可选 section，用来表达该 module 的适用边界和选择语义；主链不会在本地逐条执行它们
-- 如果某个 module 想增加更细的教学表达示例，优先写进 `Instructions`，不要引入第二套独立示例格式
+## 6. 教育 Prompt 到底应该怎么写
 
-#### `subject.md`
+教育 Prompt 不应该写成“老师口吻大全”，而应该写成“教学执行规范”。
 
-必填 frontmatter：
+最有效的写法通常遵守下面 5 条。
 
-- `id = math`
-- `type = subject`
-- `version = 1`
-- `subject_kind = math`
+### 6.1 先写对象，不先写口号
 
-必填 section：
+先写清：
 
-- `## Name`
-- `## Focus`
-- `## Explanation Strategy`
-- `## Common Mistakes`
-- `## Evidence Preference`
-- `## UI Hints`
-- `## Instructions`
+- 当前在处理什么对象
+- 新对象和旧对象怎么区分
+- 当前对象优先级是什么
 
-其中：
+因为真实失败里，最常见的问题不是不会讲，而是讲错对象。
 
-- `Focus`、`Explanation Strategy`、`Common Mistakes`、`Evidence Preference`、`Instructions` 使用 Markdown 列表
-- `UI Hints` 使用 Markdown 键值列表：`- key = value`
-- `Instructions` 可以包含“老师可用表达”或“少样例表达”，但要保持短小、可迁移，不能写成长篇示例库
+### 6.2 先写动作顺序，不先写漂亮措辞
 
-#### `style.md`
+一个好 module，应该先让模型知道：
 
-必填 frontmatter：
+1. 先确认当前对象
+2. 再判断学生诉求
+3. 再判断回答边界
+4. 再给证据、方法或下一步
 
-- `id = step_by_step`
-- `type = style`
-- `version = 1`
-- `style_kind = step_by_step`
+这比堆很多“耐心、鼓励、温柔、像老师”更有用。
 
-必填 section：
+### 6.3 学科文件要写证据顺序，不只写知识点名称
 
-- `## Name`
-- `## Tone`
-- `## Constraints`
-- `## Output Adjustments`
-- `## Instructions`
+坏写法：
 
-其中：
+- “数学要严谨”
+- “英语要注意语法”
 
-- `Constraints`、`Instructions` 使用 Markdown 列表
-- `Output Adjustments` 使用 Markdown 键值列表：`- key = value`
+好写法：
 
-#### 选择语义 section 语法
+- 数学先判断所求、已知、方法入口，再解释变形依据
+- 英语先锁定句法结构，再定位考点，再解释选项差异
 
-映射类 section 的写法：
+模型最需要的是“怎么判断”，不是“这门学科很重要”。
 
-- `- delivery_mode = speech_ui_dual`
-- `- direct_answer = false`
-- `- max_points = 3`
+### 6.4 style 文件要写边界，不要写重复内容
 
-选择语义类 section 的写法：
+style 最有价值的是约束：
 
-- 推荐表格写法：
+- 这一轮能不能直接给终局
+- 这一轮能不能跨出当前小问
+- 每次回答最多推进几步
+- 应该先给结论还是先给依据
 
-```md
-| subject_axis | answer_boundary | primary_action | primary_scenario | select |
-| --- | --- | --- | --- | --- |
-| math | | | | math |
-| | hint_first | | | hint_only |
-| | | diagnose_error | practice, lesson | check |
-```
+不要在 style 里重写一遍 module 和 subject 已经写过的东西。
 
-- 兼容旧写法：
-  - `- if subject_axis = math -> math`
-  - `- if answer_boundary = hint_first -> hint_only`
-  - `- if primary_action = diagnose_error and primary_scenario in [practice, lesson] -> check`
-- 更复杂的条件可直接写 YAML `rules:` code block
+### 6.5 renderer 要把执行顺序写死
 
-补充说明：
+教育 renderer 的价值不是“把字段打印出来”，而是明确告诉模型：
 
-- `runtime.py` 仍然支持解析这些表格或 YAML `rules:` block
-- 但当前实时主链不会在本地逐条执行这些规则来挑选资产
-- 当前真正生效的资产选择来自 Router 返回的 `plan`
-- 因此这里更适合把它理解为“资产作者写清适用边界的结构化语义”，而不是“热路径判定脚本”
+1. 先锁定对象
+2. 再判断诉求
+3. 再锁定边界
+4. 再按模块、学科和风格回答
+5. 看不清就明确说看不清
 
-### 6.4 Education 设计边界
+这能显著降低：
 
-`module` 负责：
+- 串题
+- 跑题
+- 局部问题被扩成整节课
+- 素材没看清却硬答
 
-- 任务目标
-- 适用场景
-- 回答结构
-- 互动规则
+## 7. 为什么还保留 `Module Selection Rules` 这类表格
 
-`subject` 负责：
+当前主链已经不靠这些表格做热路径选择，但它们仍然有价值。
 
-- 学科关注点
-- 学科解释策略
-- 常见误区
-- 证据偏好
+价值在于：
 
-`style` 只负责：
+1. 它们是资产边界的显式说明。
+   让人一眼看懂某个 `module / subject / style` 设计给什么场景用。
+2. 它们是 Router 语义的对照表。
+   方便保证上游的 plan 命名和下游资产理解一致。
+3. 它们仍可作为辅助解析能力和离线检查依据。
 
-- 语气
-- 长短
-- 直给程度
-- 步骤数
+所以现在的理解应该是：
 
-不要把这些内容放错层：
+- 它们主要是“说明文档和语义边界”
+- 不是当前 turn 主链里的第二套裁决器
 
-- 不要把任务目标塞进 `style`
-- 不要把学科逻辑塞进 `module` 之外的无关文件
-- 如果要保留选择语义，集中写在对应资产的 selection sections，不要散落到 README、注释或临时文档里
+## 8. 这样设计到底能带来什么效果
 
-### 6.5 教师化写法建议
+如果这个目录写得好，效果不只是“Prompt 更整洁”，而是会直接改善回答质量。
 
-教育 prompt 的改写优先顺序：
+### 8.1 更不容易串题
 
-1. 先改 `Goal / Response Structure / Global Rules`
-2. 再改学科 `Explanation Strategy / Instructions`
-3. 最后改 style 的输出约束
+因为 plugin 和 renderer 都明确强调：
 
-推荐保留的教师动作：
+- 当前对象优先
+- 新附件默认新对象
+- 除非用户明确回指，否则不把上一题带进来
 
-- 先重建对象，再解释
-- 先判断学生卡点，再决定讲多深
-- 先结论再依据，或先方向再下一步
-- 需要肯定时指出“具体对在哪里”
-- 需要纠错时区分“结果错 / 步骤错 / 表述不严谨”
+### 8.2 更不容易动作错位
 
-不推荐的写法：
+因为 `module` 单独建模了：
 
-- 空泛鼓励
-- 只报规则名不落回题目
-- 把短答写成长篇讲课
-- 把所有学科都写成同一套抽象口号
+- 求解
+- 验题
+- 解释
+- 局部答疑
+- 练习生成
 
-## 7. 非教育插件
+这会减少“用户在验题，你却在重讲整题”这类错误。
 
-当前包含：
+### 8.3 更不容易学科迁移错误
 
-- `general_qa`
-- `casual_chat`
-- `clarify`
+因为 `subject` 独立定义了学科证据顺序和易错点。
 
-这些插件统一使用：
+这会减少：
 
-```text
-plugin -> mode
-```
+- 把英语题讲成阅读理解背景题
+- 把接口识别题讲成数学题
+- 把历史材料题讲成通用概念答疑
 
-### 6.1 目录职责
+### 8.4 更容易控制回答深浅
 
-`plugins/<branch>/plugin.md`
+因为 `style` 和 `answer_boundary` 一起工作。
 
-- 分支目标和通用规则
+这会减少：
 
-`plugins/<branch>/modes/*.md`
+- 用户只想要提示，你却直接给完整答案
+- 用户明明要完整过程，你却只给一句判断
 
-- mode 级内容资产
+### 8.5 更容易维护
 
-### 6.2 `mode.md` schema
+你可以更有针对性地改问题：
 
-必填 frontmatter：
+- 教学目标不对：改 `module.md`
+- 学科讲法不对：改 `subjects/*.md`
+- 讲太深或太浅：改 `styles/*.md`
+- 全教育分支都容易串题：改 `plugins/education/plugin.md`
+- system prompt 顺序不对：改 `core/renderer/education_renderer.md`
 
-- `id = reasoned`
-- `type = mode`
-- `version = 1`
-- `mode_kind = reasoned`
+## 9. 什么时候该改哪一层
 
-必填 section：
+这是最实用的排障地图。
 
-- `## Name`
-- `## Description`
-- `## Delivery Mode`
-- `## UI Mode`
-- `## Response Shape`
-- `## Objective`
-- `## Instructions`
-- `## Interaction Rules`
-- `## Examples`
-- `## Response Contract`
-- `## Speech Policy`
-
-可选 section：
-
-- `## UI Policy`
-
-其中：
-
-- `Instructions`、`Interaction Rules`、`Examples` 使用 Markdown 列表
-- `Response Contract`、`Speech Policy`、`UI Policy` 使用 YAML code block
-
-## 7. 选择语义资产
-
-如果需要把资产边界显式写出来，优先写在 Markdown 资产里：
-
-- `plugins/education/plugin.md#Module Selection Rules`
-- `plugins/education/modules/<module>/module.md#Subject Selection Rules`
-- `plugins/education/modules/<module>/module.md#Style Selection Rules`
-
-当前仍保留 `evals/strategy_regression.yaml`，但它的定位是历史样例集，不再是当前主链的离线 selector 回归脚本输入。
-
-如果语义复杂到表格不够表达，可在对应 section 内直接写 YAML `rules:` code block；不要再新增独立 selector YAML 文件。
-
-## 8. Renderer 规则
-
-当前 renderer 统一使用 Jinja 渲染。
-
-原则：
-
-- Markdown 资产先解析成结构化 spec
-- renderer 只吃结构化对象，不直接吃自由文本说明
-- 最终 system prompt 由：
-  - `core/base/*`
-  - `core/contracts/*`
-  - `core/renderer/*`
-  - runtime context
-  共同组成
-
-## 9. 日常维护指引
-
-| 问题现象 | 优先修改位置 |
+| 现象 | 优先修改位置 |
 | --- | --- |
-| 教学目标不对 | `plugins/education/modules/*/module.md` |
-| 学科讲法不对 | `plugins/education/modules/*/subjects/*.md` |
-| 太啰嗦 / 太简短 | `plugins/education/modules/*/styles/*.md` |
-| 通用问答模式不对 | `plugins/general_qa/modes/*.md` |
-| 轻聊天语气不对 | `plugins/casual_chat/modes/*.md` |
-| 澄清问题问得不对 | `plugins/clarify/modes/*.md` |
-| 选错 module / subject / style | `core/router/router_prompt.md`、`ava/infrastructure/prompts/prompt_builder.py`、相关资产边界说明 |
-| 选错 mode | `core/router/router_prompt.md`、`plugins/*/modes/*.md` |
-| 输出结构不对 | `core/renderer/*.md` |
-| 上下文注入太多或太少 | `prompt_builder.py` / runtime context builder |
+| 回答串到上一题 | `plugins/education/plugin.md`、`core/renderer/education_renderer.md` |
+| 用户在验题却被当成讲题 | Router prompt、上游 plan；其次看 `check/module.md` |
+| 学科判断正确，但讲法像另一门学科 | 对应 `subjects/*.md` |
+| 用户只要提示，却给了完整答案 | 对应 `styles/*.md`，以及 `answer_boundary` 相关描述 |
+| 回答像在背 prompt，结构混乱 | `core/renderer/*.md` |
+| 语音场景太长、太绕、不适合听 | `core/contracts/*.md` |
+| 教育分支整体价值观不统一 | `plugins/education/plugin.md` |
 
-### 9.1 新增 education module
+## 10. 写资产时的约束
 
-至少新增：
+为了让这一层长期可维护，建议坚持下面这些约束。
 
-- `plugins/education/modules/<module>/module.md`
-- `plugins/education/modules/<module>/subjects/*.md`
-- `plugins/education/modules/<module>/styles/*.md`
+### 10.1 不把 Router 逻辑复制进资产里
 
-推荐同步做：
+资产里可以描述边界语义，但不要把完整路由逻辑再写一遍。
 
-- 在 `plugin.md` / `module.md` 里补充对应的选择语义 section
-- 检查 `core/router/router_prompt.md` 是否需要让模型知道这个新 module
-- 做真实 E2E 场景验证
+原因：
 
-### 9.2 新增 education subject
+- 顶层判断已经由 Router 负责。
+- 再复制一份只会制造分叉。
 
-至少新增：
+### 10.2 不把所有规则都写在 plugin 层
 
-- `plugins/education/modules/<module>/subjects/<subject>.md`
-- 如有必要，在对应 module 的 selection section 里补充语义
-- 做真实 E2E 场景验证
+plugin 只写跨教育分支通用的底线。
 
-### 9.3 新增 education style
+不要把：
 
-只改：
+- 学科讲法
+- 风格差异
+- 某个模块独有的教学动作
 
-- `plugins/education/modules/<module>/styles/<style>.md`
-- 如有必要，在对应 module 的 selection section 里补充语义
-- 做真实 E2E 场景验证
+全部挤到 `plugin.md` 里。
 
-### 9.4 新增非教育 mode
+### 10.3 不在 style 里塞学科知识
 
-至少新增：
+style 只管深度、节奏和边界。
 
-- `plugins/<branch>/modes/<mode>.md`
-- `model_plan_builder.py` 中的 mode 白名单或映射支持
-- 做真实 E2E 场景验证
+如果 style 里出现大量“数学应该如何讲”“英语应该如何讲”，说明职责已经串了。
 
-## 10. 回归
+### 10.4 不写空泛价值观
 
-当前主链已经切为单次模型规划，不再维护离线 selector 回归脚本。
+像下面这种低信息句子应该尽量少：
 
-这些改动后至少要做：
+- “要像老师一样耐心”
+- “要认真讲解”
+- “要循循善诱”
 
-- 语法检查
-- 实际对话链路验证
-- 修改任何 `plugin/module/subject/style/mode` Markdown 资产后，做一次真实 E2E 场景验证
+更好的写法是可执行规则：
 
-`evals/strategy_regression.yaml` 当前可以继续作为样例数据参考，但不应再把它理解成“当前主链的自动真相源”。
+- “先判断学生当前卡在哪一步，再决定讲多深”
+- “提示型回答只推进下一步，不给整题终局”
+- “如果当前轮出现新图，默认按新对象处理”
 
-## 11. 禁止事项
+## 11. 一句话总结
 
-不要重新引入这些旧结构：
+`prompt-plugin/` 的目标不是“把 Prompt 写得更长”，而是把教育回答拆成可维护的策略资产：
 
-- 旧的 `prompt-management/assets/`
-- 内容资产 `.yaml`
-- 平铺的 `scene / subject / style` 旧目录
-- `manifest.yaml`
-- `branches/*`
-- `policies/*.yaml`
-- `render_templates/*.md`
+- plugin 决定通用教学底线
+- module 决定这一轮动作
+- subject 决定学科证据和讲法
+- style 决定回答深浅
+- renderer 决定 system prompt 的执行顺序
+- contract 决定交付形态约束
 
-后续只允许沿用当前两类模式：
+这样做的核心收益是：
 
-- `education`: plugin -> module -> subject -> style
-- 其他分支: plugin -> mode
+1. 回答更稳定。
+2. 串题和跑题更少。
+3. 教学动作更清楚。
+4. 学科讲法更像对应学科。
+5. 后续优化时知道该改哪里，而不是只能盲调整段 Prompt。

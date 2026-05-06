@@ -14,6 +14,7 @@ from ava.application.evaluation import build_evaluation_tags
 from ava.application.factories import build_prompt_center, build_router
 from ava.application.multimodal import AttachmentPayload, build_turn_input
 from ava.application.orchestration import build_turn_plan
+from ava.application.responding import stream_reply_with_callbacks
 from ava.application.speech import LatexAwareSpeechBuffer, should_apply_math_oralizer
 from ava.application.trace import append_trace_log, sanitize_turn_input, sanitize_value
 from ava.application.realtime.barge_in import BargeInConfig, BargeInDetector
@@ -38,7 +39,6 @@ from ava.application.realtime.turn import TurnControl, TurnStatus
 from ava.application.voice_stream import StreamingVoicePipeline, VoiceStreamConfig
 from ava.domain.context import MediaArtifact, TurnInput, assemble_context
 from ava.domain.session.state import ConversationState
-from ava.infrastructure.llm import client as llm_client
 from ava.infrastructure.realtime import RealtimeAudioBridge
 from ava.infrastructure.tts.streaming_sdk import CosyVoiceSDKError
 from config import settings
@@ -1019,20 +1019,6 @@ class RealtimeConversationSession:
                         flush_chars=max(16, int(settings.speech_postprocess.stream_flush_chars or 72)),
                     )
 
-            stream = llm_client.chat_stream(
-                api_base=settings.openai_config.api_base,
-                api_key=settings.openai_config.api_key,
-                model=settings.openai_config.multimodal_model or settings.openai_config.model,
-                messages=plan.responder_messages,
-                timeout=settings.openai_config.timeout,
-                temperature=0.7,
-                modalities=["text"],
-                stream_options={"include_usage": True},
-                stop_event=ctrl.stop_event,
-            )
-            # print("plan.responder_messages")
-            # print(plan.responder_messages)
-            # print("plan.responder_messages")
             llm_stream_started_at = time.monotonic()
             first_token = True
 
@@ -1053,9 +1039,10 @@ class RealtimeConversationSession:
                     self._emit_metrics(ctrl)
                 tts_pipeline.submit(text)
 
-            for token in stream:
+            def _handle_token(token: str) -> None:
+                nonlocal assistant_text, token_count, token_chars, first_token
                 if ctrl.stop_event.is_set():
-                    break
+                    return
                 assistant_text += token
                 token_count += 1
                 token_chars += len(token)
@@ -1083,10 +1070,27 @@ class RealtimeConversationSession:
                             _submit_tts_text(chunk)
                     else:
                         _submit_tts_text(token)
+            reply_result = stream_reply_with_callbacks(
+                state=self.state,
+                turn_input=turn_input,
+                decision=decision,
+                plan=plan,
+                snapshot=snapshot,
+                api_base=settings.openai_config.api_base,
+                api_key=settings.openai_config.api_key,
+                model=settings.openai_config.multimodal_model or settings.openai_config.model,
+                timeout=settings.openai_config.timeout,
+                on_token=_handle_token,
+                current_turn_id=ctrl.turn_id,
+                stop_event=ctrl.stop_event,
+            )
+            assistant_text = reply_result.assistant_text
+            ctrl.assistant_text = assistant_text
             llm_stream_finished_at = time.monotonic()
             _LOG.info(
-                "Realtime turn llm stream finished: turn=%s tokens=%s token_chars=%s assistant_chars=%s elapsed_ms=%s interrupted=%s",
+                "Realtime turn llm stream finished: turn=%s backend=%s tokens=%s token_chars=%s assistant_chars=%s elapsed_ms=%s interrupted=%s",
                 ctrl.turn_id,
+                reply_result.backend,
                 token_count,
                 token_chars,
                 len(assistant_text),
@@ -1106,6 +1110,8 @@ class RealtimeConversationSession:
                         ((llm_stream_finished_at or time.monotonic()) - (llm_stream_started_at or ctrl.started_at))
                         * 1000.0,
                     ),
+                    "backend": reply_result.backend,
+                    "executor_debug": sanitize_value(reply_result.debug),
                     "interrupted": bool(ctrl.stop_event.is_set() or ctrl.interrupted),
                 },
                 turn_id=ctrl.turn_id,
@@ -1134,6 +1140,7 @@ class RealtimeConversationSession:
                             close_timeout_seconds,
                             tts_before_close,
                         )
+                        tts_pipeline.interrupt()
                 close_elapsed_ms = max(0.0, (time.monotonic() - close_started_at) * 1000.0)
                 tts_after_close = tts_pipeline.snapshot()
                 _LOG.info(

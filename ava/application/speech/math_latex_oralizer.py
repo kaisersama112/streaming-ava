@@ -3,33 +3,83 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Optional
 
-from sympy import Add, Eq, Function, Integer, Mul, Pow, Rational, Symbol
+from sympy.parsing.latex import parse_latex
+from sympy import Integer, Rational, Symbol, Eq, Add, Mul, Pow, Function
 from sympy.core.function import AppliedUndef
 from sympy.core.relational import Relational
-from sympy.parsing.latex import parse_latex
+
+from .latex_speech_config import (
+    FUNCTION_SPOKEN,
+    GREEK_SPOKEN,
+    REL_OP_SPOKEN,
+    REPLACEMENTS,
+)
+
+
+# =========================
+# 0. preprocess / normalize
+# =========================
+
+
+def is_command_optional_bracket(text: str, index: int) -> bool:
+    """判断方括号是否属于 LaTeX 命令的可选参数。"""
+    cursor = index - 1
+    while cursor >= 0 and text[cursor].isspace():
+        cursor -= 1
+
+    end = cursor
+    while cursor >= 0 and text[cursor].isalpha():
+        cursor -= 1
+
+    return end >= 0 and cursor >= 0 and text[cursor] == "\\"
+
+
+def normalize_grouping_brackets(text: str) -> str:
+    """把纯分组用途的方括号归一化成圆括号。"""
+    chars = list(text)
+    stack: list[tuple[int, bool]] = []
+    pairs: list[tuple[int, int]] = []
+
+    for index, char in enumerate(chars):
+        if char == "[":
+            stack.append((index, not is_command_optional_bracket(text, index)))
+        elif char == "]" and stack:
+            open_index, replaceable = stack.pop()
+            if replaceable:
+                pairs.append((open_index, index))
+
+    for open_index, close_index in pairs:
+        chars[open_index] = "("
+        chars[close_index] = ")"
+
+    return "".join(chars)
 
 
 def normalize_latex_for_parser(text: str) -> str:
+    """在进入解析器前清理排版命令并统一常见写法。"""
     s = text.strip()
-    s = re.sub(r"^\$\$(.*)\$\$$", r"\1", s, flags=re.DOTALL)
-    s = re.sub(r"^\$(.*)\$$", r"\1", s, flags=re.DOTALL)
-    # 把粘连写法拆开：\partialQ -> \partial Q, \partialx -> \partial x
-    s = re.sub(r"\\partial(?![\s\^_\\{])([A-Za-z])", r"\\partial \1", s)
-    s = re.sub(r"\\partial\s+([A-Za-z])(?=[A-Za-z])", r"\\partial \1", s)
+    s = s.replace(r"\left", "").replace(r"\right", "")
+    s = normalize_grouping_brackets(s)
 
     s = re.sub(
-        r"\\(sin|cos|tan|cot)\s+([A-Za-z])\s*\^\s*(\{[^{}]+\}|[A-Za-z0-9]+)",
+        r"\\(sin|cos|tan)\s+([A-Za-z])\s*\^\s*(\{[^{}]+\}|[A-Za-z0-9]+)",
         r"\\\1(\2^\3)",
         s,
     )
     s = re.sub(
-        r"\\(sin|cos|tan|cot)\s+([A-Za-z0-9]+)",
+        r"\\(sin|cos|tan)\s+([A-Za-z0-9]+)",
         r"\\\1(\2)",
         s,
     )
+
+    s = re.sub(r"^\$\$(.*)\$\$$", r"\1", s, flags=re.DOTALL)
+    s = re.sub(r"^\$(.*)\$$", r"\1", s, flags=re.DOTALL)
+
     s = s.replace(r"\dfrac", r"\frac").replace(r"\tfrac", r"\frac")
+
     s = re.sub(
         r"\\underset\s*\{([^{}]+)\}\s*\{\s*\\mathop\s*\{\s*\\lim\s*\}\s*\}",
         lambda m: fr"\lim_{{{m.group(1).strip()}}}",
@@ -40,357 +90,217 @@ def normalize_latex_for_parser(text: str) -> str:
         lambda m: fr"\lim_{{{m.group(1).strip()}}}",
         s,
     )
-    s = re.sub(r"\\mathop\s*\{\s*\\lim\s*\}", lambda _m: r"\lim", s)
+    s = re.sub(r"\\mathop\s*\{\s*\\lim\s*\}", r"\\lim", s)
+
     s = re.sub(r"\\,|\\;|\\!|\\quad|\\qquad", " ", s)
     s = re.sub(r"\\mathrm\s*\{\s*e\s*\}", "e", s)
     s = re.sub(r"\\mathrm\s*\{\s*d\s*\}", "d", s)
     s = re.sub(r"\bd\s*x\b", "dx", s)
     s = re.sub(r"\bd\s*y\b", "dy", s)
     s = re.sub(r"\bd\s*z\b", "dz", s)
-    s = re.sub(r"\bd\s*s\b", "ds", s)
     s = re.sub(r"=\s*$", "", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
 
-def strip_outer_latex_wrappers(text: str) -> str:
-    s = text.strip()
-    m = re.fullmatch(r"\\left\((.*)\\right\)", s, flags=re.DOTALL)
-    if m:
-        return m.group(1).strip()
-    if s.startswith("(") and s.endswith(")"):
-        inner = s[1:-1].strip()
-        if inner.count("(") == inner.count(")"):
-            return inner
-    if s.startswith("{") and s.endswith("}"):
-        inner = s[1:-1].strip()
-        if inner.count("{") == inner.count("}"):
-            return inner
-    return s
+
+# =========================
+# 1. semantic IR
+# =========================
+
+
+@dataclass(frozen=True)
+class SemanticIR:
+    kind: str
+
+
+@dataclass(frozen=True)
+class ExprIR(SemanticIR):
+    latex: str
+    expr: object
+
+
+@dataclass(frozen=True)
+class LimitIR(SemanticIR):
+    variable: str
+    target: str
+    body: str
+
+
+@dataclass(frozen=True)
+class DerivativeIR(SemanticIR):
+    body: str
+    variable: str
+    order: int = 1
+    partial: bool = False
+    mixed: tuple[tuple[str, int], ...] = ()
+    prime_style: bool = False
+    function_name: Optional[str] = None
+    function_arg: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SumProdIR(SemanticIR):
+    op: str
+    variable: str
+    lower: str
+    upper: str
+    body: str
+
+
+@dataclass(frozen=True)
+class IntegralIR(SemanticIR):
+    op: str
+    region: Optional[str] = None
+    lower: Optional[str] = None
+    upper: Optional[str] = None
+    body: str = ""
+    differentials: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CasesIR(SemanticIR):
+    rows: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class MatrixIR(SemanticIR):
+    matrix_type: str
+    rows: tuple[tuple[str, ...], ...]
+
+
+@dataclass(frozen=True)
+class SymbolIR(SemanticIR):
+    name: str
+
+
+@dataclass(frozen=True)
+class BoxedIR(SemanticIR):
+    body: str
+
+
+@dataclass(frozen=True)
+class AssignmentIR(SemanticIR):
+    lhs: str
+    rhs: str
+
+
+@dataclass(frozen=True)
+class SubscriptIR(SemanticIR):
+    base: str
+    subscript: str
+
+
+@dataclass(frozen=True)
+class AnnotatedIR(SemanticIR):
+    body: SemanticIR
+    notes: tuple[str, ...]
+
+
+# =========================
+# 2. helpers
+# =========================
+
+
+def split_top_level(text: str, sep: str) -> list[str]:
+    """按顶层分隔符拆分字符串，忽略括号内部内容。"""
+    parts: list[str] = []
+    depth_brace = depth_paren = depth_bracket = 0
+    start = 0
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "{":
+            depth_brace += 1
+        elif ch == "}":
+            depth_brace -= 1
+        elif ch == "(":
+            depth_paren += 1
+        elif ch == ")":
+            depth_paren -= 1
+        elif ch == "[":
+            depth_bracket += 1
+        elif ch == "]":
+            depth_bracket -= 1
+        elif text.startswith(sep, i) and depth_brace == depth_paren == depth_bracket == 0:
+            parts.append(text[start:i])
+            start = i + len(sep)
+            i = start
+            continue
+        i += 1
+    parts.append(text[start:])
+    return parts
+
+
+def split_diff_suffix(text: str) -> tuple[str, tuple[str, ...]]:
+    """从表达式末尾提取 dx、dy 这类微分后缀。"""
+    rest = text.strip()
+    match = re.search(r"\s*((?:d[A-Za-z]\s*)+)$", rest)
+    if not match:
+        return rest, ()
+    suffix = match.group(1)
+    diffs = tuple(re.findall(r"d([A-Za-z])", suffix))
+    return rest[:match.start()].rstrip(), diffs
+
+
+def extract_trailing_text_annotations(text: str) -> tuple[str, tuple[str, ...]]:
+    """提取公式尾部的 \\text 注释块。"""
+    rest = text.strip()
+    notes: list[str] = []
+
+    while True:
+        match = re.search(r"\s*\\text\{([^{}]*)\}\s*$", rest)
+        if not match:
+            break
+        notes.insert(0, match.group(1).strip())
+        rest = rest[:match.start()].rstrip()
+
+    return rest, tuple(notes)
 
 
 def normalize_region_name(raw: str) -> str:
+    """把区域名里的希腊字母替换成可口播字符。"""
     s = raw.strip()
-    mapping = {
-        r"\Omega": "Ω",
-        r"\omega": "ω",
-        r"\Gamma": "Γ",
-        r"\gamma": "γ",
-        r"\Sigma": "Σ",
-        r"\sigma": "σ",
-        r"\pi": "π",
-    }
-    for key, value in mapping.items():
-        s = s.replace(key, value)
+    for source, target in GREEK_SPOKEN.items():
+        s = s.replace(source, target)
     return s
-
-
-def normalize_exponent_for_speech(exp):
-    """
-    把指数尽量规整成 Rational。
-    例如：
-    -1/2
-    Mul(-1, Rational(1,2))
-    都尽量变成 Rational(-1, 2)
-    """
-    try:
-        if getattr(exp, "is_Rational", False):
-            return Rational(exp)
-    except Exception:
-        pass
-
-    if isinstance(exp, Mul):
-        coeff = Rational(1, 1)
-        others = []
-
-        for arg in exp.args:
-            if getattr(arg, "is_Rational", False):
-                coeff *= Rational(arg)
-            else:
-                others.append(arg)
-
-        if not others:
-            return coeff
-
-        if len(others) == 1:
-            candidate = coeff * others[0]
-            try:
-                if getattr(candidate, "is_Rational", False):
-                    return Rational(candidate)
-            except Exception:
-                pass
-
-    return exp
 
 
 def speak_atom_text(text: str) -> str:
+    """口播最小文本单元，如趋近符号和关系符。"""
     s = text.strip()
-    replacements = {
-        r"\infty": "无穷大",
-        "∞": "无穷大",
-        r"\to": "趋近于",
-        r"\leq": "小于等于",
-        r"\geq": "大于等于",
-        r"\neq": "不等于",
-        r"\sin": "正弦",
-        r"\cos": "余弦",
-        r"\tan": "正切",
-        r"\cot": "余切",
-        r"\ln": "自然对数",
-        r"\pi": "π",
-        r"\Gamma": "Γ",
-        r"\gamma": "γ",
-        r"\Omega": "Ω",
-        r"\omega": "ω",
-        r"\Sigma": "Σ",
-        r"\sigma": "σ",
-    }
-    for key, value in replacements.items():
-        s = s.replace(key, value)
-    s = re.sub(r"\s+", "", s)
-    return s
+    for source, target in GREEK_SPOKEN.items():
+        s = s.replace(source, target)
+    for source, target in REPLACEMENTS.items():
+        s = s.replace(source, target)
+    return re.sub(r"\s+", "", s)
 
 
-def oralize_fragment(text: str) -> str:
-    s = strip_outer_latex_wrappers(text.strip())
-    try:
-        return oralize_latex(s)
-    except Exception:
-        return _fallback_oralize_plain_text(s)
+
 
 
 def oralize_bound(text: str) -> str:
-    s = strip_outer_latex_wrappers(text.strip())
-    if s in {r"\pi", r"\infty", r"\Omega", r"\Gamma", r"\omega"}:
-        return speak_atom_text(s)
-    try:
-        return oralize_latex(s)
-    except Exception:
-        return _fallback_oralize_plain_text(s)
-
-
-def try_render_derivative_composite(latex: str) -> Optional[str]:
-    DERIV_FRACTION_PATTERN = re.compile(
-        r"\\frac\s*\{d\s*([^{}]+)\}\s*\{d\s*([^{}]+)\}"
-    )
-    if r"\frac" not in latex or r"\partial" in latex:
-        return None
-
-    def repl(m: re.Match) -> str:
-        body = oralize_fragment(m.group(1).strip())
-        var = oralize_fragment(m.group(2).strip())
-        return f"{body}对{var}的导数"
-
-    replaced = DERIV_FRACTION_PATTERN.sub(repl, latex)
-    if replaced == latex:
-        return None
-
-    replaced = re.sub(r"\s*\+\s*", "加", replaced)
-    replaced = re.sub(r"\s*-\s*", "减", replaced)
-    replaced = re.sub(r"\s+", "", replaced)
-    return replaced
-
-
-def try_render_partial_composite(latex: str) -> Optional[str]:
-    PARTIAL_FRACTION_PATTERN = re.compile(
-        r"\\frac\s*\{\\partial\s*([^{}]+)\}\s*\{\\partial\s*([^{}]+)\}"
-    )
-
-    if r"\frac" not in latex or r"\partial" not in latex:
-        return None
-
-    def repl(m: re.Match) -> str:
-        body = oralize_fragment(m.group(1).strip())
-        var = oralize_fragment(m.group(2).strip())
-        return f"{body}对{var}的偏导"
-
-    replaced = PARTIAL_FRACTION_PATTERN.sub(repl, latex)
-
-    if replaced == latex:
-        return None
-
-    # 把剩余运算符口播化
-    replaced = re.sub(r"\s*\+\s*", "加", replaced)
-    replaced = re.sub(r"\s*-\s*", "减", replaced)
-    replaced = re.sub(r"\s+", "", replaced)
-    return replaced
-
-
-def try_render_greek_symbol(latex: str) -> Optional[str]:
-    mapping = {
-        r"\Omega": "欧米伽",
-        r"\omega": "欧米伽",
-        r"\Gamma": "伽马",
-        r"\gamma": "伽马",
-        r"\Sigma": "西格玛",
-        r"\sigma": "西格玛",
-        r"\pi": "派",
-    }
-    return mapping.get(latex.strip())
-
-
-def try_render_limit(latex: str) -> Optional[str]:
-    m = re.fullmatch(r"\\lim_\{([^{}]+)\\to([^{}]+)\}(.+)", latex)
-    if not m:
-        return None
-    var = speak_atom_text(m.group(1))
-    target = speak_atom_text(m.group(2))
-    body_text = oralize_fragment(m.group(3).strip())
-    return f"当{var}趋近于{target}时，{body_text}"
-
-
-def try_render_cases(latex: str) -> Optional[str]:
-    m = re.search(r"\\begin\{cases\}(.*?)\\end\{cases\}", latex, flags=re.DOTALL)
-    if not m:
-        return None
-    rows = [row.strip() for row in re.split(r"\\\\", m.group(1).strip()) if row.strip()]
-    spoken_rows: list[str] = []
-    for row in rows:
-        parts = [part.strip() for part in row.split("&") if part.strip()]
-        if len(parts) == 2:
-            spoken_rows.append(
-                f"当{oralize_fragment(parts[1])}时，函数值是{oralize_fragment(parts[0])}"
-            )
-        else:
-            spoken_rows.append(oralize_fragment(row))
-    return "分段函数。" + "；".join(spoken_rows)
-
-
-def try_render_matrix(latex: str) -> Optional[str]:
-    m = re.search(r"\\begin\{([pbvBV]?matrix)\}(.*?)\\end\{\1\}", latex, flags=re.DOTALL)
-    if not m:
-        return None
-    matrix_type = m.group(1)
-    rows = [row.strip() for row in re.split(r"\\\\", m.group(2).strip()) if row.strip()]
-    parsed_rows = [[oralize_fragment(col.strip()) for col in row.split("&")] for row in rows]
-    row_n = len(parsed_rows)
-    col_n = max((len(row) for row in parsed_rows), default=0)
-    prefix = f"这是一个{row_n}行{col_n}列行列式" if matrix_type in {"vmatrix",
-                                                                    "Vmatrix"} else f"这是一个{row_n}行{col_n}列矩阵"
-    parts = [prefix]
-    for index, row in enumerate(parsed_rows, start=1):
-        parts.append(f"第{index}行是" + "，".join(row))
-    return "。".join(parts)
-
-
-def try_render_integral(latex: str) -> Optional[str]:
-    m = re.fullmatch(r"\\oint_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)", latex)
-    if m:
-        contour = normalize_region_name((m.group(1) or m.group(2)).strip())
-        body = m.group(3).strip()
-        m2 = re.fullmatch(r"(.+?)dx\s*\+\s*(.+?)dy", body)
-        if m2:
-            return (
-                f"沿{contour}的闭合曲线积分，第一部分是{oralize_fragment(m2.group(1).strip())}对x积分，"
-                f"第二部分是{oralize_fragment(m2.group(2).strip())}对y积分"
-            )
-        if body.endswith("dx"):
-            return f"沿{contour}的闭合曲线积分，{oralize_fragment(body[:-2].strip())}对x积分"
-        return f"沿{contour}的闭合曲线积分，{oralize_fragment(body)}"
-
-    m = re.fullmatch(r"\\int_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)\s*ds", latex)
-    if m:
-        contour = normalize_region_name((m.group(1) or m.group(2)).strip())
-        return f"沿{contour}的曲线积分，{oralize_fragment(m.group(3).strip())}对弧长s积分"
-
-    m = re.fullmatch(r"\\int_\{?(.+?)\}?\^\{?(.+?)\}?\s*(.+)", latex)
-    if m:
-        lower = oralize_bound(m.group(1).strip())
-        upper = oralize_bound(m.group(2).strip())
-        body = m.group(3).strip()
-        if body.endswith("dx"):
-            return f"从{lower}到{upper}，{oralize_fragment(body[:-2].strip())}对x的定积分"
-        if body.endswith("dy"):
-            return f"从{lower}到{upper}，{oralize_fragment(body[:-2].strip())}对y的定积分"
-        if body.endswith("dz"):
-            return f"从{lower}到{upper}，{oralize_fragment(body[:-2].strip())}对z的定积分"
-        return f"从{lower}到{upper}的定积分，积分函数是{oralize_fragment(body)}"
-
-    m = re.fullmatch(r"\\iint_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)", latex)
-    if m:
-        region = normalize_region_name((m.group(1) or m.group(2)).strip())
-        body = m.group(3).strip()
-        if body.endswith("dxdy"):
-            return f"在{region}上，{oralize_fragment(body[:-4].strip())}的二重积分，d x d y"
-        if body.endswith("dydx"):
-            return f"在{region}上，{oralize_fragment(body[:-4].strip())}的二重积分，d y d x"
-        return f"在{region}上的二重积分，积分函数是{oralize_fragment(body)}"
-
-    m = re.fullmatch(r"\\iiint_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)", latex)
-    if m:
-        region = normalize_region_name((m.group(1) or m.group(2)).strip())
-        body = m.group(3).strip()
-        if body.endswith("dxdydz"):
-            return f"在{region}上，{oralize_fragment(body[:-6].strip())}的三重积分，d x d y d z"
-        if body.endswith("dzdydx"):
-            return f"在{region}上，{oralize_fragment(body[:-6].strip())}的三重积分，d z d y d x"
-        return f"在{region}上的三重积分，积分函数是{oralize_fragment(body)}"
-    return None
-
-
-def try_render_derivative(latex: str) -> Optional[str]:
-    m = re.fullmatch(
-        r"\\frac\s*\{d\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{d\s*([A-Za-z]+)\^\{?([0-9]+)\}?\}",
-        latex,
-    )
-    if m and m.group(1) == m.group(4):
-        return f"{oralize_fragment(m.group(2).strip())}对{oralize_fragment(m.group(3).strip())}的{m.group(1)}阶导数"
-
-    m = re.fullmatch(r"\\frac\s*\{d\}\s*\{d\s*([A-Za-z]+)\}\s*(.+)", latex)
-    if m:
-        return f"{oralize_fragment(m.group(2).strip())}对{oralize_fragment(m.group(1).strip())}的导数"
-
-    m = re.fullmatch(r"\\frac\s*\{d\s*([^{}]+)\}\s*\{d\s*([^{}]+)\}", latex)
-    if m:
-        return f"{oralize_fragment(m.group(1).strip())}对{oralize_fragment(m.group(2).strip())}的导数"
-
-    for suffix, order in (("'''", "三"), ("''", "二"), ("'", "一")):
-        m = re.fullmatch(rf"([A-Za-z]+){re.escape(suffix)}\(([^()]*)\)", latex)
-        if m:
-            return f"{m.group(1)}关于{oralize_fragment(m.group(2).strip())}的{order}阶导数"
-    return None
-
-
-def try_render_partial(latex: str) -> Optional[str]:
-    m = re.fullmatch(
-        r"\\frac\s*\{\\partial\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{\\partial\s*([A-Za-z]+)\s*\\partial\s*([A-Za-z]+)\}",
-        latex,
-    )
-    if m and m.group(1) == "2":
-        return f"{oralize_fragment(m.group(2).strip())}先对{oralize_fragment(m.group(3).strip())}再对{oralize_fragment(m.group(4).strip())}的二阶混合偏导"
-
-    m = re.fullmatch(
-        r"\\frac\s*\{\\partial\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{\\partial\s*([A-Za-z]+)\^\{?([0-9]+)\}?\s*\\partial\s*([A-Za-z]+)\}",
-        latex,
-    )
-    if m:
-        return (
-            f"{oralize_fragment(m.group(2).strip())}对{oralize_fragment(m.group(3).strip())}的{m.group(4).strip()}阶，"
-            f"再对{oralize_fragment(m.group(5).strip())}的一阶，共{m.group(1)}阶偏导"
-        )
-
-    m = re.fullmatch(
-        r"\\frac\s*\{\\partial\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{\\partial\s*([A-Za-z]+)\^\{?([0-9]+)\}?\}",
-        latex,
-    )
-    if m and m.group(1) == m.group(4):
-        return f"{oralize_fragment(m.group(2).strip())}对{oralize_fragment(m.group(3).strip())}的{m.group(1)}阶偏导"
-
-    m = re.fullmatch(r"\\frac\s*\{\\partial\s*([^{}]+)\}\s*\{\\partial\s*([^{}]+)\}", latex)
-    if m:
-        return f"{oralize_fragment(m.group(1).strip())}对{oralize_fragment(m.group(2).strip())}的偏导"
-
-    m = re.fullmatch(r"\\frac\s*\{\\partial\}\s*\{\\partial\s*([A-Za-z]+)\}\s*(.+)", latex)
-    if m:
-        return f"{oralize_fragment(m.group(2).strip())}对{oralize_fragment(m.group(1).strip())}的偏导"
-    return None
+    """口播积分上下限或极限目标。"""
+    stripped = text.strip()
+    if stripped in GREEK_SPOKEN:
+        return GREEK_SPOKEN[stripped]
+    return oralize_latex(stripped)
 
 
 def oralize_inline_formula(text: str) -> str:
-    s = strip_outer_latex_wrappers(text.strip())
+    """优先按完整公式口播，失败时退化为行内替换。"""
+    s = text.strip()
+    try:
+        return oralize_latex(s)
+    except Exception:
+        pass
+
     s = re.sub(
         r"([A-Za-z]+)_\{([^{}]+)\}",
-        lambda m: f"{m.group(1)}下标{oralize_fragment(m.group(2).strip())}",
+        lambda m: f"{m.group(1)}下标{m.group(2).strip().replace(',', '逗号').replace('*', '')}",
         s,
     )
     s = re.sub(
@@ -401,151 +311,326 @@ def oralize_inline_formula(text: str) -> str:
     try:
         return oralize_latex(s)
     except Exception:
-        return _fallback_oralize_plain_text(s)
-
-
-def _fallback_oralize_plain_text(text: str) -> str:
-    s = normalize_latex_for_parser(strip_outer_latex_wrappers(text))
-    if not s:
         return s
-    s = _replace_fraction_fallback(s)
-    s = _replace_sqrt_fallback(s)
-    s = _replace_superscript_fallback(s)
-    s = _replace_subscript_fallback(s)
-    s = _replace_symbol_tokens_fallback(s)
-    s = s.replace("{", " ").replace("}", " ").replace("&", " ")
-    s = s.replace("\\", " ")
-    s = re.sub(r"\s+", " ", s).strip()
+
+
+def speak_symbol_name(name: str) -> str:
+    """把符号名转成更自然的中文口播形式。"""
+    m = re.fullmatch(r"([A-Za-z]+)_\{(.+)\}", name)
+    if m:
+        base = m.group(1)
+        sub = m.group(2).replace("*", "")
+        sub = sub.replace(",", "逗号")
+        return f"{base}下标{oralize_inline_formula(sub)}"
+
+    m = re.fullmatch(r"([A-Za-z]+)_([A-Za-z0-9]+)", name)
+    if m:
+        return f"{m.group(1)}下标{m.group(2)}"
+
+    return name
+
+
+def strip_outer_parens(text: str) -> str:
+    """安全去掉最外层一对完整包裹的圆括号。"""
+    s = text.strip()
+    while s.startswith("(") and s.endswith(")"):
+        depth = 0
+        balanced = True
+        for index, char in enumerate(s):
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0 and index != len(s) - 1:
+                    balanced = False
+                    break
+        if balanced:
+            s = s[1:-1].strip()
+        else:
+            break
     return s
 
 
-def _replace_fraction_fallback(text: str) -> str:
-    pattern = re.compile(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
-    while True:
-        updated = pattern.sub(
-            lambda
-                m: f"{_fallback_oralize_plain_text(m.group(2).strip())}分之{_fallback_oralize_plain_text(m.group(1).strip())}",
-            text,
-        )
-        if updated == text:
-            return updated
-        text = updated
+# =========================
+# 3. syntax -> semantic IR
+# =========================
 
 
-def _replace_sqrt_fallback(text: str) -> str:
-    pattern = re.compile(r"\\sqrt\s*\{([^{}]+)\}")
-    while True:
-        updated = pattern.sub(
-            lambda m: f"根号下{_fallback_oralize_plain_text(m.group(1).strip())}",
-            text,
-        )
-        if updated == text:
-            return updated
-        text = updated
-
-
-def _replace_superscript_fallback(text: str) -> str:
-    text = re.sub(r"([A-Za-z0-9\)\]])\^\{2\}", r"\1的平方", text)
-    text = re.sub(r"([A-Za-z0-9\)\]])\^\{3\}", r"\1的立方", text)
-    text = re.sub(
-        r"([A-Za-z0-9\)\]])\^\{([^{}]+)\}",
-        lambda m: f"{m.group(1)}的{_fallback_oralize_plain_text(m.group(2).strip())}次方",
-        text,
-    )
-    text = re.sub(r"([A-Za-z0-9\)\]])\^2\b", r"\1的平方", text)
-    text = re.sub(r"([A-Za-z0-9\)\]])\^3\b", r"\1的立方", text)
-    text = re.sub(r"([A-Za-z0-9\)\]])\^([A-Za-z0-9]+)", lambda m: f"{m.group(1)}的{m.group(2)}次方", text)
-    return text
-
-
-def _replace_subscript_fallback(text: str) -> str:
-    text = re.sub(
-        r"([A-Za-z]+)_\{([^{}]+)\}",
-        lambda m: f"{m.group(1)}下标{_fallback_oralize_plain_text(m.group(2).strip())}",
-        text,
-    )
-    text = re.sub(r"([A-Za-z]+)_([A-Za-z0-9]+)", lambda m: f"{m.group(1)}下标{m.group(2)}", text)
-    return text
-
-
-def _replace_symbol_tokens_fallback(text: str) -> str:
-    replacements = {
-        r"\to": "趋近于",
-        r"\ge": "大于等于",
-        r"\geq": "大于等于",
-        r"\le": "小于等于",
-        r"\leq": "小于等于",
-        r"\neq": "不等于",
-        r"\times": "乘",
-        r"\cdot": "乘",
-        r"\sin": "正弦",
-        r"\cos": "余弦",
-        r"\tan": "正切",
-        r"\cot": "余切",
-        r"\ln": "自然对数",
-        r"\infty": "无穷大",
-        r"\pi": "派",
-        r"\alpha": "阿尔法",
-        r"\beta": "贝塔",
-        r"\gamma": "伽马",
-        r"\theta": "西塔",
-        "=": "等于",
-        "+": "加",
-        "-": "减",
-    }
-    updated = text
-    for key, value in replacements.items():
-        updated = updated.replace(key, value)
-    return updated
-
-
-def try_render_sumprod(latex: str) -> Optional[str]:
-    m = re.fullmatch(r"\\sum_\{([^{}]+)=([^{}]+)\}\^\{([^{}]+)\}\s*(.+)", latex)
-    if m:
-        return (
-            f"从{oralize_fragment(m.group(1).strip())}等于{oralize_fragment(m.group(2).strip())}"
-            f"到{oralize_fragment(m.group(3).strip())}求和，求和项是{oralize_inline_formula(m.group(4).strip())}"
-        )
-    m = re.fullmatch(r"\\prod_\{([^{}]+)=([^{}]+)\}\^\{([^{}]+)\}\s*(.+)", latex)
-    if m:
-        return (
-            f"从{oralize_fragment(m.group(1).strip())}等于{oralize_fragment(m.group(2).strip())}"
-            f"到{oralize_fragment(m.group(3).strip())}连乘，连乘项是{oralize_inline_formula(m.group(4).strip())}"
-        )
-    return None
-
-
-def try_render_subscript_only(latex: str) -> Optional[str]:
-    s = latex.strip()
-    if s.startswith((
-            r"\lim", r"\int", r"\iint", r"\iiint", r"\oint", r"\sum", r"\prod", r"\frac", r"\partial", r"\sqrt",
-            r"\begin")):
+def try_build_limit_ir(latex: str) -> Optional[LimitIR]:
+    """识别极限结构并构造成 LimitIR。"""
+    m = re.fullmatch(r"\\lim_\{([^{}]+)\\to([^{}]+)\}(.+)", latex)
+    if not m:
         return None
-    m = re.fullmatch(r"([A-Za-z]+)_\{([^{}]+)\}", s)
+    return LimitIR(
+        kind="limit",
+        variable=m.group(1).strip(),
+        target=m.group(2).strip(),
+        body=m.group(3).strip(),
+    )
+
+
+def try_build_assignment_ir(latex: str) -> Optional[AssignmentIR]:
+    """识别顶层等号表达式并构造成赋值 IR。"""
+    if latex.startswith(r"\begin{"):
+        return None
+    parts = split_top_level(latex, "=")
+    if len(parts) != 2:
+        return None
+    lhs = parts[0].strip()
+    rhs = parts[1].strip()
+    if not lhs or not rhs:
+        return None
+    return AssignmentIR(kind="assignment", lhs=lhs, rhs=rhs)
+
+
+def try_build_subscript_ir(latex: str) -> Optional[SubscriptIR]:
+    """识别纯下标表达式并构造成 SubscriptIR。"""
+    m = re.fullmatch(r"([A-Za-z]+)_\{([^{}]+)\}", latex)
     if m:
-        return f"{m.group(1)}下标{speak_atom_text(m.group(2).strip().replace(',', '逗号'))}"
-    m = re.fullmatch(r"([A-Za-z]+)_([A-Za-z0-9]+)", s)
+        return SubscriptIR(kind="subscript", base=m.group(1), subscript=m.group(2).strip())
+    m = re.fullmatch(r"([A-Za-z]+)_([A-Za-z0-9]+)", latex)
     if m:
-        return f"{m.group(1)}下标{m.group(2)}"
-    if "_" in s:
-        updated = re.sub(
-            r"([A-Za-z]+)_\{([^{}]+)\}",
-            lambda m: f"{m.group(1)}下标{speak_atom_text(m.group(2).strip().replace(',', '逗号'))}",
-            s,
-        )
-        updated = re.sub(
-            r"([A-Za-z]+)_([A-Za-z0-9]+)",
-            lambda m: f"{m.group(1)}下标{m.group(2)}",
-            updated,
-        )
-        try:
-            return oralize_latex(updated) if updated != latex else updated
-        except Exception:
-            return updated
+        return SubscriptIR(kind="subscript", base=m.group(1), subscript=m.group(2).strip())
     return None
+
+
+def try_build_cases_ir(latex: str) -> Optional[CasesIR]:
+    """识别 cases 环境并构造成分段函数 IR。"""
+    m = re.search(r"\\begin\{cases\}(.*?)\\end\{cases\}", latex, flags=re.DOTALL)
+    if not m:
+        return None
+    rows = [r.strip() for r in re.split(r"\\\\", m.group(1).strip()) if r.strip()]
+    parsed: list[tuple[str, str]] = []
+    for row in rows:
+        parts = [p.strip() for p in row.split("&") if p.strip()]
+        if len(parts) == 2:
+            parsed.append((parts[0], parts[1]))
+    if not parsed:
+        return None
+    return CasesIR(kind="cases", rows=tuple(parsed))
+
+
+def try_build_matrix_ir(latex: str) -> Optional[MatrixIR]:
+    """识别常见矩阵环境并构造成 MatrixIR。"""
+    m = re.search(r"\\begin\{([A-Za-z]+matrix)\}(.*?)\\end\{\1\}", latex, flags=re.DOTALL)
+    if not m:
+        return None
+    rows = [r.strip() for r in re.split(r"\\\\", m.group(2).strip()) if r.strip()]
+    parsed_rows = tuple(tuple(cell.strip() for cell in row.split("&")) for row in rows)
+    return MatrixIR(kind="matrix", matrix_type=m.group(1), rows=parsed_rows)
+
+
+def try_build_greek_symbol_ir(latex: str) -> Optional[SymbolIR]:
+    """识别单独出现的希腊字母符号。"""
+    if latex.strip() in GREEK_SPOKEN:
+        return SymbolIR(kind="symbol", name=latex.strip())
+    return None
+
+
+def try_build_boxed_ir(latex: str) -> Optional[BoxedIR]:
+    """识别 boxed 包装结构。"""
+    m = re.fullmatch(r"\\boxed\{(.+)\}", latex)
+    if not m:
+        return None
+    return BoxedIR(kind="boxed", body=m.group(1).strip())
+
+
+def try_build_sumprod_ir(latex: str) -> Optional[SumProdIR]:
+    """识别求和与连乘结构。"""
+    m = re.fullmatch(r"\\(sum|prod)_\{([^{}]+)=([^{}]+)\}\^\{([^{}]+)\}\s*(.+)", latex)
+    if not m:
+        return None
+    return SumProdIR(
+        kind="sumprod",
+        op=m.group(1),
+        variable=m.group(2).strip(),
+        lower=m.group(3).strip(),
+        upper=m.group(4).strip(),
+        body=m.group(5).strip(),
+    )
+
+
+def try_build_integral_ir(latex: str) -> Optional[IntegralIR]:
+    """识别单积分、重积分与曲线积分结构。"""
+    m = re.fullmatch(r"\\oint_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)", latex)
+    if m:
+        region = (m.group(1) or m.group(2)).strip()
+        body = m.group(3).strip()
+        pair = re.fullmatch(r"(.+?)d([A-Za-z])\s*\+\s*(.+?)d([A-Za-z])", body)
+        if pair:
+            return IntegralIR(
+                kind="integral",
+                op="oint",
+                region=region,
+                body=body,
+                differentials=(pair.group(2), pair.group(4)),
+            )
+        body, diffs = split_diff_suffix(body)
+        return IntegralIR(kind="integral", op="oint", region=region, body=body, differentials=diffs)
+
+    m = re.fullmatch(r"\\int_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)\s*ds", latex)
+    if m:
+        region = (m.group(1) or m.group(2)).strip()
+        return IntegralIR(kind="integral", op="curve", region=region, body=m.group(3).strip(), differentials=("s",))
+
+    m = re.fullmatch(
+        r"\\int_(?:\{([^{}]+)\}|([^\s^]+))\^(?:\{([^{}]+)\}|([^\s]+))\s*(.+)",
+        latex,
+    )
+    if m:
+        body, diffs = split_diff_suffix(m.group(5).strip())
+        return IntegralIR(
+            kind="integral",
+            op="int",
+            lower=(m.group(1) or m.group(2)).strip(),
+            upper=(m.group(3) or m.group(4)).strip(),
+            body=body,
+            differentials=diffs,
+        )
+
+    m = re.fullmatch(r"\\iint_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)", latex)
+    if m:
+        body, diffs = split_diff_suffix(m.group(3).strip())
+        return IntegralIR(kind="integral", op="iint", region=(m.group(1) or m.group(2)).strip(), body=body, differentials=diffs)
+
+    m = re.fullmatch(r"\\iiint_(?:\{([^{}]+)\}|([A-Za-z]+|\\[A-Za-z]+))\s*(.+)", latex)
+    if m:
+        body, diffs = split_diff_suffix(m.group(3).strip())
+        return IntegralIR(kind="integral", op="iiint", region=(m.group(1) or m.group(2)).strip(), body=body, differentials=diffs)
+
+    return None
+
+
+def try_build_derivative_ir(latex: str) -> Optional[DerivativeIR]:
+    """识别常见常微分写法。"""
+    m = re.fullmatch(
+        r"\\frac\s*\{d\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{d\s*([A-Za-z]+)\^\{?([0-9]+)\}?\}",
+        latex,
+    )
+    if m and m.group(1) == m.group(4):
+        return DerivativeIR(kind="derivative", body=m.group(2).strip(), variable=m.group(3).strip(), order=int(m.group(1)))
+
+    m = re.fullmatch(r"\\frac\s*\{d\}\s*\{d\s*([A-Za-z]+)\}\s*(.+)", latex)
+    if m:
+        return DerivativeIR(kind="derivative", body=m.group(2).strip(), variable=m.group(1).strip())
+
+    m = re.fullmatch(r"\\frac\s*\{d\s*([^{}]+)\}\s*\{d\s*([^{}]+)\}", latex)
+    if m:
+        return DerivativeIR(kind="derivative", body=m.group(1).strip(), variable=m.group(2).strip())
+
+    m = re.fullmatch(r"([A-Za-z]+)('{1,})\(([^()]*)\)", latex)
+    if m:
+        return DerivativeIR(
+            kind="derivative",
+            body=m.group(1),
+            variable=m.group(3).strip(),
+            order=len(m.group(2)),
+            prime_style=True,
+            function_name=m.group(1),
+            function_arg=m.group(3).strip(),
+        )
+
+    return None
+
+
+def try_build_partial_ir(latex: str) -> Optional[DerivativeIR]:
+    """识别常见偏导和混合偏导写法。"""
+    m = re.fullmatch(
+        r"\\frac\s*\{\\partial\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{\\partial\s*([A-Za-z]+)\s*\\partial\s*([A-Za-z]+)\}",
+        latex,
+    )
+    if m:
+        return DerivativeIR(
+            kind="derivative",
+            body=m.group(2).strip(),
+            variable="",
+            order=int(m.group(1)),
+            partial=True,
+            mixed=((m.group(3).strip(), 1), (m.group(4).strip(), 1)),
+        )
+
+    m = re.fullmatch(
+        r"\\frac\s*\{\\partial\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{\\partial\s*([A-Za-z]+)\^\{?([0-9]+)\}?\s*\\partial\s*([A-Za-z]+)\}",
+        latex,
+    )
+    if m:
+        return DerivativeIR(
+            kind="derivative",
+            body=m.group(2).strip(),
+            variable="",
+            order=int(m.group(1)),
+            partial=True,
+            mixed=((m.group(3).strip(), int(m.group(4))), (m.group(5).strip(), 1)),
+        )
+
+    m = re.fullmatch(
+        r"\\frac\s*\{\\partial\^\{?([0-9]+)\}?\s+([^{}]+)\}\s*\{\\partial\s*([A-Za-z]+)\^\{?([0-9]+)\}?\}",
+        latex,
+    )
+    if m and m.group(1) == m.group(4):
+        return DerivativeIR(kind="derivative", body=m.group(2).strip(), variable=m.group(3).strip(), order=int(m.group(1)), partial=True)
+
+    m = re.fullmatch(r"\\frac\s*\{\\partial\s*([^{}]+)\}\s*\{\\partial\s*([^{}]+)\}", latex)
+    if m:
+        return DerivativeIR(kind="derivative", body=m.group(1).strip(), variable=m.group(2).strip(), partial=True)
+
+    m = re.fullmatch(r"\\frac\s*\{\\partial\}\s*\{\\partial\s*([A-Za-z]+)\}\s*(.+)", latex)
+    if m:
+        return DerivativeIR(kind="derivative", body=m.group(2).strip(), variable=m.group(1).strip(), partial=True)
+
+    return None
+
+
+def build_semantic_ir(
+    latex: str,
+    *,
+    _normalized: bool = False,
+    _allow_annotations: bool = True,
+) -> SemanticIR:
+    """把 LaTeX 文本转换成统一的语义中间层。"""
+    normalized = latex if _normalized else normalize_latex_for_parser(latex)
+
+    if _allow_annotations:
+        core, notes = extract_trailing_text_annotations(normalized)
+        if notes:
+            return AnnotatedIR(
+                kind="annotated",
+                body=build_semantic_ir(
+                    core,
+                    _normalized=True,
+                    _allow_annotations=False,
+                ),
+                notes=notes,
+            )
+
+    for builder in (
+        try_build_greek_symbol_ir,
+        try_build_boxed_ir,
+        try_build_assignment_ir,
+        try_build_subscript_ir,
+        try_build_cases_ir,
+        try_build_matrix_ir,
+        try_build_derivative_ir,
+        try_build_partial_ir,
+        try_build_sumprod_ir,
+        try_build_integral_ir,
+        try_build_limit_ir,
+    ):
+        result = builder(normalized)
+        if result is not None:
+            return result
+
+    expr = parse_latex(normalized, backend="antlr")
+    return ExprIR(kind="expr", latex=normalized, expr=expr)
+
+
+# =========================
+# 4. expr speech helpers
+# =========================
 
 
 def is_negative_expr(expr) -> bool:
+    """判断表达式是否带有显式负号。"""
     if expr.is_number and expr.is_negative:
         return True
     if isinstance(expr, Mul) and expr.args and expr.args[0] == -1:
@@ -553,13 +638,9 @@ def is_negative_expr(expr) -> bool:
     return False
 
 
-def speak_relational(expr: Relational) -> str:
-    op_map = {"<": "小于", ">": "大于", "<=": "小于等于", ">=": "大于等于", "=": "等于", "==": "等于", "!=": "不等于"}
-    return f"{speak_expr(expr.lhs)}{op_map.get(expr.rel_op, expr.rel_op)}{speak_expr(expr.rhs)}"
-
-
 def join_add_terms(expr: Add) -> str:
-    parts: list[str] = []
+    """按加减顺序拼接加法表达式的口播文本。"""
+    parts = []
     for index, arg in enumerate(expr.args):
         text = speak_expr(arg)
         if index == 0:
@@ -571,63 +652,40 @@ def join_add_terms(expr: Add) -> str:
     return "".join(parts)
 
 
-def speak_symbol_name(name: str) -> str:
-    mapping = {
-        "E": "e",
-        "pi": "π",
-        "oo": "无穷大",
-        "Omega": "欧米伽",
-        "omega": "欧米伽",
-        "Gamma": "伽马",
-        "gamma": "伽马",
-        "Sigma": "西格玛",
-        "sigma": "西格玛",
-    }
-    if name in mapping:
-        return mapping[name]
-    m = re.fullmatch(r"([A-Za-z]+)_\{([^{}]+)\}", name)
-    if m:
-        return f"{m.group(1)}下标{oralize_fragment(m.group(2).strip())}"
-    m = re.fullmatch(r"([A-Za-z]+)_([A-Za-z0-9]+)", name)
-    if m:
-        return f"{m.group(1)}下标{m.group(2)}"
-    return speak_atom_text(name)
+def speak_relational(expr: Relational) -> str:
+    """口播关系表达式。"""
+    op = REL_OP_SPOKEN.get(expr.rel_op, expr.rel_op)
+    return f"{speak_expr(expr.lhs)}{op}{speak_expr(expr.rhs)}"
 
 
 def speak_power(base_text: str, exp) -> str:
-    exp = normalize_exponent_for_speech(exp)
-
+    """口播幂运算，优先处理常见特殊指数。"""
     if exp == Integer(2):
         return f"{base_text}的平方"
-
     if exp == Integer(3):
         return f"{base_text}的3次方"
-
-    if getattr(exp, "is_Rational", False):
-        return f"{base_text}的{speak_rational_exponent(exp)}次方"
-
+    if exp == Rational(1, 2):
+        return f"{base_text}的2分之1次方"
+    if exp == Integer(-1):
+        return f"{base_text}分之1"
+    if exp == Integer(-2):
+        return f"1除以{base_text}的平方"
     return f"{base_text}的{speak_expr(exp)}次方"
 
 
-def maybe_reorder_linear_text(text: str) -> str:
-    text = re.sub(r"^负1加([A-Za-z\u4e00-\u9fa5]+)$", r"\1减1", text)
-    text = re.sub(r"^1加([A-Za-z\u4e00-\u9fa5]+)$", r"\1加1", text)
-    return text
-
-
 def speak_fraction(numer, denom) -> str:
-    num_text = maybe_reorder_linear_text(speak_expr(numer))
-    den_text = maybe_reorder_linear_text(speak_expr(denom))
+    """口播分式，按复杂度选择“分之”或“除以”。"""
+    num_text = speak_expr(numer)
+    den_text = speak_expr(denom)
     if getattr(numer, "is_Integer", False) and getattr(denom, "is_Integer", False):
         return f"{den_text}分之{num_text}"
-    if getattr(denom, "is_Symbol", False) or getattr(denom, "is_Integer", False):
-        return f"{den_text}分之{num_text}"
-    if isinstance(denom, Mul) and not any(isinstance(arg, Add) for arg in denom.args):
-        return f"{den_text}分之{num_text}"
-    return f"{num_text}除以{den_text}"
+    if isinstance(denom, (Add, Mul, Pow, Function)):
+        return f"{num_text}除以{den_text}"
+    return f"{den_text}分之{num_text}"
 
 
 def speak_mul(expr: Mul) -> str:
+    """口播乘法表达式，并保留负号语义。"""
     if expr.args and expr.args[0] == -1:
         if len(expr.args) == 2:
             return f"负{speak_expr(expr.args[1])}"
@@ -635,23 +693,14 @@ def speak_mul(expr: Mul) -> str:
     parts = [speak_expr(arg) for arg in expr.args]
     if len(parts) == 2:
         return f"{parts[0]}{parts[1]}"
-    return "乘".join(parts)
+    return "乘以".join(parts)
 
 
 def speak_function(expr) -> str:
+    """口播函数调用表达式。"""
     name = expr.func.__name__
     args = expr.args
-    fn_map = {
-        "sin": "sine ",
-        "cos": "cosine ",
-        "tan": "tangent ",
-        "cot": "co-tangent ",
-        "sec": "secant ",
-        "csc": "co-secant ",
-        "log": "log ",
-        "exp": "e ",
-    }
-    zh_name = fn_map.get(name, name)
+    zh_name = FUNCTION_SPOKEN.get(name, name)
     if name == "log" and len(args) == 2:
         arg_text = speak_expr(args[0])
         base_text = speak_expr(args[1])
@@ -664,63 +713,28 @@ def speak_function(expr) -> str:
 
 
 def speak_applied_undef(expr: AppliedUndef) -> str:
-    return f"{expr.func.__name__}（{'，'.join(speak_expr(arg) for arg in expr.args)}）"
+    """口播未定义函数的调用形式。"""
+    name = expr.func.__name__
+    return f"{name}（{'，'.join(speak_expr(arg) for arg in expr.args)}）"
 
 
 def speak_eq(expr: Eq) -> str:
+    """口播等式表达式。"""
     return f"{speak_expr(expr.lhs)}等于{speak_expr(expr.rhs)}"
 
 
 def try_speak_fraction(expr) -> Optional[str]:
-    # Pow 不在这里拆成分数，保留指数语义
-    if isinstance(expr, (Add, Eq, Relational, Pow)):
+    """尝试把一般表达式降级为分式口播。"""
+    if isinstance(expr, (Add, Eq, Relational)) or not hasattr(expr, "as_numer_denom"):
         return None
-
-    if not hasattr(expr, "as_numer_denom"):
-        return None
-
     numer, denom = expr.as_numer_denom()
     if denom == 1:
         return None
-
     return speak_fraction(numer, denom)
 
 
-def zh_num(n: int) -> str:
-    mapping = {
-        0: "零",
-        1: "一",
-        2: "二",
-        3: "三",
-        4: "四",
-        5: "五",
-        6: "六",
-        7: "七",
-        8: "八",
-        9: "九",
-        10: "十",
-    }
-    return mapping.get(n, str(n))
-
-
-def speak_rational_exponent(exp) -> str:
-    exp = Rational(exp)
-    p = int(exp.p)
-    q = int(exp.q)
-
-    sign = "负" if p < 0 else ""
-    p = abs(p)
-
-    if q == 1:
-        return f"{sign}{zh_num(p)}"
-
-    if p == 1:
-        return f"{sign}{zh_num(q)}分之一"
-
-    return f"{sign}{zh_num(q)}分之{zh_num(p)}"
-
-
 def speak_expr(expr) -> str:
+    """把 SymPy 表达式递归转换成中文口播。"""
     if isinstance(expr, Relational):
         return speak_relational(expr)
     if isinstance(expr, Eq):
@@ -730,33 +744,23 @@ def speak_expr(expr) -> str:
     if isinstance(expr, Symbol):
         return speak_symbol_name(str(expr))
     if getattr(expr, "is_Integer", False):
-        value = int(expr)
-        return f"负{abs(value)}" if value < 0 else str(value)
+        n = int(expr)
+        return f"负{abs(n)}" if n < 0 else str(n)
     if getattr(expr, "is_Number", False):
-        try:
-            if float(expr) < 0:
-                return f"负{str(expr)[1:]}"
-        except Exception:
-            pass
         return str(expr)
-
     if isinstance(expr, Add):
         return join_add_terms(expr)
-
-    # Pow 必须先于 fraction
-    if isinstance(expr, Pow):
-        base, exp = expr.args
-
-        if exp == Rational(1, 2):
-            return f"根号下{speak_expr(base)}"
-
-        base_text = speak_expr(base)
-        return speak_power(base_text, exp)
-
     fraction_text = try_speak_fraction(expr)
     if fraction_text is not None:
         return fraction_text
-
+    if isinstance(expr, Pow):
+        base, exp = expr.args
+        if exp == Rational(1, 2):
+            return f"根号下{speak_expr(base)}"
+        base_text = speak_expr(base)
+        if isinstance(base, (Add, Eq)):
+            base_text = f"括号{base_text}"
+        return speak_power(base_text, exp)
     if isinstance(expr, Mul):
         return speak_mul(expr)
     if isinstance(expr, Function):
@@ -764,54 +768,168 @@ def speak_expr(expr) -> str:
     return str(expr)
 
 
-def oralize_latex_with_trace(latex: str) -> tuple[str, dict[str, Any]]:
-    normalized = normalize_latex_for_parser(latex)
-    for fn in (
-            try_render_greek_symbol,
-            try_render_cases,
-            try_render_matrix,
-            try_render_derivative_composite,
-            try_render_derivative,
-            try_render_partial_composite,  # 新增，放在单个偏导规则前面
-            try_render_partial,
-            try_render_sumprod,
-            try_render_integral,
-            try_render_limit,
-            try_render_subscript_only,
-    ):
-        result = fn(normalized)
-        if result:
-            return result, {
-                "backend": "math_latex_oralizer",
-                "normalized_text": normalized,
-                "mode": "rule",
-                "fallback_used": False,
-            }
-    try:
-        return speak_expr(parse_latex(normalized, backend="antlr")), {
-            "backend": "math_latex_oralizer",
-            "normalized_text": normalized,
-            "mode": "sympy_ast",
-            "fallback_used": False,
-        }
-    except Exception as exc:
-        return _fallback_oralize_plain_text(normalized), {
-            "backend": "math_latex_oralizer",
-            "normalized_text": normalized,
-            "mode": "fallback",
-            "fallback_used": True,
-            "fallback_reason": f"{type(exc).__name__}: {exc}",
-        }
+# =========================
+# 5. IR -> speech
+# =========================
+
+
+def render_derivative_ir(ir: DerivativeIR) -> str:
+    """把导数 IR 渲染成中文口播。"""
+    body = oralize_latex(strip_outer_parens(ir.body))
+    if ir.prime_style and ir.function_name and ir.function_arg is not None:
+        order_map = {1: "一阶", 2: "二阶", 3: "三阶"}
+        return f"{ir.function_name}关于{oralize_latex(ir.function_arg)}的{order_map.get(ir.order, str(ir.order) + '阶')}导数"
+
+    if ir.partial:
+        if ir.mixed:
+            if len(ir.mixed) == 2 and ir.mixed[0][1] == 1 and ir.mixed[1][1] == 1 and ir.order == 2:
+                var1 = oralize_latex(ir.mixed[0][0])
+                var2 = oralize_latex(ir.mixed[1][0])
+                return f"{body}先对{var1}再对{var2}的二阶混合偏导"
+            parts = []
+            for var, order in ir.mixed:
+                var_text = oralize_latex(var)
+                if order == 1:
+                    parts.append(f"对{var_text}的一阶")
+                else:
+                    parts.append(f"对{var_text}的{order}阶")
+            return f"{body}{'，'.join(parts)}，共{ir.order}阶偏导"
+        if ir.order == 1:
+            return f"{body}对{oralize_latex(ir.variable)}的偏导"
+        return f"{body}对{oralize_latex(ir.variable)}的{ir.order}阶偏导"
+
+    if ir.order == 1:
+        return f"{body}对{oralize_latex(ir.variable)}的导数"
+    return f"{body}对{oralize_latex(ir.variable)}的{ir.order}阶导数"
+
+
+def render_integral_ir(ir: IntegralIR) -> str:
+    """把积分 IR 渲染成中文口播。"""
+    body_text = oralize_latex(ir.body) if ir.body else ""
+    diff_text = " ".join(f"d {item}" for item in ir.differentials)
+
+    if ir.op == "oint":
+        region = normalize_region_name(ir.region or "")
+        if ir.differentials == ("x", "y"):
+            pair = re.fullmatch(r"(.+?)d([A-Za-z])\s*\+\s*(.+?)d([A-Za-z])", ir.body)
+            if pair:
+                first = pair.group(1).strip()
+                second = pair.group(3).strip()
+                return f"沿{region}的闭合曲线积分，第一部分是{oralize_latex(first)}对x积分，第二部分是{oralize_latex(second)}对y积分"
+        return f"沿{region}的闭合曲线积分，{body_text}{'，' + diff_text if diff_text else ''}"
+
+    if ir.op == "curve":
+        return f"沿{normalize_region_name(ir.region or '')}的曲线积分，{body_text}对弧长s积分"
+
+    if ir.op == "int":
+        lower = oralize_bound(ir.lower or "")
+        upper = oralize_bound(ir.upper or "")
+        if ir.differentials:
+            return f"从{lower}到{upper}，{body_text}对{''.join(ir.differentials)}的定积分"
+        return f"从{lower}到{upper}的定积分，积分函数是{body_text}"
+
+    if ir.op == "iint":
+        return f"在{normalize_region_name(ir.region or '')}上，{body_text}的二重积分，{diff_text}"
+
+    if ir.op == "iiint":
+        return f"在{normalize_region_name(ir.region or '')}上，{body_text}的三重积分，{diff_text}"
+
+    return body_text
+
+
+def render_semantic_ir(ir: SemanticIR) -> str:
+    """把任意语义 IR 渲染成最终中文口播。"""
+    if isinstance(ir, AnnotatedIR):
+        body_text = render_semantic_ir(ir.body)
+        note_text = "；".join(f"注释：{note}" for note in ir.notes)
+        return f"{body_text}；{note_text}" if body_text else note_text
+    if isinstance(ir, SymbolIR):
+        return GREEK_SPOKEN[ir.name]
+    if isinstance(ir, BoxedIR):
+        return f"方框中的{oralize_latex(ir.body)}"
+    if isinstance(ir, AssignmentIR):
+        return f"{oralize_latex(ir.lhs)}等于{oralize_latex(strip_outer_parens(ir.rhs))}"
+    if isinstance(ir, SubscriptIR):
+        subscript = ir.subscript.replace(",", "逗号").replace("*", "")
+        return f"{ir.base}下标{oralize_inline_formula(subscript)}"
+    if isinstance(ir, LimitIR):
+        return f"当{speak_atom_text(ir.variable)}趋近于{speak_atom_text(ir.target)}时，{oralize_latex(ir.body)}"
+    if isinstance(ir, CasesIR):
+        parts = [f"当{oralize_latex(cond)}时，函数值是{oralize_latex(value)}" for value, cond in ir.rows]
+        return "分段函数。" + "；".join(parts)
+    if isinstance(ir, MatrixIR):
+        row_n = len(ir.rows)
+        col_n = max((len(row) for row in ir.rows), default=0)
+        noun = "行列式" if ir.matrix_type == "vmatrix" else "矩阵"
+        pieces = [f"这是一个{row_n}行{col_n}列{noun}"]
+        for index, row in enumerate(ir.rows, start=1):
+            pieces.append(f"第{index}行是{'，'.join(oralize_inline_formula(cell) for cell in row)}")
+        return "。".join(pieces)
+    if isinstance(ir, DerivativeIR):
+        return render_derivative_ir(ir)
+    if isinstance(ir, SumProdIR):
+        op_text = "求和" if ir.op == "sum" else "连乘"
+        item_text = "求和项" if ir.op == "sum" else "连乘项"
+        return f"从{oralize_latex(ir.variable)}等于{oralize_latex(ir.lower)}到{oralize_latex(ir.upper)}{op_text}，{item_text}是{oralize_inline_formula(ir.body)}"
+    if isinstance(ir, IntegralIR):
+        return render_integral_ir(ir)
+    if isinstance(ir, ExprIR):
+        return speak_expr(ir.expr)
+    raise TypeError(f"Unsupported IR: {type(ir)!r}")
+
+
+# =========================
+# 6. public API
+# =========================
 
 
 def oralize_latex(latex: str) -> str:
-    spoken, _trace = oralize_latex_with_trace(latex)
-    return spoken
+    """对外暴露的 LaTeX 转中文口播入口。"""
+    return render_semantic_ir(build_semantic_ir(latex))
+
+
+def oralize_latex_with_trace(latex: str) -> tuple[str, dict[str, object]]:
+    """返回口播结果与调试追踪信息，供上层适配器记录。"""
+    normalized_text = normalize_latex_for_parser(latex)
+    trace: dict[str, object] = {
+        "backend": "math_latex_oralizer",
+        "mode": "semantic_ir",
+        "fallback_used": False,
+        "fallback_reason": "",
+        "normalized_text": normalized_text,
+    }
+
+    try:
+        ir = build_semantic_ir(latex)
+        trace["ir_kind"] = ir.kind
+        return render_semantic_ir(ir), trace
+    except Exception as exc:
+        trace["mode"] = "normalized_fallback"
+        trace["fallback_used"] = True
+        trace["fallback_reason"] = f"{type(exc).__name__}: {exc}"
+        return normalized_text or latex.strip(), trace
+
+
+def demo(latex: str) -> None:
+    """打印单条样例的归一化结果与中文口播。"""
+    try:
+        ir = build_semantic_ir(latex)
+        spoken = render_semantic_ir(ir)
+    except Exception as e:
+        spoken = f"[解析失败] {e}"
+
+    print("=" * 100)
+    print("LaTeX   :", latex)
+    print("Normalize:", normalize_latex_for_parser(latex))
+    print("中文口播 :", spoken)
+
+
+
+
 
 
 __all__ = [
     "normalize_latex_for_parser",
     "oralize_latex",
     "oralize_latex_with_trace",
-    "strip_outer_latex_wrappers",
 ]

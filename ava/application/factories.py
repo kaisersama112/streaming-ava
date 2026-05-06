@@ -22,12 +22,14 @@ def build_router(
     api_base: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
+    multimodal_model: str | None = None,
     timeout: int | None = None,
 ) -> RouterService:
     return RouterService(
         api_base=api_base or settings.openai_config.api_base,
         api_key=api_key or settings.openai_config.api_key,
         model=model or settings.runtime.router_model or settings.openai_config.model or settings.openai_config.intent_model,
+        multimodal_model=multimodal_model or settings.openai_config.multimodal_model or model,
         timeout=timeout or settings.runtime.router_timeout,
         prompt_center=prompt_center,
     )

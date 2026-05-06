@@ -1,5 +1,6 @@
 """User-facing command handlers shared by CLI and debugging flows."""
 
+from ava.application.agents_sdk import clear_agent_session
 from ava.domain.session.state import ConversationState
 
 
@@ -42,6 +43,7 @@ def handle_state_command(text: str, state: ConversationState) -> bool:
 
     if text == "/reset":
         state.reset()
+        clear_agent_session(state.session_id)
         print("[memory] 已重置")
         return True
 

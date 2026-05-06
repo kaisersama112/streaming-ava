@@ -1,1318 +1,1430 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>AVA Realtime Console</title>
     <style>
-      :root {
-        --bg: #f3efe7;
-        --bg-soft: #faf7f1;
-        --surface: rgba(255, 255, 255, 0.84);
-        --surface-strong: rgba(255, 255, 255, 0.94);
-        --surface-alt: #f6f1e8;
-        --line: rgba(42, 34, 26, 0.1);
-        --line-strong: rgba(42, 34, 26, 0.16);
-        --text: #1e1a16;
-        --muted: #6d6358;
-        --accent: #b76033;
-        --accent-soft: rgba(183, 96, 51, 0.12);
-        --accent-strong: #8f431e;
-        --ok: #1f8a63;
-        --warn: #b57a18;
-        --danger: #b2422f;
-        --shadow: 0 18px 42px rgba(58, 43, 28, 0.08);
-        --shadow-soft: 0 8px 20px rgba(58, 43, 28, 0.05);
-        --radius-card: 28px;
-        --radius-panel: 22px;
-        --radius-pill: 999px;
-        --ease-out: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-        --display-font: "Iowan Old Style", "Georgia", "Songti SC", "Times New Roman", serif;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html,
-      body {
-        margin: 0;
-        min-height: 100%;
-        color: var(--text);
-        font-family: "Avenir Next", "SF Pro Display", "PingFang SC", "Noto Sans SC", sans-serif;
-        background:
-          radial-gradient(circle at top left, rgba(183, 96, 51, 0.08), transparent 24%),
-          linear-gradient(180deg, var(--bg-soft), var(--bg));
-      }
-
-      body {
-        padding: 22px;
-      }
-
-      a {
-        color: inherit;
-      }
-
-      button,
-      input,
-      textarea {
-        font: inherit;
-      }
-
-      input,
-      textarea {
-        width: 100%;
-        border: 1px solid var(--line);
-        border-radius: 18px;
-        background: var(--surface-strong);
-        color: var(--text);
-        transition: border-color var(--ease-out), box-shadow var(--ease-out), background var(--ease-out);
-      }
-
-      input {
-        padding: 12px 14px;
-      }
-
-      textarea {
-        min-height: 168px;
-        resize: vertical;
-        padding: 16px 18px;
-        line-height: 1.72;
-      }
-
-      input:focus-visible,
-      textarea:focus-visible,
-      button:focus-visible,
-      summary:focus-visible,
-      a:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 4px rgba(183, 96, 51, 0.14);
-        border-color: rgba(183, 96, 51, 0.32);
-      }
-
-      button {
-        appearance: none;
-        border: 1px solid transparent;
-        border-radius: 18px;
-        min-height: 48px;
-        padding: 12px 16px;
-        cursor: pointer;
-        font-weight: 700;
-        transition:
-          transform var(--ease-out),
-          background var(--ease-out),
-          box-shadow var(--ease-out),
-          border-color var(--ease-out),
-          opacity var(--ease-out);
-      }
-
-      button:hover {
-        transform: translateY(-1px);
-      }
-
-      button:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-        transform: none;
-      }
-
-      .btn-primary {
-        color: #fff9f2;
-        background: linear-gradient(135deg, #201b17, #553020);
-        box-shadow: 0 10px 24px rgba(42, 29, 20, 0.18);
-      }
-
-      .btn-accent {
-        color: #fff8f2;
-        background: linear-gradient(135deg, #cc7142, #ad4f29);
-        box-shadow: 0 10px 24px rgba(183, 96, 51, 0.2);
-      }
-
-      .btn-live {
-        color: #f5fffa;
-        background: linear-gradient(135deg, #2a966d, #1f7a58);
-        box-shadow: 0 10px 24px rgba(31, 138, 99, 0.2);
-      }
-
-      .btn-warning {
-        color: #fffaf3;
-        background: linear-gradient(135deg, #c59432, #ac7614);
-        box-shadow: 0 10px 24px rgba(181, 122, 24, 0.18);
-      }
-
-      .btn-soft {
-        color: var(--text);
-        background: var(--surface-strong);
-        border-color: var(--line);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-      }
-
-      .btn-danger {
-        color: #fff8f6;
-        background: linear-gradient(135deg, #c45f4c, #9c3728);
-        box-shadow: 0 10px 24px rgba(156, 55, 40, 0.18);
-      }
-
-      .app-shell {
-        max-width: 1700px;
-        margin: 0 auto;
-        display: grid;
-        gap: 0;
-      }
-
-      .card {
-        border: 1px solid var(--line);
-        border-radius: var(--radius-card);
-        background: var(--surface);
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(16px) saturate(120%);
-      }
-
-      #speakerStateMirror {
-        color: var(--text);
-        font-size: 18px;
-        font-weight: 700;
-      }
-
-      #speakerStateMirror.ok {
-        color: var(--ok);
-      }
-
-      #speakerStateMirror.warn {
-        color: var(--warn);
-      }
-
-      #speakerStateMirror.danger {
-        color: var(--danger);
-      }
-
-      #speakerStateMirror.muted {
-        color: var(--muted);
-      }
-
-      .workspace {
-        display: grid;
-        grid-template-columns: minmax(300px, 336px) minmax(0, 1fr) minmax(360px, 420px);
-        gap: 20px;
-        align-items: start;
-      }
-
-      .sidebar,
-      .main-column,
-      .history-column {
-        min-width: 0;
-        display: grid;
-        gap: 20px;
-      }
-
-      .panel,
-      .stage-card,
-      .composer-card,
-      .history-card {
-        padding: 20px;
-      }
-
-      .panel,
-      .history-card {
-        position: sticky;
-        top: 22px;
-      }
-
-      .panel {
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 241, 233, 0.9));
-      }
-
-      .section-label {
-        margin: 0 0 6px;
-        color: var(--accent-strong);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-
-      .section-title {
-        margin: 0;
-        font-family: var(--display-font);
-        font-size: 28px;
-        line-height: 1;
-        letter-spacing: -0.03em;
-      }
-
-      .section-copy {
-        margin: 8px 0 0;
-        color: var(--muted);
-        font-size: 14px;
-        line-height: 1.7;
-      }
-
-      .panel-copy {
-        max-width: 28ch;
-      }
-
-      .meta-stack {
-        display: grid;
-        gap: 0;
-      }
-
-      .meta-item {
-        display: grid;
-        gap: 6px;
-        padding: 14px 0;
-        border-top: 1px dashed rgba(42, 34, 26, 0.12);
-      }
-
-      .meta-item:first-child {
-        padding-top: 0;
-        border-top: 0;
-      }
-
-      .meta-item small {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .meta-item code,
-      .log {
-        display: block;
-        border-radius: 16px;
-        padding: 11px 13px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 239, 231, 0.9));
-        border: 1px solid rgba(42, 34, 26, 0.08);
-        color: var(--text);
-        overflow: auto;
-      }
-
-      .meta-item code + code,
-      .meta-item code + pre,
-      .meta-item pre + code {
-        margin-top: 6px;
-      }
-
-      .meta-item code a {
-        text-decoration: none;
-      }
-
-      .meta-item code a:hover {
-        text-decoration: underline;
-      }
-
-      .session-switch-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .inline-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-
-      .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-      }
-
-      .metric-item {
-        display: grid;
-        gap: 4px;
-        padding: 12px 14px;
-        border-radius: 18px;
-        border: 1px solid var(--line);
-        background: linear-gradient(180deg, var(--surface-strong), rgba(246, 241, 233, 0.92));
-      }
-
-      .metric-item small {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .metric-value {
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: -0.03em;
-      }
-
-      .log {
-        margin: 0;
-        min-height: 140px;
-        max-height: 260px;
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-size: 12px;
-        line-height: 1.55;
-      }
-
-      .stage-card {
-        display: grid;
-        gap: 20px;
-        background:
-          radial-gradient(circle at top right, rgba(183, 96, 51, 0.09), transparent 24%),
-          linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 233, 0.92));
-      }
-
-      .stage-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        align-items: flex-start;
-        padding-bottom: 18px;
-        border-bottom: 1px solid rgba(42, 34, 26, 0.08);
-      }
-
-      .stage-meta {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(120px, 1fr));
-        gap: 10px;
-        min-width: 272px;
-      }
-
-      .stage-meta-card {
-        display: grid;
-        gap: 6px;
-        padding: 12px 14px;
-        border-radius: 18px;
-        border: 1px solid var(--line);
-        background: var(--surface-strong);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
-      }
-
-      .stage-meta-card small {
-        display: block;
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .stage-meta-card strong {
-        font-size: 26px;
-        letter-spacing: -0.04em;
-      }
-
-      .status-strip {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .pill {
-        display: grid;
-        gap: 4px;
-        padding: 14px 16px;
-        border-radius: 18px;
-        border: 1px solid var(--line);
-        background: var(--surface-strong);
-      }
-
-      .pill-label {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
-      }
-
-      .pill-value {
-        font-size: 17px;
-        font-weight: 700;
-      }
-
-      .ok {
-        color: var(--ok);
-      }
-
-      .warn {
-        color: var(--warn);
-      }
-
-      .danger {
-        color: var(--danger);
-      }
-
-      .muted {
-        color: var(--muted);
-      }
-
-      .stage-grid {
-        display: grid;
-        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-        gap: 16px;
-      }
-
-      .focus-card,
-      .control-card,
-      .live-card,
-      .pane-card,
-      .attachment-card {
-        border-radius: var(--radius-panel);
-        border: 1px solid var(--line);
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 243, 236, 0.92));
-      }
-
-      .focus-card {
-        display: grid;
-        gap: 16px;
-        align-content: start;
-        padding: 18px;
-      }
-
-      .focus-label {
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
-
-      .focus-state {
-        display: grid;
-        gap: 8px;
-      }
-
-      .focus-state .pill-value {
-        font-family: var(--display-font);
-        font-size: 34px;
-        line-height: 1;
-      }
-
-      .focus-copy {
-        color: var(--muted);
-        font-size: 14px;
-        line-height: 1.7;
-      }
-
-      .meter-box {
-        display: grid;
-        gap: 10px;
-        padding: 14px;
-        border-radius: 18px;
-        background: var(--surface-alt);
-      }
-
-      .meter-copy {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .meter-track {
-        position: relative;
-        height: 12px;
-        border-radius: var(--radius-pill);
-        overflow: hidden;
-        background: rgba(42, 34, 26, 0.08);
-      }
-
-      .meter-fill {
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 0%;
-        border-radius: inherit;
-        background: linear-gradient(90deg, var(--ok), #e0a13a, var(--accent));
-        transition: width 90ms linear;
-      }
-
-      .control-card {
-        display: grid;
-        gap: 16px;
-        padding: 18px;
-      }
-
-      .control-copy {
-        color: var(--muted);
-        font-size: 14px;
-        line-height: 1.7;
-      }
-
-      .control-group {
-        display: grid;
-        gap: 10px;
-      }
-
-      .controls-primary,
-      .controls-secondary {
-        display: grid;
-        gap: 10px;
-      }
-
-      .controls-primary {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .controls-secondary {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .live-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .live-card {
-        min-height: 150px;
-        padding: 16px;
-      }
-
-      .live-card small {
-        display: block;
-        margin-bottom: 10px;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
-
-      .live-text {
-        margin: 0;
-        white-space: pre-wrap;
-        word-break: break-word;
-        line-height: 1.72;
-      }
-
-      .composer-card {
-        display: grid;
-        gap: 18px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 232, 0.92));
-      }
-
-      .composer-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: flex-end;
-      }
-
-      .composer-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 336px;
-        gap: 16px;
-        align-items: start;
-      }
-
-      .pane-card,
-      .attachment-card {
-        display: grid;
-        gap: 14px;
-        padding: 16px;
-      }
-
-      .pane-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: center;
-      }
-
-      .pane-head small {
-        color: var(--accent-strong);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
-
-      .pane-head span {
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .send-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: center;
-      }
-
-      .hint {
-        color: var(--muted);
-        font-size: 13px;
-        line-height: 1.65;
-      }
-
-      .attachment-input {
-        display: none;
-      }
-
-      .attachment-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-
-      .attachment-list {
-        display: grid;
-        gap: 10px;
-        max-height: 360px;
-        overflow: auto;
-        padding-right: 4px;
-      }
-
-      .attachment-item {
-        display: grid;
-        gap: 6px;
-        padding: 12px 14px;
-        border-radius: 16px;
-        border: 1px solid var(--line);
-        background: linear-gradient(180deg, var(--surface-strong), rgba(246, 241, 233, 0.92));
-      }
-
-      .attachment-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: center;
-      }
-
-      .attachment-meta {
-        display: grid;
-        gap: 2px;
-      }
-
-      .attachment-name {
-        font-size: 14px;
-        font-weight: 700;
-      }
-
-      .attachment-desc {
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .attachment-preview {
-        overflow: hidden;
-        border-radius: 14px;
-        border: 1px solid rgba(42, 34, 26, 0.08);
-        background: rgba(42, 34, 26, 0.04);
-      }
-
-      .attachment-preview img,
-      .attachment-preview video,
-      .attachment-preview audio {
-        display: block;
-        width: 100%;
-      }
-
-      .history-card {
-        display: flex;
-        flex-direction: column;
-        min-height: calc(100vh - 44px);
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 232, 0.9));
-      }
-
-      .history-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: flex-start;
-        margin-bottom: 16px;
-      }
-
-      .history-tag {
-        padding: 10px 12px;
-        border-radius: 16px;
-        border: 1px solid rgba(42, 34, 26, 0.08);
-        background: var(--surface-strong);
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        white-space: nowrap;
-      }
-
-      .transcript {
-        flex: 1;
-        min-height: 0;
-        overflow: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        padding-right: 4px;
-      }
-
-      .message {
-        display: grid;
-        gap: 8px;
-        max-width: 94%;
-        padding: 16px 18px;
-        border-radius: 22px;
-        border: 1px solid var(--line);
-        background: var(--surface-strong);
-        box-shadow: var(--shadow-soft);
-        animation: messageEnter 220ms var(--ease-out);
-      }
-
-      .message.user {
-        align-self: flex-end;
-        background: linear-gradient(135deg, rgba(183, 96, 51, 0.14), rgba(183, 96, 51, 0.06));
-        border-color: rgba(183, 96, 51, 0.18);
-      }
-
-      .message.assistant {
-        align-self: flex-start;
-      }
-
-      .message.system {
-        align-self: center;
-        max-width: 100%;
-        background: rgba(42, 34, 26, 0.05);
-      }
-
-      .message.interrupted {
-        opacity: 0.8;
-        border-style: dashed;
-      }
-
-      .message-role {
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
-
-      .message-text {
-        white-space: pre-wrap;
-        word-break: break-word;
-        line-height: 1.72;
-      }
-
-      .message-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .message-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 10px;
-        border-radius: var(--radius-pill);
-        border: 1px solid rgba(42, 34, 26, 0.08);
-        background: rgba(255, 255, 255, 0.58);
-        font-size: 12px;
-      }
-
-      .message-chip strong {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      details.debug-panel {
-        border-radius: 18px;
-        border: 1px solid var(--line);
-        background: var(--surface-strong);
-        overflow: hidden;
-      }
-
-      details.debug-panel summary {
-        list-style: none;
-        cursor: pointer;
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: center;
-        padding: 14px 16px;
-        color: var(--muted);
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      details.debug-panel summary::-webkit-details-marker {
-        display: none;
-      }
-
-      details.debug-panel summary::after {
-        content: "+";
-        color: var(--accent-strong);
-        font-size: 16px;
-        transition: transform var(--ease-out);
-      }
-
-      details.debug-panel[open] summary::after {
-        transform: rotate(45deg);
-      }
-
-      .debug-body {
-        display: grid;
-        gap: 14px;
-        padding: 0 16px 16px;
-      }
-
-      .player-frame {
-        overflow: hidden;
-        border-radius: 18px;
-        border: 1px solid var(--line);
-        background: rgba(42, 34, 26, 0.04);
-      }
-
-      .player-frame iframe {
-        width: 100%;
-        height: 200px;
-        border: 0;
-        background: #fff;
-      }
-
-      #attachmentList:empty::before,
-      #transcript:empty::before {
-        display: grid;
-        place-items: center;
-        min-height: 150px;
-        padding: 24px;
-        border-radius: 18px;
-        border: 1px dashed rgba(42, 34, 26, 0.14);
-        background: rgba(255, 255, 255, 0.42);
-        color: var(--muted);
-        text-align: center;
-        line-height: 1.75;
-      }
-
-      #attachmentList:empty::before {
-        content: "附件会显示在这里。上传后的图片、音频、视频和文档会持续挂载到当前会话。";
-      }
-
-      #transcript:empty::before {
-        content: "连接会话后，这里会逐步展示实时转写、文本输入、附件记录和助手回复。";
-      }
-
-      .transcript::-webkit-scrollbar,
-      .attachment-list::-webkit-scrollbar,
-      .log::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-      }
-
-      .transcript::-webkit-scrollbar-thumb,
-      .attachment-list::-webkit-scrollbar-thumb,
-      .log::-webkit-scrollbar-thumb {
-        border: 2px solid transparent;
-        border-radius: var(--radius-pill);
-        background: rgba(109, 99, 88, 0.34);
-        background-clip: padding-box;
-      }
-
-      .transcript::-webkit-scrollbar-track,
-      .attachment-list::-webkit-scrollbar-track,
-      .log::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      @keyframes messageEnter {
-        from {
-          transform: translateY(8px);
-          opacity: 0;
+        :root {
+            --bg: #f3efe7;
+            --bg-soft: #faf7f1;
+            --surface: rgba(255, 255, 255, 0.84);
+            --surface-strong: rgba(255, 255, 255, 0.94);
+            --surface-alt: #f6f1e8;
+            --line: rgba(42, 34, 26, 0.1);
+            --line-strong: rgba(42, 34, 26, 0.16);
+            --text: #1e1a16;
+            --muted: #6d6358;
+            --accent: #b76033;
+            --accent-soft: rgba(183, 96, 51, 0.12);
+            --accent-strong: #8f431e;
+            --ok: #1f8a63;
+            --warn: #b57a18;
+            --danger: #b2422f;
+            --shadow: 0 18px 42px rgba(58, 43, 28, 0.08);
+            --shadow-soft: 0 8px 20px rgba(58, 43, 28, 0.05);
+            --radius-card: 28px;
+            --radius-panel: 22px;
+            --radius-pill: 999px;
+            --ease-out: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            --display-font: "Iowan Old Style", "Georgia", "Songti SC", "Times New Roman", serif;
+            --history-pane-height: calc(100vh - 44px);
         }
 
-        to {
-          transform: translateY(0);
-          opacity: 1;
-        }
-      }
-
-      @media (max-width: 1440px) {
-        .workspace {
-          grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(320px, 380px);
+        * {
+            box-sizing: border-box;
         }
 
-        .controls-primary {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      @media (max-width: 1240px) {
-        .workspace {
-          grid-template-columns: 1fr;
-        }
-
-        .panel,
-        .history-card {
-          position: static;
-        }
-
-        .history-card {
-          min-height: 560px;
-        }
-
-        .stage-grid,
-        .composer-grid,
-        .live-grid,
-        .status-strip {
-          grid-template-columns: 1fr;
-        }
-
-        .stage-meta {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          min-width: 0;
-        }
-
-        .controls-primary {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 760px) {
+        html,
         body {
-          padding: 14px;
+            margin: 0;
+            height: 100%;
+            min-height: 100%;
+            color: var(--text);
+            font-family: "Avenir Next", "SF Pro Display", "PingFang SC", "Noto Sans SC", sans-serif;
+            background: radial-gradient(circle at top left, rgba(183, 96, 51, 0.08), transparent 24%),
+            linear-gradient(180deg, var(--bg-soft), var(--bg));
+        }
+
+        body {
+            padding: 18px;
+            overflow: hidden;
+        }
+
+        a {
+            color: inherit;
+        }
+
+        button,
+        input,
+        textarea {
+            font: inherit;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: var(--surface-strong);
+            color: var(--text);
+            transition: border-color var(--ease-out), box-shadow var(--ease-out), background var(--ease-out);
+        }
+
+        input {
+            padding: 12px 14px;
+        }
+
+        textarea {
+            min-height: 168px;
+            resize: vertical;
+            padding: 16px 18px;
+            line-height: 1.72;
+        }
+
+        input:focus-visible,
+        textarea:focus-visible,
+        button:focus-visible,
+        summary:focus-visible,
+        a:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(183, 96, 51, 0.14);
+            border-color: rgba(183, 96, 51, 0.32);
+        }
+
+        button {
+            appearance: none;
+            border: 1px solid transparent;
+            border-radius: 18px;
+            min-height: 48px;
+            padding: 12px 16px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: transform var(--ease-out),
+            background var(--ease-out),
+            box-shadow var(--ease-out),
+            border-color var(--ease-out),
+            opacity var(--ease-out);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-primary {
+            color: #fff9f2;
+            background: linear-gradient(135deg, #201b17, #553020);
+            box-shadow: 0 10px 24px rgba(42, 29, 20, 0.18);
+        }
+
+        .btn-accent {
+            color: #fff8f2;
+            background: linear-gradient(135deg, #cc7142, #ad4f29);
+            box-shadow: 0 10px 24px rgba(183, 96, 51, 0.2);
+        }
+
+        .btn-live {
+            color: #f5fffa;
+            background: linear-gradient(135deg, #2a966d, #1f7a58);
+            box-shadow: 0 10px 24px rgba(31, 138, 99, 0.2);
+        }
+
+        .btn-warning {
+            color: #fffaf3;
+            background: linear-gradient(135deg, #c59432, #ac7614);
+            box-shadow: 0 10px 24px rgba(181, 122, 24, 0.18);
+        }
+
+        .btn-soft {
+            color: var(--text);
+            background: var(--surface-strong);
+            border-color: var(--line);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+        }
+
+        .btn-danger {
+            color: #fff8f6;
+            background: linear-gradient(135deg, #c45f4c, #9c3728);
+            box-shadow: 0 10px 24px rgba(156, 55, 40, 0.18);
+        }
+
+        .app-shell {
+            max-width: 1680px;
+            margin: 0 auto;
+            display: grid;
+            gap: 0;
+            height: var(--history-pane-height);
         }
 
         .card {
-          border-radius: 22px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-card);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(16px) saturate(120%);
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(292px, 328px) minmax(0, 1fr) minmax(340px, 396px);
+            gap: 18px;
+            align-items: start;
+            height: 100%;
+            min-height: 0;
+        }
+
+        .sidebar,
+        .main-column,
+        .history-column {
+            min-width: 0;
+            display: grid;
+            gap: 18px;
+            height: 100%;
+            min-height: 0;
+        }
+
+        .main-column {
+            grid-template-rows: minmax(0, 0.94fr) minmax(260px, 0.72fr);
+            align-content: start;
         }
 
         .panel,
         .stage-card,
         .composer-card,
         .history-card {
-          padding: 18px;
+            padding: 18px;
         }
 
-        .stage-head,
-        .composer-head,
-        .history-head,
-        .send-row {
-          flex-direction: column;
-          align-items: stretch;
+        .panel,
+        .history-card {
+            position: sticky;
+            top: 22px;
         }
 
-        .metrics-grid,
+        .panel {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 241, 233, 0.9));
+            max-height: var(--history-pane-height);
+            overflow: auto;
+        }
+
+        .section-label {
+            margin: 0 0 6px;
+            color: var(--accent-strong);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+
+        .section-title {
+            margin: 0;
+            font-family: var(--display-font);
+            font-size: 28px;
+            line-height: 1;
+            letter-spacing: -0.03em;
+        }
+
+        .section-copy {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .panel-copy {
+            max-width: 28ch;
+        }
+
+        .meta-stack {
+            display: grid;
+            gap: 0;
+        }
+
+        .meta-item {
+            display: grid;
+            gap: 6px;
+            padding: 14px 0;
+            border-top: 1px dashed rgba(42, 34, 26, 0.12);
+        }
+
+        .meta-item:first-child {
+            padding-top: 0;
+            border-top: 0;
+        }
+
+        .meta-item small {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .meta-item code,
+        .log {
+            display: block;
+            border-radius: 16px;
+            padding: 11px 13px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 239, 231, 0.9));
+            border: 1px solid rgba(42, 34, 26, 0.08);
+            color: var(--text);
+            overflow: auto;
+        }
+
+        .meta-item code + code,
+        .meta-item code + pre,
+        .meta-item pre + code {
+            margin-top: 6px;
+        }
+
+        .meta-item code a {
+            text-decoration: none;
+        }
+
+        .meta-item code a:hover {
+            text-decoration: underline;
+        }
+
+        .session-switch-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .inline-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .metric-item {
+            display: grid;
+            gap: 4px;
+            padding: 12px 14px;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: linear-gradient(180deg, var(--surface-strong), rgba(246, 241, 233, 0.92));
+        }
+
+        .metric-item small {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+
+        .log {
+            margin: 0;
+            min-height: 140px;
+            max-height: 260px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 12px;
+            line-height: 1.55;
+        }
+
+        .stage-card {
+            display: grid;
+            gap: 14px;
+            overflow: hidden;
+            background: radial-gradient(circle at top right, rgba(183, 96, 51, 0.09), transparent 24%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 233, 0.92));
+        }
+
+        .call-state-card,
+        .call-live-card,
+        .pane-card,
+        .attachment-card {
+            border-radius: var(--radius-panel);
+            border: 1px solid var(--line);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 243, 236, 0.92));
+        }
+
+        .pill {
+            display: grid;
+            gap: 4px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: var(--surface-strong);
+        }
+
+        .pill-label {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.13em;
+            text-transform: uppercase;
+        }
+
+        .pill-value {
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .ok {
+            color: var(--ok);
+        }
+
+        .warn {
+            color: var(--warn);
+        }
+
+        .danger {
+            color: var(--danger);
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .call-console {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(288px, 340px);
+            gap: 14px;
+            min-height: 0;
+            align-items: stretch;
+        }
+
+        .call-primary {
+            display: grid;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .call-state-card {
+            display: grid;
+            gap: 12px;
+            padding: 16px;
+            align-content: start;
+        }
+
+        .focus-label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .focus-state {
+            display: grid;
+            gap: 8px;
+        }
+
+        .call-state-main {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            align-items: flex-start;
+        }
+
+        .call-state-main .pill-value {
+            font-family: var(--display-font);
+            font-size: 34px;
+            line-height: 0.96;
+        }
+
+        .call-state-copy {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.58;
+            max-width: 22ch;
+        }
+
+        .meter-box {
+            display: grid;
+            gap: 8px;
+            padding: 12px 13px;
+            border-radius: 18px;
+            background: var(--surface-alt);
+        }
+
+        .call-toolbar {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .call-toolbar button {
+            min-height: 40px;
+            padding: 8px 10px;
+            border-radius: 16px;
+        }
+
+        .meter-copy {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .meter-track {
+            position: relative;
+            height: 12px;
+            border-radius: var(--radius-pill);
+            overflow: hidden;
+            background: rgba(42, 34, 26, 0.08);
+        }
+
+        .meter-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--ok), #e0a13a, var(--accent));
+            transition: width 90ms linear;
+        }
+
+        .call-state-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .call-state-chip {
+            display: grid;
+            gap: 4px;
+            padding: 10px 11px;
+            border-radius: 16px;
+            border: 1px solid rgba(42, 34, 26, 0.08);
+            background: rgba(255, 255, 255, 0.72);
+        }
+
+        .call-state-chip .pill-label {
+            font-size: 10px;
+        }
+
+        .call-state-chip .pill-value {
+            font-size: 15px;
+        }
+
+        .call-control-card {
+            display: grid;
+            gap: 14px;
+            padding: 18px;
+        }
+
+        .call-control-note {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .control-group {
+            display: grid;
+            gap: 10px;
+        }
+
         .controls-primary,
         .controls-secondary {
-          grid-template-columns: 1fr;
+            display: grid;
+            gap: 10px;
         }
 
-        .stage-meta {
-          grid-template-columns: 1fr;
+        .controls-primary {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .controls-secondary {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .call-live-card {
+            display: grid;
+            gap: 10px;
+            padding: 16px;
+            min-height: 0;
+        }
+
+        .live-stack {
+            display: grid;
+            gap: 8px;
+            min-height: 0;
+        }
+
+        .live-stream-block {
+            display: grid;
+            gap: 7px;
+            min-height: 0;
+            padding: 12px 13px;
+            border-radius: 18px;
+            border: 1px solid rgba(42, 34, 26, 0.08);
+            background: rgba(255, 255, 255, 0.68);
+        }
+
+        .live-stream-block small {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .live-text {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.62;
+            max-height: 96px;
+            overflow: auto;
+        }
+
+        .composer-card {
+            display: grid;
+            gap: 12px;
+            overflow: hidden;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 232, 0.92));
+        }
+
+        .composer-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(42, 34, 26, 0.08);
+        }
+
+        .composer-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 300px;
+            gap: 14px;
+            align-items: start;
+            min-height: 0;
+        }
+
+        .pane-card,
+        .attachment-card {
+            display: grid;
+            gap: 10px;
+            padding: 14px;
+            min-height: 0;
+        }
+
+        .pane-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .pane-head small {
+            color: var(--accent-strong);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .pane-head span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .send-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.65;
+        }
+
+        .attachment-input {
+            display: none;
+        }
+
+        .attachment-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .attachment-list {
+            display: grid;
+            gap: 8px;
+            max-height: 148px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        #textInput {
+            min-height: 96px;
+            max-height: 136px;
+        }
+
+        .attachment-item {
+            display: grid;
+            gap: 6px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            border: 1px solid var(--line);
+            background: linear-gradient(180deg, var(--surface-strong), rgba(246, 241, 233, 0.92));
+        }
+
+        .attachment-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .attachment-meta {
+            display: grid;
+            gap: 2px;
+        }
+
+        .attachment-name {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .attachment-desc {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .attachment-preview {
+            overflow: hidden;
+            border-radius: 14px;
+            border: 1px solid rgba(42, 34, 26, 0.08);
+            background: rgba(42, 34, 26, 0.04);
+        }
+
+        .attachment-preview img,
+        .attachment-preview video,
+        .attachment-preview audio {
+            display: block;
+            width: 100%;
+        }
+
+        .history-card {
+            display: flex;
+            flex-direction: column;
+            height: var(--history-pane-height);
+            max-height: var(--history-pane-height);
+            min-height: var(--history-pane-height);
+            overflow: hidden;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 232, 0.9));
+        }
+
+        .history-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .history-tag {
+            padding: 10px 12px;
+            border-radius: 16px;
+            border: 1px solid rgba(42, 34, 26, 0.08);
+            background: var(--surface-strong);
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .history-shell {
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            gap: 14px;
+        }
+
+        .history-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .history-summary-card {
+            display: grid;
+            gap: 4px;
+            padding: 10px 12px;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 233, 0.92));
+        }
+
+        .history-summary-card small {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .history-summary-card strong,
+        .history-summary-card code {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .history-summary-card code {
+            padding: 0;
+            border: 0;
+            background: transparent;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-scroll {
+            min-height: 0;
+            overflow: hidden;
+            padding: 10px;
+            border-radius: 22px;
+            border: 1px solid rgba(42, 34, 26, 0.08);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 239, 231, 0.72));
+        }
+
+        .transcript {
+            height: 100%;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding-right: 6px;
         }
 
         .message {
-          max-width: 100%;
+            display: grid;
+            gap: 10px;
+            max-width: 100%;
+            padding: 14px 16px;
+            border-radius: 22px;
+            border: 1px solid var(--line);
+            background: var(--surface-strong);
+            box-shadow: var(--shadow-soft);
+            animation: messageEnter 220ms var(--ease-out);
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, rgba(183, 96, 51, 0.14), rgba(183, 96, 51, 0.06));
+            border-color: rgba(183, 96, 51, 0.18);
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message.system {
+            align-self: center;
+            max-width: 100%;
+            background: rgba(42, 34, 26, 0.05);
+        }
+
+        .message.interrupted {
+            opacity: 0.8;
+            border-style: dashed;
+        }
+
+        .message-role {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .message-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .message-time {
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            opacity: 0.9;
+        }
+
+        .message-text {
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.68;
+        }
+
+        .message-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .message-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 9px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(42, 34, 26, 0.08);
+            background: rgba(255, 255, 255, 0.58);
+            font-size: 11px;
+        }
+
+        .message-chip strong {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        details.debug-panel {
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: var(--surface-strong);
+            /*overflow: hidden;*/
+        }
+
+        details.debug-panel summary {
+            list-style: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding: 14px 16px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        details.debug-panel summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details.debug-panel summary::after {
+            content: "+";
+            color: var(--accent-strong);
+            font-size: 16px;
+            transition: transform var(--ease-out);
+        }
+
+        details.debug-panel[open] summary::after {
+            transform: rotate(45deg);
+        }
+
+        .debug-body {
+            display: grid;
+            gap: 14px;
+            padding: 0 16px 16px;
+        }
+
+        .player-frame {
+            overflow: hidden;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: rgba(42, 34, 26, 0.04);
         }
 
         .player-frame iframe {
-          height: 180px;
+            width: 100%;
+            height: 200px;
+            border: 0;
+            background: #fff;
         }
-      }
+
+        #attachmentList:empty::before,
+        #transcript:empty::before {
+            display: grid;
+            place-items: center;
+            min-height: 150px;
+            padding: 24px;
+            border-radius: 18px;
+            border: 1px dashed rgba(42, 34, 26, 0.14);
+            background: rgba(255, 255, 255, 0.42);
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.75;
+        }
+
+        #attachmentList:empty::before {
+            content: "";
+        }
+
+        #transcript:empty::before {
+            content: "";
+        }
+
+        .transcript::-webkit-scrollbar,
+        .attachment-list::-webkit-scrollbar,
+        .log::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        .transcript::-webkit-scrollbar-thumb,
+        .attachment-list::-webkit-scrollbar-thumb,
+        .log::-webkit-scrollbar-thumb {
+            border: 2px solid transparent;
+            border-radius: var(--radius-pill);
+            background: rgba(109, 99, 88, 0.34);
+            background-clip: padding-box;
+        }
+
+        .transcript::-webkit-scrollbar-track,
+        .attachment-list::-webkit-scrollbar-track,
+        .log::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        @keyframes messageEnter {
+            from {
+                transform: translateY(8px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 1440px) {
+            .workspace {
+                grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(320px, 380px);
+            }
+
+            .call-console {
+                grid-template-columns: 1fr;
+            }
+
+            .call-state-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .call-toolbar {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .controls-primary {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 1240px) {
+            body {
+                overflow: auto;
+            }
+
+            .app-shell,
+            .sidebar,
+            .main-column,
+            .history-column {
+                height: auto;
+            }
+
+            .workspace {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .panel,
+            .history-card {
+                position: static;
+            }
+
+            .panel {
+                max-height: none;
+            }
+
+            .history-card {
+                height: auto;
+                max-height: none;
+                min-height: 560px;
+            }
+
+            .history-summary {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .composer-grid,
+            .call-console {
+                grid-template-columns: 1fr;
+            }
+
+            .main-column {
+                grid-template-rows: none;
+            }
+
+            .call-state-main {
+                display: grid;
+                gap: 12px;
+            }
+
+            .call-state-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .call-toolbar {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .controls-primary {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 760px) {
+            body {
+                padding: 14px;
+            }
+
+            .card {
+                border-radius: 22px;
+            }
+
+            .panel,
+            .stage-card,
+            .composer-card,
+            .history-card {
+                padding: 18px;
+            }
+
+            .stage-head,
+            .composer-head,
+            .history-head,
+            .send-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .metrics-grid,
+            .controls-primary,
+            .controls-secondary {
+                grid-template-columns: 1fr;
+            }
+
+            .message {
+                max-width: 100%;
+            }
+
+            .call-state-grid,
+            .history-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .call-toolbar {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .player-frame iframe {
+                height: 180px;
+            }
+        }
     </style>
-  </head>
-  <body>
-    <div class="app-shell">
-      <div class="workspace">
+</head>
+<body>
+<div class="app-shell">
+    <div class="workspace">
         <aside class="sidebar">
-          <section class="card panel">
-            <p class="section-label">Session Sidebar</p>
-            <h2 class="section-title">会话信息</h2>
-            <p class="section-copy panel-copy">左侧保留连接、路由、策略和调试摘要，避免把主舞台挤成后台页。</p>
+            <section class="card panel">
+                <h2 class="section-title">会话信息</h2>
+                <div class="meta-stack">
+                    <div class="meta-item">
+                        <small>Session ID</small>
+                        <div class="session-switch-row">
+                            <input id="sessionId" type="text" placeholder="default" value="default"/>
+                            <button class="btn-soft" id="btnApplySession" type="button">切换</button>
+                        </div>
+                        <code id="currentSessionId">default</code>
+                    </div>
 
-            <div class="meta-stack">
-              <div class="meta-item">
-                <small>Session ID</small>
-                <div class="session-switch-row">
-                  <input id="sessionId" type="text" placeholder="default" value="default" />
-                  <button class="btn-soft" id="btnApplySession" type="button">切换</button>
-                </div>
-                <code id="currentSessionId">default</code>
-              </div>
+                    <div class="meta-item">
+                        <small>WebSocket</small>
+                        <code id="wsUrl">-</code>
+                    </div>
 
-              <div class="meta-item">
-                <small>WebSocket</small>
-                <code id="wsUrl">-</code>
-              </div>
+                    <div class="meta-item">
+                        <small>Route / Handler</small>
+                        <code id="currentRoute">-</code>
+                        <code id="currentHandler">-</code>
+                    </div>
 
-              <div class="meta-item">
-                <small>Route / Handler</small>
-                <code id="currentRoute">-</code>
-                <code id="currentHandler">-</code>
-              </div>
+                    <div class="meta-item">
+                        <small>Branch / Strategy</small>
+                        <code id="currentBranch">-</code>
+                        <code id="currentStrategy">-</code>
+                        <code id="currentStrategyName">-</code>
+                    </div>
 
-              <div class="meta-item">
-                <small>Branch / Strategy</small>
-                <code id="currentBranch">-</code>
-                <code id="currentStrategy">-</code>
-                <code id="currentStrategyName">-</code>
-              </div>
+                    <div class="meta-item">
+                        <small>Delivery / UI / Follow-up</small>
+                        <code id="currentDelivery">-</code>
+                        <code id="currentUiMode">-</code>
+                        <code id="currentFollowupType">-</code>
+                    </div>
 
-              <div class="meta-item">
-                <small>Delivery / UI / Follow-up</small>
-                <code id="currentDelivery">-</code>
-                <code id="currentUiMode">-</code>
-                <code id="currentFollowupType">-</code>
-              </div>
+                    <div class="meta-item">
+                        <small>Render Template / Source</small>
+                        <code id="currentRenderTemplate">-</code>
+                        <code id="currentStrategySource">-</code>
+                    </div>
 
-              <div class="meta-item">
-                <small>Render Template / Source</small>
-                <code id="currentRenderTemplate">-</code>
-                <code id="currentStrategySource">-</code>
-              </div>
-
-              <div class="meta-item">
-                <small>Realtime Player</small>
-                <code><a id="playerUrl" href="#" target="_blank" rel="noreferrer">-</a></code>
-                <div class="inline-actions">
-                  <button class="btn-soft" id="btnCopyStrategyContext" type="button">复制当前策略上下文</button>
-                </div>
-              </div>
-            </div>
-
-            <details class="debug-panel">
-              <summary>高级调试</summary>
-              <div class="debug-body">
-                <div class="meta-item">
-                  <small>Audio Spec</small>
-                  <code id="audioSpec">-</code>
+                    <div class="meta-item">
+                        <small>Realtime Player</small>
+                        <code><a id="playerUrl" href="#" target="_blank" rel="noreferrer">-</a></code>
+                        <div class="inline-actions">
+                            <button class="btn-soft" id="btnCopyStrategyContext" type="button">复制当前策略上下文
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="meta-item">
-                  <small>Current Multimodal Input</small>
-                  <code id="multimodalSummary">无</code>
-                </div>
+                <details class="debug-panel">
+                    <summary>高级调试</summary>
+                    <div class="debug-body">
+                        <div class="meta-item">
+                            <small>Audio Spec</small>
+                            <code id="audioSpec">-</code>
+                        </div>
 
-                <div class="meta-item">
-                  <small>Artifact Subject / Task Hint</small>
-                  <code id="currentArtifactSubjectHint">-</code>
-                  <code id="currentArtifactTaskHint">-</code>
-                </div>
+                        <div class="meta-item">
+                            <small>Current Multimodal Input</small>
+                            <code id="multimodalSummary">无</code>
+                        </div>
 
-                <div class="meta-item">
-                  <small>Artifact Text</small>
-                  <pre class="log" id="artifactTextView">无</pre>
-                </div>
+                        <div class="meta-item">
+                            <small>Artifact Subject / Task Hint</small>
+                            <code id="currentArtifactSubjectHint">-</code>
+                            <code id="currentArtifactTaskHint">-</code>
+                        </div>
 
-                <div class="metrics-grid">
-                  <div class="metric-item">
-                    <small>ASR Final</small>
-                    <div class="metric-value" id="metricAsrFinalLatency">-</div>
-                  </div>
-                  <div class="metric-item">
-                    <small>First Token</small>
-                    <div class="metric-value" id="metricFirstTokenLatency">-</div>
-                  </div>
-                  <div class="metric-item">
-                    <small>First Audio</small>
-                    <div class="metric-value" id="metricFirstAudioLatency">-</div>
-                  </div>
-                  <div class="metric-item">
-                    <small>Interrupt Count</small>
-                    <div class="metric-value" id="metricInterruptCount">0</div>
-                  </div>
-                </div>
+                        <div class="meta-item">
+                            <small>Artifact Text</small>
+                            <pre class="log" id="artifactTextView">无</pre>
+                        </div>
 
-                <div class="meta-item">
-                  <small>Turn Timeline</small>
-                  <pre class="log" id="timelineView">无</pre>
-                </div>
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <small>ASR Final</small>
+                                <div class="metric-value" id="metricAsrFinalLatency">-</div>
+                            </div>
+                            <div class="metric-item">
+                                <small>First Token</small>
+                                <div class="metric-value" id="metricFirstTokenLatency">-</div>
+                            </div>
+                            <div class="metric-item">
+                                <small>First Audio</small>
+                                <div class="metric-value" id="metricFirstAudioLatency">-</div>
+                            </div>
+                            <div class="metric-item">
+                                <small>Interrupt Count</small>
+                                <div class="metric-value" id="metricInterruptCount">0</div>
+                            </div>
+                        </div>
 
-                <div class="meta-item">
-                  <small>Recent Memory</small>
-                  <code id="memorySummary">无</code>
-                </div>
+                        <div class="meta-item">
+                            <small>Turn Timeline</small>
+                            <pre class="log" id="timelineView">无</pre>
+                        </div>
 
-                <div class="meta-item">
-                  <small>History Summary</small>
-                  <code id="historySummary">无</code>
-                </div>
+                        <div class="meta-item">
+                            <small>Recent Memory</small>
+                            <code id="memorySummary">无</code>
+                        </div>
 
-                <div class="meta-item">
-                  <small>Facts</small>
-                  <code id="factsView">{}</code>
-                </div>
+                        <div class="meta-item">
+                            <small>History Summary</small>
+                            <code id="historySummary">无</code>
+                        </div>
 
-                <div class="meta-item">
-                  <small>System Prompt</small>
-                  <pre class="log" id="promptView">无</pre>
-                </div>
+                        <div class="meta-item">
+                            <small>Facts</small>
+                            <code id="factsView">{}</code>
+                        </div>
 
-                <div class="meta-item">
-                  <small>事件日志</small>
-                  <pre class="log" id="log"></pre>
-                </div>
-              </div>
-            </details>
-          </section>
+                        <div class="meta-item">
+                            <small>System Prompt</small>
+                            <pre class="log" id="promptView">无</pre>
+                        </div>
+
+                        <div class="meta-item">
+                            <small>事件日志</small>
+                            <pre class="log" id="log"></pre>
+                        </div>
+                    </div>
+                </details>
+            </section>
         </aside>
 
         <main class="main-column">
-          <section class="card stage-card">
-            <div class="stage-head">
-              <div>
-                <p class="section-label">Live Session</p>
-                <h2 class="section-title">语音通话</h2>
-                <p class="section-copy">中央主舞台只负责连接、播报、输入电平和实时转写，减少不必要的视觉噪声。</p>
-              </div>
-              <div class="stage-meta">
-                <div class="stage-meta-card">
-                  <small>Voice State</small>
-                  <div id="speakerStateMirror" class="pill-value muted">等待回复</div>
-                </div>
-                <div class="stage-meta-card">
-                  <small>Call Timer</small>
-                  <strong id="callTimer">00:00</strong>
-                </div>
-              </div>
-            </div>
+            <section class="card stage-card">
+                <div class="call-console">
+                    <div class="call-primary">
+                        <div class="call-state-card">
+                            <div class="pill-value muted" id="speakerState">等待回复</div>
+                            <div class="call-state-grid">
+                                <div class="call-state-chip">
+                                    <span class="pill-label">WebSocket</span>
+                                    <span class="pill-value muted" id="connState">未连接</span>
+                                </div>
+                                <div class="call-state-chip">
+                                    <span class="pill-label">Mic</span>
+                                    <span class="pill-value muted" id="micState">未开启</span>
+                                </div>
+                                <div class="call-state-chip">
+                                    <span class="pill-label">Session</span>
+                                    <span class="pill-value muted" id="sessionState">-</span>
+                                </div>
+                                <div class="call-state-chip">
+                                    <span class="pill-label">Mute</span>
+                                    <span class="pill-value muted" id="muteState">未静音</span>
+                                </div>
+                            </div>
 
-            <div class="status-strip">
-              <div class="pill">
-                <span class="pill-label">WebSocket</span>
-                <span class="pill-value muted" id="connState">未连接</span>
-              </div>
-              <div class="pill">
-                <span class="pill-label">Mic</span>
-                <span class="pill-value muted" id="micState">未开启</span>
-              </div>
-              <div class="pill">
-                <span class="pill-label">Session</span>
-                <span class="pill-value muted" id="sessionState">-</span>
-              </div>
-              <div class="pill">
-                <span class="pill-label">Mute</span>
-                <span class="pill-value muted" id="muteState">未静音</span>
-              </div>
-            </div>
-
-            <div class="stage-grid">
-              <div class="focus-card">
-                <div class="focus-state">
-                  <div class="focus-label">Current Speaker State</div>
-                  <div class="pill-value muted" id="speakerState">等待回复</div>
-                </div>
-                <div class="focus-copy">这里集中展示当前播报状态，避免把关键反馈埋进右侧历史流里。</div>
-
-                <div class="meter-box">
-                  <div class="meter-copy">
-                    <span>Input Level</span>
-                    <span id="levelValue">0%</span>
-                  </div>
-                  <div class="meter-track">
-                    <div class="meter-fill" id="levelFill"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="control-card">
-                <div>
-                  <div class="focus-label">Controls</div>
-                  <div class="control-copy">把高频动作分成两组：连接与采集、会话内控制。主次更清楚，危险操作也不会混在一起。</div>
+                            <div class="meter-box">
+                                <div class="meter-copy">
+                                    <span>Input Level</span>
+                                    <span id="levelValue">0%</span>
+                                </div>
+                                <div class="meter-track">
+                                    <div class="meter-fill" id="levelFill"></div>
+                                </div>
+                            </div>
+                            <div class="call-toolbar">
+                                <button id="btnConnect" class="btn-primary">连接</button>
+                                <button id="btnMic" class="btn-accent">开麦</button>
+                                <button id="btnInterrupt" class="btn-danger">打断</button>
+                                <button id="btnMute" class="btn-soft">静音</button>
+                                <button id="btnClear" class="btn-soft">清空</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="call-live-card">
+                        <div class="focus-label">Live Transcript</div>
+                        <div class="live-stack">
+                            <div class="live-stream-block">
+                                <small>ASR Partial</small>
+                                <p class="live-text" id="partial">等待实时识别...</p>
+                            </div>
+                            <div class="live-stream-block">
+                                <small>ASR Final</small>
+                                <p class="live-text" id="final">等待最终转写...</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="control-group">
-                  <div class="controls-primary">
-                    <button id="btnConnect" class="btn-primary">连接</button>
-                    <button id="btnMic" class="btn-accent">开麦</button>
-                    <button id="btnInterrupt" class="btn-danger">打断</button>
-                  </div>
-                  <div class="controls-secondary">
-                    <button id="btnMute" class="btn-soft">静音</button>
-                    <button id="btnClear" class="btn-soft">清空</button>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            <div class="live-grid">
-              <div class="live-card">
-                <small>ASR Partial</small>
-                <p class="live-text" id="partial">等待实时识别...</p>
-              </div>
-              <div class="live-card">
-                <small>ASR Final</small>
-                <p class="live-text" id="final">等待最终转写...</p>
-              </div>
-            </div>
+            </section>
 
-            <details class="debug-panel">
-              <summary>播放桥接页</summary>
-              <div class="debug-body">
-                <div class="player-frame">
-                  <iframe id="playerFrame" title="FastRTC Player" allow="autoplay; microphone"></iframe>
+            <section class="card composer-card">
+                <div class="composer-head">
+                    <div>
+                        <h2 class="section-title">文本与附件</h2>
+                    </div>
                 </div>
-              </div>
-            </details>
-          </section>
 
-          <section class="card composer-card">
-            <div class="composer-head">
-              <div>
-                <p class="section-label">Input Dock</p>
-                <h2 class="section-title">文本与附件</h2>
-                <p class="section-copy">语音不中断，文字和文件都直接挂进当前 session。输入区保持明确而低干扰。</p>
-              </div>
-            </div>
+                <div class="composer-grid">
+                    <div class="pane-card">
+                        <div class="pane-head">
+                            <small>Message Draft</small>
+                            <span>Enter 发送，Shift + Enter 换行</span>
+                        </div>
+                        <textarea id="textInput"
+                                  placeholder="输入文本消息。按 Enter 发送，Shift + Enter 换行。"></textarea>
+                        <div class="send-row">
+                            <button id="btnSend" class="btn-primary">发送文本</button>
+                        </div>
+                    </div>
 
-            <div class="composer-grid">
-              <div class="pane-card">
-                <div class="pane-head">
-                  <small>Message Draft</small>
-                  <span>Enter 发送，Shift + Enter 换行</span>
-                </div>
-                <textarea id="textInput" placeholder="输入文本消息。按 Enter 发送，Shift + Enter 换行。"></textarea>
-                <div class="send-row">
-                  <div class="hint">文本会直接进入当前会话，不需要停止语音通话。</div>
-                  <button id="btnSend" class="btn-primary">发送文本</button>
-                </div>
-              </div>
+                    <div class="attachment-card">
+                        <div class="pane-head">
+                            <small>Session Attachments</small>
+                            <span>持续挂载到当前会话</span>
+                        </div>
+                        <div class="attachment-row">
+                            <input id="attachmentInput" class="attachment-input" type="file" multiple
+                                   accept="image/*,audio/*,video/*,.pdf,.txt,.md,.json"/>
+                            <button id="btnPickAttachment" class="btn-soft">添加附件</button>
+                            <button id="btnClearAttachment" class="btn-soft">清空附件</button>
+                        </div>
 
-              <div class="attachment-card">
-                <div class="pane-head">
-                  <small>Session Attachments</small>
-                  <span>持续挂载到当前会话</span>
+                        <div class="hint" id="stagedAttachmentState">
+                            附件上传后，会固定挂载在当前会话上，直到手动移除。
+                        </div>
+                        <div class="attachment-list" id="attachmentList"></div>
+                    </div>
                 </div>
-                <div class="attachment-row">
-                  <input id="attachmentInput" class="attachment-input" type="file" multiple accept="image/*,audio/*,video/*,.pdf,.txt,.md,.json" />
-                  <button id="btnPickAttachment" class="btn-soft">添加附件</button>
-                  <button id="btnClearAttachment" class="btn-soft">清空附件</button>
-                </div>
-                <div class="attachment-row">
-                  <input id="attachmentUrlInput" type="url" placeholder="粘贴附件 URL。支持 GitHub blob/raw、图片、音频、视频等直链。" />
-                  <button id="btnAddAttachmentUrl" class="btn-soft">添加 URL</button>
-                </div>
-                <div class="hint" id="stagedAttachmentState">未选择附件。上传后，这批文件会固定挂载在当前会话上，直到你手动移除。</div>
-                <div class="attachment-list" id="attachmentList"></div>
-              </div>
-            </div>
-          </section>
+            </section>
         </main>
 
         <aside class="history-column">
-          <section class="card history-card">
-            <div class="history-head">
-              <div>
-                <p class="section-label">Conversation Log</p>
-                <h2 class="section-title">会话历史</h2>
-                <p class="section-copy">语音转写、文本输入、附件记录和助手回复都按时间进入这里，右侧只做这一件事。</p>
-              </div>
-              <div class="history-tag">Session Log</div>
-            </div>
-            <div class="transcript" id="transcript"></div>
-          </section>
+            <section class="card history-card">
+                <div class="history-head">
+                    <div>
+                        <h2 class="section-title">会话历史</h2>
+                    </div>
+                </div>
+                <div class="history-shell">
+                    <div class="history-summary">
+                        <div class="history-summary-card">
+                            <small>Messages</small>
+                            <strong id="historyMessageCount">0</strong>
+                        </div>
+                        <div class="history-summary-card">
+                            <small>Turns</small>
+                            <strong id="historyTurnCount">0</strong>
+                        </div>
+                        <div class="history-summary-card">
+                            <small>Current Focus</small>
+                            <code id="historyFocus">-</code>
+                        </div>
+                    </div>
+                    <div class="history-scroll">
+                        <div class="transcript" id="transcript"></div>
+                    </div>
+                </div>
+            </section>
         </aside>
-      </div>
     </div>
+</div>
 
-    <script type="module" src="/static/app.js"></script>
-  </body>
+<script type="module" src="/static/app.js?v=20260429-mic-fix-1"></script>
+</body>
 </html>

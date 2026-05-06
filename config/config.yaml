@@ -9,7 +9,7 @@ openai_config:
   api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   api_key: "sk-150866734fa64b428e4d7e642db1270b"
   model: "qwen-plus"
-  multimodal_model: "qwen3.5-omni-plus"
+  multimodal_model: "qwen3.5-omni-flash"
   timeout: 60
 
 bigmodel_config:
@@ -62,6 +62,24 @@ runtime:
   prompt_dir: "prompt-plugin"
   router_model: ""
   router_timeout: 30
+  agents_sdk_enabled: true
+  agents_sdk_realtime_enabled: true
+  agents_sdk_tracing_enabled: false
+  agents_sdk_timeout: 45
+  agents_sdk_max_turns: 6
+  agents_sdk_model: ""
+  agents_sdk_multimodal_model: ""
+  agents_sdk_session_db: "state/agents_sessions.json"
+  agents_sdk_branches:
+    - "education"
+    - "general_qa"
+    - "clarify"
+  agents_sdk_education_modules:
+    - "solve"
+    - "check"
+    - "explain"
+    - "answer"
+    - "qa"
   debug_audio_dump: true
   realtime_audio_frame_ms: 60
   realtime_audio_max_lead_seconds: 0.05

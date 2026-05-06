@@ -9,10 +9,10 @@ from ava.application.conversation import load_state, persist_turn, prepare_state
 from ava.application.factories import build_prompt_center, build_router
 from ava.application.multimodal import build_turn_input
 from ava.application.orchestration import build_turn_plan
+from ava.application.responding import generate_reply_sync
 from ava.application.speech import build_speech_text
 from ava.domain.context import assemble_context
 from ava.infrastructure.audio.playback import maybe_play_audio
-from ava.infrastructure.llm import client as llm_client
 from ava.infrastructure.tts import rest_client as tts_client
 from ava.shared.errors import DashScopeError
 from config import settings
@@ -98,22 +98,25 @@ class VoiceChatService:
             snapshot=snapshot,
         )
 
-        reply = llm_client.chat(
+        reply_result = generate_reply_sync(
+            state=self.state,
+            turn_input=turn_input,
+            decision=decision,
+            plan=plan,
+            snapshot=snapshot,
             api_base=self.llm_api_base,
             api_key=self.llm_api_key,
             model=self.llm_model,
-            messages=plan.responder_messages,
             timeout=self.llm_timeout,
-            temperature=0.7,
-            modalities=["text"],
         )
+        reply = reply_result.assistant_text
 
         persist_turn(self.state, turn_input, reply, decision, strategy=plan.strategy)
 
         print(
             f"助手(scene={decision.turn_scene}, session={decision.session_scene}, "
             f"confidence={decision.confidence:.2f}, handler={plan.orchestrator_name}, "
-            f"strategy={plan.strategy.strategy_id}): {reply}"
+            f"strategy={plan.strategy.strategy_id}, backend={reply_result.backend}): {reply}"
         )
 
         speech_result = build_speech_text(reply, plan.strategy)

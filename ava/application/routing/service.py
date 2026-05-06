@@ -16,6 +16,27 @@ from ava.infrastructure.llm import client as llm_client
 from .heuristics import heuristic_route
 from .parser import extract_json_object
 from .multimodal import build_router_messages
+from ava.infrastructure.prompts import PromptCenter
+
+_CURRENT_ARTIFACT_STRONG_CONTINUITY_CUES = (
+    "上一题",
+    "上题",
+    "继续",
+    "接着",
+    "我圈出来了",
+    "我改了",
+    "我这样做",
+    "我写了",
+    "做对了吗",
+    "对不对",
+    "算对了吗",
+    "写对了吗",
+    "为什么不是",
+    "为什么要",
+    "哪一步",
+    "错在哪",
+    "哪错了",
+)
 
 
 def _compact_router_context_trace(context) -> dict[str, Any]:
@@ -41,6 +62,35 @@ def _compact_router_messages_trace(messages: list[dict[str, Any]]) -> dict[str, 
         "first_message_preview": sanitize_value(messages[0].get("content", ""), text_limit=400),
         "last_message_preview": sanitize_value(messages[-1].get("content", ""), text_limit=400),
     }
+
+
+def _should_isolate_current_artifact_context(
+    state: ConversationState,
+    context,
+    *,
+    current_turn_id: int | None = None,
+) -> bool:
+    current_artifacts = tuple(getattr(context, "artifacts", ()) or ())
+    if not current_artifacts:
+        return False
+
+    previous_artifacts = state.recent_reference_artifacts(
+        current_turn_id=current_turn_id,
+        limit_turns=1,
+    )
+    if not previous_artifacts:
+        return True
+
+    current_key = state.artifact_bundle_key(current_artifacts)
+    previous_key = state.artifact_bundle_key(previous_artifacts)
+    if current_key and current_key == previous_key:
+        return False
+
+    text = str(getattr(context, "user_text", "") or "").strip().lower()
+    if not text:
+        return True
+
+    return not any(token in text for token in _CURRENT_ARTIFACT_STRONG_CONTINUITY_CUES)
 
 
 def _normalize_subject(value: str) -> str:
@@ -164,14 +214,23 @@ class RouterService:
             api_base: str,
             api_key: str,
             model: str,
+            multimodal_model: str | None,
             timeout: int,
             prompt_center: PromptCenter,
     ):
         self.api_base = api_base
         self.api_key = api_key
         self.model = model
+        self.multimodal_model = str(multimodal_model or "").strip() or model
         self.timeout = timeout
         self.prompt_center = prompt_center
+
+    def _select_model_for_context(self, context, *, text_only: bool = False) -> str:
+        if text_only:
+            return self.model
+        if getattr(context, "artifacts", ()) or getattr(context, "reference_artifacts", ()):
+            return self.multimodal_model
+        return self.model
 
     def route(
             self,
@@ -210,17 +269,41 @@ class RouterService:
             max_context_messages=max_context_messages,
             profile="router",
         )
-        fallback = apply_confidence_policy(
-            heuristic_route(context.user_text, state.session_scene),
-            current_session_scene=state.session_scene,
+        isolate_current_artifact_context = _should_isolate_current_artifact_context(
+            state,
+            context,
+            current_turn_id=current_turn_id,
         )
+        route_context = context
+        if isolate_current_artifact_context:
+            route_context = replace(
+                context,
+                session_scene="general",
+                turn_scene="general_qa",
+                recent_history_summary="",
+                recent_turns_summary="",
+                history_messages=[],
+                education_state={},
+                turn_records=[],
+            )
+        fallback = apply_confidence_policy(
+            heuristic_route(route_context.user_text, route_context.session_scene),
+            current_session_scene=route_context.session_scene,
+        )
+        artifact_brief = dict(getattr(route_context, "router_artifact_brief", {}) or {})
+        artifact_brief_source = str(artifact_brief.get("source") or "").strip()
+        text_only_router = artifact_brief_source in {"turn_result", "llm_brief"}
+        selected_model = self._select_model_for_context(route_context, text_only=text_only_router)
         append_trace_log(
             "router.route.start",
             {
-                "turn_input": sanitize_turn_input(context.turn_input),
-                "context": _compact_router_context_trace(context),
+                "turn_input": sanitize_turn_input(route_context.turn_input),
+                "context": _compact_router_context_trace(route_context),
                 "fallback": sanitize_value(fallback),
-                "model": self.model,
+                "model": selected_model,
+                "artifact_brief_source": artifact_brief_source,
+                "text_only_router": text_only_router,
+                "isolate_current_artifact_context": isolate_current_artifact_context,
                 "timeout": self.timeout,
             },
             turn_id=current_turn_id,
@@ -229,13 +312,16 @@ class RouterService:
 
         messages = build_router_messages(
             self.prompt_center,
-            context,
-            text_only=False,
+            route_context,
+            text_only=text_only_router,
+            artifact_brief=artifact_brief or None,
         )
         append_trace_log(
             "router.route.request",
             {
                 "model": self.model,
+                "selected_model": selected_model,
+                "artifact_brief": artifact_brief,
                 "single_model_plan": True,
                 "messages": _compact_router_messages_trace(messages),
             },
@@ -247,7 +333,7 @@ class RouterService:
             raw = llm_client.chat(
                 api_base=self.api_base,
                 api_key=self.api_key,
-                model=self.model,
+                model=selected_model,
                 messages=messages,
                 timeout=self.timeout,
                 temperature=0.1,
@@ -262,9 +348,9 @@ class RouterService:
             obj = extract_json_object(raw)
             decision_payload = {key: value for key, value in obj.items() if key != "plan"}
             decision = RouteDecision.model_validate(decision_payload)
-            final_decision = apply_confidence_policy(decision, current_session_scene=state.session_scene)
-            plan = dict(obj.get("plan") or {}) or _fallback_router_plan(final_decision, context, state)
-            enriched_context = replace(context, router_plan=plan)
+            final_decision = apply_confidence_policy(decision, current_session_scene=route_context.session_scene)
+            plan = dict(obj.get("plan") or {}) or _fallback_router_plan(final_decision, route_context, state)
+            enriched_context = replace(route_context, router_plan=plan)
             selection_summary = {
                 "session_id": state.session_id,
                 "turn_id": current_turn_id,
@@ -292,8 +378,8 @@ class RouterService:
             return final_decision, enriched_context
         except Exception as exc:
             final_decision = fallback
-            fallback_plan = _fallback_router_plan(final_decision, context, state)
-            fallback_context = replace(context, router_plan=fallback_plan)
+            fallback_plan = _fallback_router_plan(final_decision, route_context, state)
+            fallback_context = replace(route_context, router_plan=fallback_plan)
             selection_summary = {
                 "session_id": state.session_id,
                 "turn_id": current_turn_id,

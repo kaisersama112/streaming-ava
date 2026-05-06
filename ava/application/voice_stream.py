@@ -21,6 +21,10 @@ class VoiceStreamConfig:
     instruction: str
     audio_format: str
     sample_rate: int
+    synth_segment_chars: int = 48
+    synth_burst_chars: int = 96
+    synth_feed_pause_seconds: float = 0.04
+    synth_complete_timeout_millis: int = 15000
 
 
 class StreamingVoicePipeline:
@@ -36,6 +40,7 @@ class StreamingVoicePipeline:
     PUNCTUATION = set("。！？!?；;，、,\n")
 
     def __init__(self, config: VoiceStreamConfig) -> None:
+        self._config = config
         self._submit_queue: queue.Queue[str | None] = queue.Queue()
         self._done = threading.Event()
         self._interrupted = threading.Event()
@@ -54,23 +59,32 @@ class StreamingVoicePipeline:
         self._completed_at: float | None = None
         self._last_submit_at: float | None = None
         self._last_flush_at: float | None = None
-        self._synth = StreamingCosyVoice(
-            api_key=config.api_key,
-            model=config.model,
-            voice=config.voice,
-            volume=config.volume,
-            speech_rate=config.speech_rate,
-            pitch_rate=config.pitch_rate,
-            instruction=config.instruction,
-            audio_format=config.audio_format,
-            sample_rate=config.sample_rate,
-        )
+        self._synth = self._create_synth()
         self._flush_char_threshold = 8
         self._first_flush_char_threshold = 4
         self._flush_wait_seconds = 0.03
         self._first_flush_done = False
+        self._synth_segment_chars = max(16, int(config.synth_segment_chars or 48))
+        self._synth_burst_chars = max(self._synth_segment_chars, int(config.synth_burst_chars or 96))
+        self._synth_feed_pause_seconds = max(0.0, float(config.synth_feed_pause_seconds or 0.0))
+        self._synth_complete_timeout_millis = max(1000, int(config.synth_complete_timeout_millis or 15000))
+        self._last_synth_feed_at: float | None = None
+        self._synth_feed_calls = 0
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def _create_synth(self) -> StreamingCosyVoice:
+        return StreamingCosyVoice(
+            api_key=self._config.api_key,
+            model=self._config.model,
+            voice=self._config.voice,
+            volume=self._config.volume,
+            speech_rate=self._config.speech_rate,
+            pitch_rate=self._config.pitch_rate,
+            instruction=self._config.instruction,
+            audio_format=self._config.audio_format,
+            sample_rate=self._config.sample_rate,
+        )
 
     def submit(self, text: str) -> None:
         if self._interrupted.is_set() or self._done.is_set():
@@ -161,6 +175,7 @@ class StreamingVoicePipeline:
                 "completed_at": self._completed_at,
                 "last_submit_at": self._last_submit_at,
                 "last_flush_at": self._last_flush_at,
+                "synth_feed_calls": self._synth_feed_calls,
                 "done": self._done.is_set(),
                 "interrupted": self._interrupted.is_set(),
                 "error": bool(self._error),
@@ -195,10 +210,57 @@ class StreamingVoicePipeline:
 
         return False
 
+    def _split_for_synth(self, content: str) -> list[str]:
+        content = content.strip()
+        if not content:
+            return []
+        if len(content) <= self._synth_segment_chars:
+            return [content]
+
+        segments: list[str] = []
+        current: list[str] = []
+        last_boundary = -1
+        min_boundary = max(12, self._synth_segment_chars // 2)
+
+        for ch in content:
+            current.append(ch)
+            if ch in self.PUNCTUATION or ch in ":：)]）":
+                last_boundary = len(current)
+            if len(current) < self._synth_segment_chars:
+                continue
+
+            cut = last_boundary if last_boundary >= min_boundary else len(current)
+            segment = "".join(current[:cut]).strip()
+            if segment:
+                segments.append(segment)
+            current = current[cut:]
+            last_boundary = -1
+            for idx, cur_ch in enumerate(current, start=1):
+                if cur_ch in self.PUNCTUATION or cur_ch in ":：)]）":
+                    last_boundary = idx
+
+        tail = "".join(current).strip()
+        if tail:
+            segments.append(tail)
+        return segments
+
+    def _feed_synth_segments(self, content: str) -> None:
+        for segment in self._split_for_synth(content):
+            if self._interrupted.is_set():
+                return
+            if self._last_synth_feed_at is not None and self._synth_feed_pause_seconds > 0.0:
+                elapsed = time.monotonic() - self._last_synth_feed_at
+                if elapsed < self._synth_feed_pause_seconds:
+                    time.sleep(self._synth_feed_pause_seconds - elapsed)
+            self._synth.feed(segment)
+            self._last_synth_feed_at = time.monotonic()
+            with self._stats_lock:
+                self._synth_feed_calls += 1
+
     def _flush_buffer(self, buffer: str) -> str:
         content = buffer.strip()
         if content:
-            self._synth.feed(content)
+            self._feed_synth_segments(content)
             self._first_flush_done = True
             with self._stats_lock:
                 self._flushed_batches += 1
@@ -234,15 +296,15 @@ class StreamingVoicePipeline:
                 if item is None:
                     if buffer.strip():
                         self._flush_buffer(buffer)
-                    self._synth.complete()
+                    self._synth.complete(timeout_millis=self._synth_complete_timeout_millis)
                     break
 
-                # Drain any queued token burst immediately so long LLM outputs do not
-                # leave a large feeder backlog that delays synthesis completion.
+                # Keep a moderate local backlog, but do not shovel the entire LLM burst
+                # into the provider at once. Long replies are expected to outpace speech.
                 burst_parts = [item]
                 burst_chars = len(item)
                 close_requested = False
-                while True:
+                while burst_chars < self._synth_burst_chars:
                     try:
                         queued = self._submit_queue.get_nowait()
                     except queue.Empty:
@@ -263,7 +325,7 @@ class StreamingVoicePipeline:
                 if close_requested:
                     if buffer.strip():
                         buffer = self._flush_buffer(buffer)
-                    self._synth.complete()
+                    self._synth.complete(timeout_millis=self._synth_complete_timeout_millis)
                     break
 
                 if self._has_punctuation(buffer):
