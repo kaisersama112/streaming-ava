@@ -583,6 +583,85 @@ function stopPlaybackQueue() {
   playbackScheduledAt = playbackCtx ? playbackCtx.currentTime : 0;
 }
 
+function withCacheBuster(rawUrl) {
+  if (!rawUrl || rawUrl === "-" || rawUrl === "about:blank") {
+    return "";
+  }
+  try {
+    const url = new URL(rawUrl, window.location.href);
+    url.searchParams.set("_ts", String(Date.now()));
+    return url.toString();
+  } catch (_) {
+    return rawUrl;
+  }
+}
+
+function refreshPlayerFrame(playerUrl) {
+  const nextUrl = withCacheBuster(playerUrl || playerUrlEl?.href || playerFrameEl?.src || "");
+  if (!nextUrl) {
+    return;
+  }
+  if (playerUrlEl) {
+    playerUrlEl.textContent = playerUrl || playerUrlEl.textContent || nextUrl;
+    playerUrlEl.href = playerUrl || playerUrlEl.href || nextUrl;
+  }
+  if (playerFrameEl) {
+    playerFrameEl.src = nextUrl;
+  }
+}
+
+function hardResetPlayerFrame() {
+  const nextUrl = playerUrlEl?.href || playerFrameEl?.src || "";
+  if (!nextUrl || nextUrl === "about:blank") {
+    return;
+  }
+  if (playerFrameEl) {
+    playerFrameEl.src = "about:blank";
+    window.setTimeout(() => refreshPlayerFrame(nextUrl), 30);
+  }
+}
+
+function estimatePcmRms(buf) {
+  if (!buf || !buf.byteLength) {
+    return 0;
+  }
+  const samples = new Int16Array(buf);
+  if (!samples.length) {
+    return 0;
+  }
+  let sum = 0;
+  for (let i = 0; i < samples.length; i += 1) {
+    const normalized = samples[i] / 32768;
+    sum += normalized * normalized;
+  }
+  return Math.sqrt(sum / samples.length);
+}
+
+function maybeInterruptPlaybackFromMic(buf) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || isMuted) {
+    return;
+  }
+  if (currentSessionState !== "speaking" && currentSessionState !== "thinking") {
+    localSpeechInterruptArmed = true;
+    return;
+  }
+  const rms = estimatePcmRms(buf);
+  if (rms <= LOCAL_BARGE_IN_RELEASE_THRESHOLD) {
+    localSpeechInterruptArmed = true;
+    return;
+  }
+  if (rms < LOCAL_BARGE_IN_RMS_THRESHOLD) {
+    return;
+  }
+  const now = Date.now();
+  if (!localSpeechInterruptArmed || (now - lastLocalInterruptAt) < LOCAL_BARGE_IN_COOLDOWN_MS) {
+    return;
+  }
+  localSpeechInterruptArmed = false;
+  lastLocalInterruptAt = now;
+  interruptPlayback("speech_start");
+}
+
 function decodeBase64ToInt16(base64) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
