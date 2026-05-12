@@ -38,12 +38,9 @@ const currentArtifactSubjectHintEl = el("currentArtifactSubjectHint");
 const currentArtifactTaskHintEl = el("currentArtifactTaskHint");
 const multimodalSummaryEl = el("multimodalSummary");
 const artifactTextViewEl = el("artifactTextView");
-const memorySummaryEl = el("memorySummary");
-const historySummaryEl = el("historySummary");
 const historyMessageCountEl = el("historyMessageCount");
 const historyTurnCountEl = el("historyTurnCount");
 const historyFocusEl = el("historyFocus");
-const factsViewEl = el("factsView");
 const promptViewEl = el("promptView");
 const timelineViewEl = el("timelineView");
 const metricAsrFinalLatencyEl = el("metricAsrFinalLatency");
@@ -1100,9 +1097,6 @@ function handleEvent(msg) {
   }
   if (msg.type === "debug_context") {
     setCodeText(multimodalSummaryEl, msg.multimodal_summary || "无");
-    setCodeText(memorySummaryEl, msg.memory_summary || "无");
-    setCodeText(historySummaryEl, msg.history_summary || "无");
-    setCodeText(factsViewEl, JSON.stringify(msg.facts || {}, null, 2), "{}");
     return;
   }
   if (msg.type === "debug_prompt") {
@@ -1463,15 +1457,6 @@ function buildStrategyContextText() {
     "artifact_text:",
     compactValue(artifactTextViewEl?.textContent, "无"),
     "",
-    "memory_summary:",
-    compactValue(memorySummaryEl?.textContent, "无"),
-    "",
-    "history_summary:",
-    compactValue(historySummaryEl?.textContent, "无"),
-    "",
-    "facts:",
-    compactValue(factsViewEl?.textContent, "{}"),
-    "",
     "system_prompt:",
     compactValue(promptViewEl?.textContent, "无"),
     "",
@@ -1600,9 +1585,6 @@ setCodeText(currentArtifactSubjectHintEl, "-", "-");
 setCodeText(currentArtifactTaskHintEl, "-", "-");
 setCodeText(multimodalSummaryEl, "无");
 setCodeText(artifactTextViewEl, "无");
-setCodeText(memorySummaryEl, "无");
-setCodeText(historySummaryEl, "无");
-setCodeText(factsViewEl, "{}");
 setCodeText(promptViewEl, "无");
 setCodeText(timelineViewEl, "无");
 setMetricValue(metricAsrFinalLatencyEl, null);

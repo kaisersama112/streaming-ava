@@ -1,70 +1,44 @@
 # Domain Layer
 
-`ava/domain/` 放系统的核心状态模型、上下文模型、路由 schema 和策略模型。
+`ava/domain/` contains the core models and policies of the system.
 
-这一层的重点是“表达系统是什么”，而不是“执行一次 turn 要怎么做”。
+It describes what the system is, not how a turn is executed.
 
-## 当前职责
-
-- 定义输入与上下文快照
-- 定义路由决策模型
-- 定义会话状态聚合
-- 定义策略与 prompt 选择相关的结构化模型
-
-## 当前子模块
+## Current packages
 
 - `context/`
-  - `TurnInput`
-  - `MediaArtifact`
-  - `ContextSnapshot`
-  - `assemble_context()`
+  - `TurnInput`, `MediaArtifact`, `ContextSnapshot`
 - `routing/`
-  - `RouteDecision`
-  - 置信度策略与 policy
+  - `RouteDecision`, routing schema, confidence policy
 - `session/`
-  - `ConversationState`
+  - `ConversationState`, `SessionMemory`
 - `strategy/`
-  - `PromptSelection`
-  - `ResolvedPromptSpec`
-  - `BranchStrategy`
+  - `BranchStrategy`, `ResolvedPromptSpec`
 
-## 设计边界
+## Boundary
 
-这一层负责：
+This layer is responsible for:
 
-- 保存“当前会话有哪些事实、turn records、education_state”
-- 表达“当前路由决策长什么样”
-- 表达“编排层最终选中的策略长什么样”
+- input and context models
+- routing decision models
+- session state machine and memory models
+- prompt-selection strategy models
 
-这一层不负责：
+This layer is not responsible for:
 
-- 调 LLM / TTS / ASR
-- 直接读取 Prompt markdown 文件
-- 组织一轮 turn 的执行顺序
+- calling LLM / TTS / ASR
+- reading prompt asset files
+- orchestrating full turn execution order
 
-## 关键对象
+## State and memory split
 
-### Context
+- `ConversationState`
+  - session flow state, turn records, route continuity, realtime lifecycle
+- `SessionMemory`
+  - facts, education state, summaries, artifact analysis cache
 
-- [context/media.py](/app/streaming-ava/ava/domain/context/media.py)
-- [context/models.py](/app/streaming-ava/ava/domain/context/models.py)
-- [context/assembler.py](/app/streaming-ava/ava/domain/context/assembler.py)
+Official access path:
 
-### Routing
-
-- [routing/schema.py](/app/streaming-ava/ava/domain/routing/schema.py)
-- [routing/policy.py](/app/streaming-ava/ava/domain/routing/policy.py)
-
-### Session
-
-- [session/state.py](/app/streaming-ava/ava/domain/session/state.py)
-
-### Strategy
-
-- [strategy/models.py](/app/streaming-ava/ava/domain/strategy/models.py)
-
-## 与其他层关系
-
-- 被 [ava/application/README.md](/app/streaming-ava/ava/application/README.md) 消费
-- 不直接依赖 `ava/infrastructure/`
-- 是整个系统文档里判断“真实模型边界”的基准层
+```python
+state.memory.*
+```

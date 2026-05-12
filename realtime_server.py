@@ -4,7 +4,7 @@ from app import app
 
 if __name__ == "__main__":
     import uvicorn
-    from config import settings
+    from configs import settings
 
     host = getattr(settings.server, "host", "0.0.0.0")
     port = int(getattr(settings.server, "port", 7000))

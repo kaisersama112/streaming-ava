@@ -1,0 +1,95 @@
+server:
+  title: "streaming-ava"
+  host: "0.0.0.0"
+  port: 7000
+  reload: false
+  workers: 1
+
+openai_config:
+  api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: "" # 从环境变量读取：STREAMING_AVA_OPENAI_API_KEY
+  model: "qwen-plus"
+  multimodal_model: "qwen3.5-omni-plus"
+  timeout: 60
+
+voice_config:
+  api_base: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+  api_key: "" # 从环境变量读取：STREAMING_AVA_TTS_API_KEY
+  model: "cosyvoice-v3-flash"
+  voice: "longanhuan"
+  volume: 50
+  speech_rate: 1.0
+  pitch_rate: 1.0
+  instruction: "你说话的角色是温和客服，你说话的情感是neutral。"
+  format: "wav"
+  sample_rate: 24000
+  timeout: 120
+
+asr_config:
+  api_key: "" # 从环境变量读取：STREAMING_AVA_ASR_API_KEY
+  model: "qwen3-asr-flash-realtime"
+  format: "pcm"
+  sample_rate: 16000
+  language: "zh"
+  websocket_url: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+  websocket_ping_interval_sec: 15.0
+  websocket_ping_timeout_sec: 8.0
+  enable_turn_detection: true
+  turn_detection_threshold: 0.45
+  turn_detection_silence_duration_ms: 850
+
+runtime:
+  state_file: "state/memory.json"
+  default_session_id: "default"
+  evaluation_log_file: "state/evaluation.jsonl"
+  trace_log_file: "state/trace.jsonl"
+  trace_log_enabled: true
+  trace_log_asr_partials: true
+  trace_max_text_chars: 12000
+  history_window: 8
+  max_context_messages: 16
+  router_max_context_messages: 8
+  responder_max_context_messages: 16
+  output_dir: "outputs"
+  realtime_audio_host: "0.0.0.0"
+  realtime_audio_port: 7860
+  realtime_audio_public_url: ""
+  prompt_dir: "prompt-plugin"
+  router_model: ""
+  router_timeout: 30
+  agents_sdk_enabled: true
+  agents_sdk_realtime_enabled: true
+  agents_sdk_tracing_enabled: false
+  agents_sdk_timeout: 45
+  agents_sdk_max_turns: 6
+  agents_sdk_model: ""
+  agents_sdk_multimodal_model: ""
+  agents_sdk_session_db: "state/agents_sessions.json"
+  agents_sdk_branches:
+    - "education"
+    - "general_qa"
+    - "clarify"
+  agents_sdk_education_modules:
+    - "solve"
+    - "check"
+    - "explain"
+    - "answer"
+    - "qa"
+  debug_audio_dump: false
+  realtime_audio_frame_ms: 60
+  realtime_audio_max_lead_seconds: 0.05
+  realtime_tts_complete_timeout_millis: 45000
+  realtime_tts_done_drain_grace_seconds: 2.0
+  realtime_tts_close_timeout_seconds: 45.0
+  realtime_audio_pump_drain_timeout_seconds: 45.0
+  realtime_audio_rebuild_on_interrupt: true
+  barge_in_partial_chars: 4
+  barge_in_stability_threshold: 0.65
+  barge_in_cooldown_ms: 900
+
+speech_postprocess:
+  enabled: true
+  math_oralizer_enabled: true
+  latex_span_only: true
+  math_stream_buffer_enabled: true
+  stream_flush_chars: 72

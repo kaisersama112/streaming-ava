@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import base64
@@ -15,13 +15,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from ava.application.multimodal import AttachmentPayload, build_turn_input
-from ava.application.conversation import load_state
-from ava.application.realtime import RealtimeConversationSession
-from ava.application.trace import append_trace_log, sanitize_turn_input, sanitize_value
-from ava.infrastructure.realtime import PlayerConfig, get_bridge
-from ava.infrastructure.asr import ASRConfig, ASRError, StreamingASRClient
-from config import settings
+from ava.core.context import AttachmentPayload, build_turn_input
+from ava.core.session import load_state
+from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
+from ava.interfaces.websocket import PlayerConfig, get_bridge
+from ava.capabilities.asr.asr_streaming_client import StreamingASRClient
+from ava.capabilities.asr.asr_streaming_sdk import ASRConfig, ASRError
+from ava.pipeline.streaming import RealtimeConversationSession
+from configs import settings
 
 # WebSocket 实时服务模块日志记录器
 _LOG = logging.getLogger("streaming_ava.ws")
@@ -168,7 +169,7 @@ async def _decode_attachments(items: list[dict[str, object]] | None) -> list[Att
             try:
                 binary = base64.b64decode(raw)
             except Exception:
-                # 非法 base64 数据直接跳过，避免影响整个请求
+                # 闈炴硶 base64 鏁版嵁鐩存帴璺宠繃锛岄伩鍏嶅奖鍝嶆暣涓姹?
                 continue
             attachments.append(
                 AttachmentPayload(
@@ -198,7 +199,7 @@ async def _decode_attachments(items: list[dict[str, object]] | None) -> list[Att
 
 
 def _attachment_payloads(attachments: list[AttachmentPayload]) -> list[dict[str, object]]:
-    """将内部附件对象转换为可发给前端的 JSON 载荷。
+    """将内部附件对象转换为可发送给前端的 JSON 载荷。
 
     对图片/音频/视频类型，额外生成 data_url，便于前端直接预览。
     其他类型仅返回元信息，不内联原始二进制数据。
@@ -281,7 +282,7 @@ def _resolve_session_id(raw: str | None) -> str:
     若前端未提供 session_id，则回退到默认配置值。
     最终通过 ConversationState.normalize_session_id 进行标准化处理。
     """
-    from ava.domain.session.state import ConversationState
+    from ava.domain.conversation.state import ConversationState
 
     return ConversationState.normalize_session_id(raw or settings.runtime.default_session_id)
 
@@ -301,7 +302,8 @@ def _build_bridge_session(ws: WebSocket, session_id: str) -> tuple[RealtimeConve
     - 前端可访问的播放器 URL
     """
     bind_host = getattr(settings.runtime, "realtime_audio_host", "127.0.0.1")
-    if not (getattr(settings.runtime, "realtime_audio_public_url", "") or "") and bind_host in {"127.0.0.1", "localhost"}:
+    if not (getattr(settings.runtime, "realtime_audio_public_url", "") or "") and bind_host in {"127.0.0.1",
+                                                                                                "localhost"}:
         # 若未配置公网地址且当前仅绑定本地回环地址，则提升为 0.0.0.0，
         # 以便播放器服务可被外部访问
         bind_host = "0.0.0.0"
@@ -320,12 +322,12 @@ def _build_bridge_session(ws: WebSocket, session_id: str) -> tuple[RealtimeConve
     try:
         player_url = bridge.launch()
     except Exception:
-        # 若 bridge 已启动或启动失败，则保留兜底地址
+        # 鑻?bridge 宸插惎鍔ㄦ垨鍚姩澶辫触锛屽垯淇濈暀鍏滃簳鍦板潃
         pass
 
     player_url = _resolve_player_url(player_url, ws)
 
-    # 加载当前会话历史状态，用于恢复上下文
+    # 若 bridge 已启动或启动失败，则保留兜底地址
     state = load_state(
         settings.runtime.state_file,
         settings.runtime.history_window,
@@ -344,7 +346,7 @@ def _build_bridge_session(ws: WebSocket, session_id: str) -> tuple[RealtimeConve
 
 
 def create_app() -> FastAPI:
-    """创建 FastAPI 应用并注册 HTTP / WebSocket 路由。"""
+    """Create the FastAPI app and register HTTP/WebSocket routes."""
     app = FastAPI(title="streaming-ava-realtime")
 
     # 提供一个最小可用的静态前端页面（非 Streamlit）。
@@ -357,30 +359,17 @@ def create_app() -> FastAPI:
 
         @app.get("/")
         async def index():  # type: ignore[override]
-            """返回前端首页。"""
+            """Return the static frontend index page."""
             return FileResponse(str(static_dir / "index.html"))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        """健康检查接口。"""
+        """Health check endpoint."""
         return {"status": "ok"}
 
     @app.websocket("/ws/audio")
     async def ws_audio(ws: WebSocket):
-        """实时音频 WebSocket 接口。
-
-        支持两类消息：
-        1. 二进制帧：原始 PCM 音频流
-        2. JSON 文本：控制类消息，如 interrupt / ping / text / stage_attachments
-
-        整体流程：
-        - 建立连接后初始化 ASR 与实时会话
-        - 启动两个后台任务：
-          - ASR 结果轮询任务
-          - Session 事件下发任务
-        - 主循环持续接收前端音频与控制消息
-        - 连接断开后统一清理资源
-        """
+        """Realtime audio WebSocket endpoint."""
         await ws.accept()
         ws_closed = asyncio.Event()
         session_id = _resolve_session_id(ws.query_params.get("session_id"))
@@ -410,23 +399,19 @@ def create_app() -> FastAPI:
         session, player_url = _build_bridge_session(ws, session_id)
         runtime = WSRuntime(session=session, asr=StreamingASRClient(asr_cfg), player_url=player_url)
 
-        # 临时 PCM 缓冲区：将前端持续发送的小块音频拼成适合 ASR 上送的帧大小
+        # 临时 PCM 缓冲区：将前端持续发送的小块音频拼成适合 ASR 上传的帧大小
         pcm_buffer = bytearray()
         frame_bytes = 3200  # 约 0.1 秒，PCM16 / 16kHz / 单声道
 
         async def _asr_result_loop():
-            """后台轮询 ASR 结果，并将 partial/final 转发给 session。
-
-            - partial：用于增量识别与打断判断
-            - final：触发一次完整用户输入提交
-            """
+            """Poll ASR results and forward them into the realtime session."""
             try:
                 while not ws_closed.is_set():
                     results = runtime.asr.pop_results(max_items=16)
                     if results:
                         for r in results:
                             if r.is_final:
-                                # final 结果到来时，消耗当前暂存附件并作为本轮输入的一部分
+                                # final 结果到来时，消费当前暂存附件并作为本轮输入的一部分
                                 attachments = list(runtime.staged_attachments)
                                 runtime.session.on_asr_final(
                                     r.text,
@@ -452,14 +437,7 @@ def create_app() -> FastAPI:
                 await _safe_send_json(ws, {"type": "error", "scope": "asr", "message": str(exc)}, ws_closed)
 
         async def _session_event_loop():
-            """后台轮询 session 产生的事件，并推送给前端。
-
-            事件可能包括：
-            - assistant 文本增量
-            - TTS 播放状态
-            - turn 生命周期事件
-            - 控制类通知
-            """
+            """Drain realtime session events and push them to the client."""
             try:
                 while not ws_closed.is_set():
                     events = runtime.session.poll_events(max_items=64)
@@ -480,22 +458,22 @@ def create_app() -> FastAPI:
 
             # 建连成功后向前端发送 hello 包，声明协议与初始状态
             if not await _safe_send_json(
-                ws,
-                {
-                    "type": "hello",
-                    "protocol": 1,
-                    "audio": {
-                        "format": "pcm_s16le",
-                        "sample_rate": asr_cfg.sample_rate,
-                        "channels": 1,
+                    ws,
+                    {
+                        "type": "hello",
+                        "protocol": 1,
+                        "audio": {
+                            "format": "pcm_s16le",
+                            "sample_rate": asr_cfg.sample_rate,
+                            "channels": 1,
+                        },
+                        "player_url": runtime.player_url,
+                        "session_id": runtime.session.session_id,
+                        "history": runtime.session.history_snapshot(limit=16),
+                        "staged_attachments": _attachment_payloads(runtime.staged_attachments),
+                        "note": "Send binary frames as raw PCM audio and JSON text as control messages such as interrupt or ping.",
                     },
-                    "player_url": runtime.player_url,
-                    "session_id": runtime.session.session_id,
-                    "history": runtime.session.history_snapshot(limit=16),
-                    "staged_attachments": _attachment_payloads(runtime.staged_attachments),
-                    "note": "发送二进制帧作为原始 PCM 音频；发送 JSON 文本作为控制消息（如 interrupt/ping）。",
-                },
-                ws_closed,
+                    ws_closed,
             ):
                 return
 
@@ -597,7 +575,7 @@ def create_app() -> FastAPI:
                             tail = bytes(pcm_buffer)
                             pcm_buffer.clear()
                             if len(tail) < frame_bytes:
-                                # 尾帧不足时补零，保证 ASR 上送帧格式稳定
+                                # 尾帧不足时补零，保证 ASR 上传帧格式稳定
                                 tail = tail + (b"\x00" * (frame_bytes - len(tail)))
                             runtime.asr.send_audio(tail)
 
@@ -637,7 +615,7 @@ def create_app() -> FastAPI:
                     continue
 
                 if mtype == "ping":
-                    # 简单保活/连通性探测
+                    # 简单保活 / 连通性探测
                     await _safe_send_json(ws, {"type": "pong"}, ws_closed)
                     continue
 
@@ -714,7 +692,7 @@ def create_app() -> FastAPI:
         except WebSocketDisconnect:
             ws_closed.set()
         finally:
-            # 无论正常断开还是异常退出，都统一清理资源
+            # 无论正常断开还是异常退出，均统一清理资源
             ws_closed.set()
 
             # 关闭实时对话会话
