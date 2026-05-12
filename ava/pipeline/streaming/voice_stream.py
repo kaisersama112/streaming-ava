@@ -360,22 +360,3 @@ class StreamingVoicePipeline:
             self._done.set()
 
 
-def warmup_shared_synth(config: VoiceStreamConfig) -> None:
-    """Prime the underlying WebSocket connection before the first visible turn."""
-    try:
-        synth = StreamingCosyVoice(
-            api_key=config.api_key,
-            model=config.model,
-            voice=config.voice,
-            volume=config.volume,
-            speech_rate=config.speech_rate,
-            pitch_rate=config.pitch_rate,
-            instruction=config.instruction,
-            audio_format=config.audio_format,
-            sample_rate=config.sample_rate,
-        )
-        synth.feed("你好。")
-        synth.complete()
-        synth.pop_chunks()
-    except Exception:
-        return

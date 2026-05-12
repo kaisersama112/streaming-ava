@@ -1,7 +1,6 @@
 ﻿"""Session-scoped full-duplex runtime."""
 
 from __future__ import annotations
-
 import base64
 from difflib import SequenceMatcher
 import logging
@@ -9,18 +8,33 @@ import threading
 import time
 from typing import Any
 
+# 上下文构建相关工具
 from ava.core.context import (
     AttachmentPayload,
     build_context_snapshot,
     build_turn_input,
 )
+
+# 会话状态加载与预处理
 from ava.core.session import load_state, prepare_state_for_turn
+
+# 评估标签构建
 from ava.pipeline.output import build_evaluation_tags
+
+# 生成阶段：构建 turn plan
 from ava.pipeline.generation import build_turn_plan
 from ava.pipeline.generation import stream_reply_with_callbacks
+
+# 路由决策
 from ava.pipeline.routing import route_with_context
+
+# 数学语音缓冲与口语化处理
 from ava.pipeline.speech import LatexAwareSpeechBuffer, should_apply_math_oralizer
+
+# 打断（barge-in）检测
 from ava.pipeline.streaming.barge_in import BargeInConfig, BargeInDetector
+
+# 实时事件定义
 from ava.core.events.realtime import (
     AsrFinalEvent,
     AsrPartialEvent,
@@ -38,26 +52,54 @@ from ava.core.events.realtime import (
     StrategyDebugEvent,
     TtsChunkEvent,
 )
+
+# Turn 生命周期控制
 from ava.pipeline.streaming.turn import TurnControl, TurnStatus
+
+# Prompt 管理中心
 from ava.capabilities.prompt import build_prompt_center
+
+# Trace 日志工具
 from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
+
+# 流式语音播放 Pipeline
 from ava.pipeline.streaming.voice_stream import StreamingVoicePipeline, VoiceStreamConfig
+
+# 多模态领域对象
 from ava.domain.multimodal import MediaArtifact, TurnInput
+
+# 会话状态对象
 from ava.domain.conversation.state import ConversationState
+
+# WebSocket 音频桥
 from ava.interfaces.websocket import RealtimeAudioBridge
+
+# TTS SDK 异常
 from ava.capabilities.tts import CosyVoiceSDKError
+
+# 全局配置
 from configs import settings
 
+# 日志实例
 _LOG = logging.getLogger("streaming_ava.realtime.session")
 
 
 def _compact_snapshot_trace(snapshot: Any) -> dict[str, Any]:
+    """
+    将 context snapshot 压缩为适合 trace 日志输出的轻量结构。
+
+    目的：
+    - 避免 trace 日志过大
+    - 保留关键上下文信息用于排查问题
+    """
     return {
         "session_id": getattr(snapshot, "session_id", ""),
         "context_profile": getattr(snapshot, "context_profile", ""),
         "user_text": getattr(snapshot, "user_text", ""),
         "session_scene": getattr(snapshot, "session_scene", ""),
         "turn_scene": getattr(snapshot, "turn_scene", ""),
+
+        # 只记录数量，不记录完整内容
         "history_messages_count": len(getattr(snapshot, "history_messages", []) or []),
         "artifacts_count": len(getattr(snapshot, "artifacts", ()) or ()),
         "reference_artifacts_count": len(getattr(snapshot, "reference_artifacts", ()) or ()),
@@ -65,49 +107,105 @@ def _compact_snapshot_trace(snapshot: Any) -> dict[str, Any]:
 
 
 def _compact_debug_prompt(text: str, limit: int = 1200) -> str:
+    """
+    压缩 prompt 内容，避免调试日志过长。
+
+    参数:
+    - text: 原始 prompt
+    - limit: 最大保留长度
+    """
     value = str(text or "").strip()
+
+    # 不超过限制直接返回
     if len(value) <= limit:
         return value
+
+    # 超长则截断
     return f"{value[:limit].rstrip()}..."
 
 
 def _artifact_to_payload(artifact: MediaArtifact, *, include_inline_data: bool = False) -> dict[str, Any]:
+    """
+    将 MediaArtifact 转换为可序列化 payload。
+
+    include_inline_data:
+        是否内联携带 base64 数据（图片/音频/视频）
+    """
+
+    # 基础 prompt dict
     payload = artifact.to_prompt_dict()
+
+    # URI 信息
     if artifact.uri:
         payload["uri"] = artifact.uri
+
+    # 可选内联数据
     if include_inline_data and artifact.data_url and artifact.kind in {"image", "audio", "video"}:
         payload["data_url"] = artifact.data_url
+
     return payload
 
 
 def _artifacts_to_payload(turn_input: TurnInput, *, include_inline_data: bool = False) -> list[dict[str, Any]]:
-    return [_artifact_to_payload(artifact, include_inline_data=include_inline_data) for artifact in
-            turn_input.artifacts]
+    """
+    将 TurnInput 中所有 artifact 转换为 payload 列表。
+    """
+    return [
+        _artifact_to_payload(artifact, include_inline_data=include_inline_data)
+        for artifact in turn_input.artifacts
+    ]
 
 
 def _message_content_to_text(content: Any) -> str:
+    """
+    将 message content 转换为纯文本。
+
+    支持：
+    - str
+    - OpenAI multimodal block list
+    """
+
+    # 纯字符串直接返回
     if isinstance(content, str):
         return content
+
+    # multimodal block
     if isinstance(content, list):
         parts: list[str] = []
+
         for block in content:
             if not isinstance(block, dict):
                 continue
+
+            # 文本 block
             if block.get("type") == "text":
                 text = str(block.get("text", "")).strip()
                 if text:
                     parts.append(text)
                     continue
+
+            # 图片 / 音频 / 视频占位
             for key in ("image_url", "input_audio", "video"):
                 if key in block:
                     parts.append(f"[{key}]")
                     break
+
         return "\n".join(parts).strip()
+
     return str(content or "")
 
 
 class RealtimeConversationSession:
-    """Conversation runtime for full-duplex voice sessions."""
+    """
+    全双工实时语音会话 Runtime。
+
+    主要职责：
+    1. 管理实时 turn 生命周期
+    2. 管理 ASR / LLM / TTS 流
+    3. 处理 barge-in（用户打断）
+    4. 管理事件总线
+    5. 维护 conversation state
+    """
 
     def __init__(
             self,
@@ -118,51 +216,135 @@ class RealtimeConversationSession:
             max_context_messages: int | None = None,
             session_id: str | None = None,
     ) -> None:
+        """
+        初始化实时会话。
+
+        参数:
+        - bridge: WebSocket 音频桥
+        - state: 会话状态
+        - history_window: 历史窗口大小
+        - max_context_messages: 最大上下文消息数
+        - session_id: 会话 ID
+        """
+
+        # WebSocket 音频桥
         self.bridge = bridge
-        self.session_id = ConversationState.normalize_session_id(session_id or settings.runtime.default_session_id)
+
+        # 标准化 session id
+        self.session_id = ConversationState.normalize_session_id(
+            session_id or settings.runtime.default_session_id
+        )
+
+        # 加载会话状态
         self.state = state or load_state(
             settings.runtime.state_file,
             settings.runtime.history_window,
             session_id=self.session_id,
         )
+
         self.session_id = self.state.session_id
+
+        # 历史窗口
         self.history_window = history_window or settings.runtime.history_window
-        self.max_context_messages = max_context_messages or settings.runtime.max_context_messages
+
+        # 上下文消息限制
+        self.max_context_messages = (
+                max_context_messages or settings.runtime.max_context_messages
+        )
+
+        # Router 阶段最大上下文
         self.router_max_context_messages = int(
-            getattr(settings.runtime, "router_max_context_messages", 0) or self.max_context_messages
+            getattr(settings.runtime, "router_max_context_messages", 0)
+            or self.max_context_messages
         )
+
+        # Responder 阶段最大上下文
         self.responder_max_context_messages = int(
-            getattr(settings.runtime, "responder_max_context_messages", 0) or self.max_context_messages
+            getattr(settings.runtime, "responder_max_context_messages", 0)
+            or self.max_context_messages
         )
+
+        # Prompt 中心
         self.prompt_center = build_prompt_center()
+
+        # 实时事件总线
         self.events = RealtimeEventBus()
+
+        # 线程锁
         self._lock = threading.RLock()
+
+        # 当前 active turn
         self._active: TurnControl | None = None
+
+        # turn 序号
         self._turn_seq = 0
+
+        # shutdown 标记
         self._shutdown = threading.Event()
+
+        # 当前 session 状态
         self._session_status = TurnStatus.LISTENING
+
+        # barge-in 检测器
         self._barge_in = BargeInDetector(
             BargeInConfig(
-                min_partial_chars=int(getattr(settings.runtime, "barge_in_partial_chars", 2) or 2),
-                stability_threshold=float(getattr(settings.runtime, "barge_in_stability_threshold", 0.35) or 0.35),
-                cooldown_ms=int(getattr(settings.runtime, "barge_in_cooldown_ms", 450) or 450),
+                min_partial_chars=int(
+                    getattr(settings.runtime, "barge_in_partial_chars", 2) or 2
+                ),
+                stability_threshold=float(
+                    getattr(settings.runtime, "barge_in_stability_threshold", 0.35)
+                    or 0.35
+                ),
+                cooldown_ms=int(
+                    getattr(settings.runtime, "barge_in_cooldown_ms", 450)
+                    or 450
+                ),
             )
         )
+
+        # 打断计数
         self._interrupt_count = 0
+
+        # 最近音频帧时间戳
         self._last_audio_frame_ts: float | None = None
+
+        # 最近 TTS chunk 时间
         self._last_tts_chunk_at: float = 0.0
+
+        # 初始化状态
         self._emit_state(TurnStatus.LISTENING, detail="session_ready")
+
+        # 输出 metrics
         self._emit_metrics()
 
+    # =====================================================================
+    # 历史快照
+    # =====================================================================
+
     def history_snapshot(self, limit: int = 12) -> list[dict[str, object]]:
+        """
+        返回历史对话快照。
+
+        用于：
+        - UI 历史展示
+        - Debug
+        - 恢复上下文
+        """
+
         turns = self.state.turn_records[-max(0, limit):]
+
         payload: list[dict[str, object]] = []
+
         for index, record in enumerate(turns):
             turn_key = record.get("created_at") or f"history-{index}"
+
             decision = dict(record.get("decision") or {})
             strategy = dict(record.get("strategy") or {})
             evaluation = dict(record.get("evaluation") or {})
+
             turn_status = str(record.get("turn_status", "completed") or "completed")
+
+            # 用户消息
             payload.append(
                 {
                     "role": "user",
@@ -173,7 +355,11 @@ class RealtimeConversationSession:
                     "created_at": record.get("created_at") or "",
                 }
             )
+
+            # assistant 文本
             assistant_text = str(record.get("assistant_text") or "").strip()
+
+            # 补充状态文本
             if not assistant_text and turn_status == "interrupted":
                 assistant_text = "已中断"
             elif not assistant_text and turn_status == "error":
@@ -181,6 +367,7 @@ class RealtimeConversationSession:
             elif not assistant_text and turn_status == "pending":
                 assistant_text = "处理中"
 
+            # assistant 消息
             if assistant_text or strategy or evaluation or decision:
                 payload.append(
                     {
@@ -202,6 +389,7 @@ class RealtimeConversationSession:
                         },
                     }
                 )
+
         return payload
 
     @property
@@ -596,7 +784,8 @@ class RealtimeConversationSession:
                     append_trace_log(
                         "realtime.turn.t7_first_push_pcm",
                         {
-                            "timeline_ms": max(0.0, (ctrl.t7_first_push_pcm_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
+                            "timeline_ms": max(0.0, (
+                                    ctrl.t7_first_push_pcm_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
                             "bytes_len": len(data),
                         },
                         turn_id=ctrl.turn_id,
@@ -658,7 +847,8 @@ class RealtimeConversationSession:
                                 append_trace_log(
                                     "realtime.turn.t6_first_tts_chunk",
                                     {
-                                        "timeline_ms": max(0.0, (ctrl.t6_first_tts_chunk_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
+                                        "timeline_ms": max(0.0, (ctrl.t6_first_tts_chunk_at - (
+                                                ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
                                         "chunk_bytes": len(chunk),
                                     },
                                     turn_id=ctrl.turn_id,
@@ -928,7 +1118,8 @@ class RealtimeConversationSession:
             append_trace_log(
                 "realtime.turn.t1_prepare_state_done",
                 {
-                    "timeline_ms": max(0.0, (ctrl.t1_prepare_state_done_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
+                    "timeline_ms": max(0.0, (
+                            ctrl.t1_prepare_state_done_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
                 },
                 turn_id=ctrl.turn_id,
                 scope="realtime_turn",
@@ -990,7 +1181,8 @@ class RealtimeConversationSession:
             append_trace_log(
                 "realtime.turn.t3_turn_plan_done",
                 {
-                    "timeline_ms": max(0.0, (ctrl.t3_turn_plan_done_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
+                    "timeline_ms": max(0.0,
+                                       (ctrl.t3_turn_plan_done_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
                     "strategy_id": plan.strategy.strategy_id,
                     "render_template": plan.strategy.render_template,
                 },
@@ -1022,7 +1214,8 @@ class RealtimeConversationSession:
                     user_followup_type=evaluation_tags.get("user_followup_type", ""),
                     artifact_subject_hint=str(plan.strategy.analysis.get("artifact_subject_hint", "") or ""),
                     artifact_task_hint=str(plan.strategy.analysis.get("artifact_task_hint", "") or ""),
-                    artifact_text=str(((plan.strategy.analysis.get("signals", {}) or {}).get("artifact_text", "")) or ""),
+                    artifact_text=str(
+                        ((plan.strategy.analysis.get("signals", {}) or {}).get("artifact_text", "")) or ""),
                     turn_id=ctrl.turn_id,
                 )
             )
@@ -1060,8 +1253,8 @@ class RealtimeConversationSession:
                     scope="realtime_tts",
                 )
                 if (
-                    oralizer_enabled
-                    and settings.speech_postprocess.math_stream_buffer_enabled
+                        oralizer_enabled
+                        and settings.speech_postprocess.math_stream_buffer_enabled
                 ):
                     speech_buffer = LatexAwareSpeechBuffer(
                         strategy=plan.strategy,
@@ -1079,7 +1272,8 @@ class RealtimeConversationSession:
                     append_trace_log(
                         "realtime.turn.t5_first_tts_submit",
                         {
-                            "timeline_ms": max(0.0, (ctrl.t5_first_tts_submit_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
+                            "timeline_ms": max(0.0, (
+                                    ctrl.t5_first_tts_submit_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
                             "token_preview": text[:80],
                         },
                         turn_id=ctrl.turn_id,
@@ -1102,7 +1296,8 @@ class RealtimeConversationSession:
                     append_trace_log(
                         "realtime.turn.t4_first_token",
                         {
-                            "timeline_ms": max(0.0, (ctrl.t4_first_token_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
+                            "timeline_ms": max(0.0, (
+                                    ctrl.t4_first_token_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
                             "token_preview": token[:80],
                         },
                         turn_id=ctrl.turn_id,
@@ -1119,6 +1314,7 @@ class RealtimeConversationSession:
                             _submit_tts_text(chunk)
                     else:
                         _submit_tts_text(token)
+
             reply_result = stream_reply_with_callbacks(
                 state=self.state,
                 turn_input=turn_input,
@@ -1445,5 +1641,3 @@ class RealtimeConversationSession:
                 if "wait for complete timeout" not in error_text.lower():
                     self.events.publish(ErrorEvent(scope="tts", message=error_text, turn_id=ctrl.turn_id))
             self.end_turn(ctrl)
-
-

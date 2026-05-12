@@ -63,7 +63,10 @@ const btnCopyStrategyContext = el("btnCopyStrategyContext");
 const TARGET_SAMPLE_RATE = 16000;
 const MAX_LOG_CHARS = 12000;
 const SESSION_STORAGE_KEY = "ava.realtime.session_id";
-const STATIC_ASSET_VERSION = "20260429-mic-fix-1";
+const STATIC_ASSET_VERSION = "20260512-barge-in-fix-1";
+const LOCAL_BARGE_IN_RMS_THRESHOLD = 0.02;
+const LOCAL_BARGE_IN_RELEASE_THRESHOLD = 0.012;
+const LOCAL_BARGE_IN_COOLDOWN_MS = 450;
 
 let ws = null;
 let connectPromise = null;
@@ -88,6 +91,9 @@ let partialDraftId = null;
 let pendingAttachments = [];
 const interruptedAssistantTurns = new Set();
 let isMicTransitioning = false;
+let currentSessionState = "idle";
+let lastLocalInterruptAt = 0;
+let localSpeechInterruptArmed = true;
 
 const assistantNodes = new Map();
 const userMessageKeys = new Set();
