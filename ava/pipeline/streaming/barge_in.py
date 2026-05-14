@@ -9,12 +9,20 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class BargeInConfig:
+    """Thresholds for treating ASR partial text as an intentional interrupt."""
+
     min_partial_chars: int = 2
     stability_threshold: float = 0.35
     cooldown_ms: int = 450
 
 
 class BargeInDetector:
+    """Stateful cooldown gate for full-duplex user interruption.
+
+    The detector only decides whether an interruption is allowed. The session is
+    responsible for stopping LLM/TTS work and flushing playback.
+    """
+
     def __init__(self, config: BargeInConfig | None = None) -> None:
         self.config = config or BargeInConfig()
         self._lock = threading.Lock()
@@ -28,6 +36,7 @@ class BargeInDetector:
         is_speaking: bool,
         now: float | None = None,
     ) -> bool:
+        """Return True once per cooldown window when speech should be stopped."""
         if not is_speaking:
             return False
 

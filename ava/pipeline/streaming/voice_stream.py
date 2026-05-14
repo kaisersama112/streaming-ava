@@ -1,4 +1,9 @@
-"""Low-latency streaming TTS pipeline utilities."""
+"""Low-latency streaming TTS pipeline utilities.
+
+`StreamingVoicePipeline` decouples token arrival from provider-specific TTS
+calls. The LLM can submit text fragments quickly while a background worker
+groups them into small speech segments and drains provider audio chunks.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +19,8 @@ from ava.capabilities.tts.factory import build_streaming_tts, normalize_tts_erro
 
 @dataclass(frozen=True)
 class VoiceStreamConfig:
+    """Provider-neutral config for one realtime TTS feeder."""
+
     voice: Any
     audio_format: str = "pcm"
     sample_rate: int | None = None
@@ -37,10 +44,14 @@ class StreamingVoicePipeline:
 
     def __init__(self, config: VoiceStreamConfig) -> None:
         self._config = config
+        # Text submitted by the LLM thread. `None` is the sentinel used to close
+        # the background feeder after all buffered text is flushed.
         self._submit_queue: queue.Queue[str | None] = queue.Queue()
         self._done = threading.Event()
         self._interrupted = threading.Event()
         self._error: Exception | None = None
+        # Stats are read by realtime metrics while the feeder thread is still
+        # running, so every mutable counter is protected by this lock.
         self._stats_lock = threading.Lock()
         self._submitted_items = 0
         self._submitted_chars = 0
@@ -55,6 +66,8 @@ class StreamingVoicePipeline:
         self._completed_at: float | None = None
         self._last_submit_at: float | None = None
         self._last_flush_at: float | None = None
+        # Provider selection is delegated to the TTS factory. This keeps the
+        # realtime pipeline independent from Doubao/CosyVoice/StepFun schemas.
         self._synth = self._create_synth()
         self._flush_char_threshold = 8
         self._first_flush_char_threshold = 4
@@ -79,6 +92,7 @@ class StreamingVoicePipeline:
         )
 
     def submit(self, text: str) -> None:
+        """Queue text from the LLM stream without blocking token generation."""
         if self._interrupted.is_set() or self._done.is_set():
             return
         content = text.strip()
@@ -152,6 +166,7 @@ class StreamingVoicePipeline:
         return self._error
 
     def snapshot(self) -> dict[str, int | float | bool | None]:
+        """Return feeder metrics for realtime trace/debug events."""
         with self._stats_lock:
             return {
                 "submitted_items": self._submitted_items,
@@ -239,6 +254,7 @@ class StreamingVoicePipeline:
         return segments
 
     def _feed_synth_segments(self, content: str) -> None:
+        """Submit bounded segments to the provider to avoid large TTS bursts."""
         for segment in self._split_for_synth(content):
             if self._interrupted.is_set():
                 return
@@ -279,6 +295,7 @@ class StreamingVoicePipeline:
                 self._last_complete_timeout_message = str(exc)
 
     def _run(self) -> None:
+        """Background feeder loop that turns queued text into provider calls."""
         buffer = ""
         last_append_at = time.monotonic()
 

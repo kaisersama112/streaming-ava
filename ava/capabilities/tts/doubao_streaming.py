@@ -14,7 +14,6 @@ import requests
 
 from ava.capabilities.tts.base import TTSError, TTSRuntimeOptions
 
-
 __all__ = [
     "StreamingDoubaoTTS",
 ]
@@ -31,7 +30,7 @@ class StreamingDoubaoTTS:
             x_api_key: str,
             x_api_resource_id: str,
             sse_url: str,
-            model: str,
+            model: str | None = None,
             req_params: Any | dict[str, Any] | None = None,
             options: TTSRuntimeOptions | None = None,
             fallback_speaker: str = "",
@@ -42,14 +41,14 @@ class StreamingDoubaoTTS:
             raise TTSError("Doubao access_key is empty.")
         self._req_params = self._normalize_req_params(
             req_params=req_params,
-            fallback_model=model,
             fallback_speaker=fallback_speaker,
             options=options or TTSRuntimeOptions(),
         )
         if not self._req_params.get("speaker"):
             raise TTSError("Doubao speaker is empty.")
         self._x_api_key = x_api_key
-        self._x_api_resource_id = x_api_resource_id or model or "seed-tts-2.0"
+        self._x_api_resource_id = x_api_resource_id
+        self._model = model or x_api_resource_id
         self._sse_url = sse_url or "https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse"
         self._chunks: queue.Queue[bytes] = queue.Queue()
         self._error: Exception | None = None
@@ -66,19 +65,16 @@ class StreamingDoubaoTTS:
 
     @classmethod
     def _normalize_req_params(
-        cls,
-        *,
-        req_params: Any | dict[str, Any] | None,
-        fallback_model: str,
-        fallback_speaker: str,
-        options: TTSRuntimeOptions,
+            cls,
+            *,
+            req_params: Any | dict[str, Any] | None,
+            fallback_speaker: str,
+            options: TTSRuntimeOptions,
     ) -> dict[str, Any]:
         configured = bool(req_params)
         base = cls._to_plain_dict(req_params)
         if not str(base.get("speaker") or "").strip():
             base["speaker"] = fallback_speaker
-        if not str(base.get("model") or "").strip() and fallback_model:
-            base["model"] = fallback_model
         if not cls._to_plain_dict(base.get("audio_params")):
             base["audio_params"] = {
                 "format": options.audio_format or "pcm",

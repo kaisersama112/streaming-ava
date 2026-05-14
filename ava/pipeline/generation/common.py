@@ -1,4 +1,10 @@
-﻿"""Common responder-message builder for the model-planned turn pipeline."""
+"""Common responder-message builder for the model-planned turn pipeline.
+
+This module assembles the prompt that actually generates the assistant answer.
+Router prompts should stay compact; responder prompts can include richer
+history, memory projection, and reference media when the selected strategy
+allows it.
+"""
 
 from __future__ import annotations
 
@@ -13,12 +19,14 @@ from ava.capabilities.prompt import PromptCenter, build_responder_system_prompt
 
 
 def _should_include_history_messages(strategy: BranchStrategy) -> bool:
+    """Respect the strategy-level context policy before appending history."""
     analysis = dict(getattr(strategy, "analysis", {}) or {})
     context_policy = dict(analysis.get("prompt_context_policy", {}) or {})
     return bool(context_policy.get("include_history_messages", True))
 
 
 def _should_attach_reference_artifacts(snapshot: ContextSnapshot, strategy: BranchStrategy) -> bool:
+    """Decide whether previous-turn media must be reattached to the model call."""
     if snapshot.artifacts or not snapshot.reference_artifacts:
         return False
 
@@ -46,6 +54,13 @@ def build_responder_messages(
     strategy: BranchStrategy,
     decision: RouteDecision | None = None,
 ) -> list[dict[str, object]]:
+    """Build final answer messages from the locked strategy and context.
+
+    This is the right place to inject responder-grade memory later: facts and
+    preferences should go through `build_responder_runtime_context`, while
+    raw memories should stay out of the direct user content unless they are
+    evidence the model must explicitly reason over.
+    """
     system_prompt = build_responder_system_prompt(
         prompt_center=prompt_center,
         snapshot=snapshot,
@@ -56,11 +71,15 @@ def build_responder_messages(
     if text:
         user_content.append({"type": "text", "text": text})
 
+    # Current-turn artifacts are always part of the user's message because the
+    # answer may need to inspect them directly.
     for artifact in snapshot.artifacts:
         block = artifact.to_message_block()
         if block:
             user_content.append(block)
 
+    # Inherited reference artifacts are attached only when the continuity policy
+    # says the model needs the original media, not just its structured brief.
     if _should_attach_reference_artifacts(snapshot, strategy):
         user_content.append(
             {

@@ -4,18 +4,60 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="61f03ad6-fb28-44d5-84b9-9ae3752b0d4e" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+    <list default="true" id="61f03ad6-fb28-44d5-84b9-9ae3752b0d4e" name="更改" comment="重构llm-tts 模块">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/asr/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/asr/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/asr/asr_streaming_sdk.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/asr/asr_streaming_sdk.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/context/builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/context/builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/context/history.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/context/history.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/context/memory.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/context/memory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/context/multimodal.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/context/multimodal.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/context/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/context/types.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/runtime_context.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/runtime_context.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/capabilities/tts/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/tts/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/tts/doubao_streaming.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/tts/doubao_streaming.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/tts/factory.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/tts/factory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/tts/tts_streaming_sdk.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/tts/cosyvoice_streaming_sdk.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/core/context/continuity.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/core/context/continuity.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/core/context/snapshot.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/core/context/snapshot.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/core/events/realtime.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/core/events/realtime.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/conversation/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/memory/session_memory.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/session_memory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/multimodal/media.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/multimodal/media.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/routing/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/routing/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/interfaces/cli/voice_chat.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/interfaces/cli/voice_chat.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/interfaces/sdk/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/agents.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/agents.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/executor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/context/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/common.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/dispatcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/dispatcher.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/reply_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/reply_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/input/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/routing/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/routing/runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/routing/runner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/speech/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/speech/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/barge_in.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/barge_in.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/turn.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/turn.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/voice_stream.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/voice_stream.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/README.md" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config.example.yaml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/model.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/model_config.yaml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/configs/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/system.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/system_config.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/tts.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/state/trace.jsonl" beforeDir="false" afterPath="$PROJECT_DIR$/state/trace.jsonl" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_doubao_streaming.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_doubao_streaming.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,7 +86,7 @@
   "keyToString": {
     "Python.demo_parse_latex.executor": "Debug",
     "Python.openai-agent-demo.executor": "Run",
-    "Python.realtime_server.executor": "Run",
+    "Python.realtime_server.executor": "Debug",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "multimodal-latency-spike",
     "last_opened_file_path": "//wsl$/Ubuntu/app/streaming-ava/ava/infrastructure",
@@ -66,13 +108,14 @@
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\ava\application\routing" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="\\wsl$\Ubuntu\app\streaming-ava\ava\domain\routing" />
+      <recent name="\\wsl$\Ubuntu\app\streaming-ava\configs\tts" />
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\configs" />
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\temp" />
       <recent name="\\wsl$\Ubuntu\app\streaming-ava" />
-      <recent name="\\wsl$\Ubuntu\app\streaming-ava\ava" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.openai-agent-demo">
+  <component name="RunManager" selected="Python.realtime_server">
     <configuration name="demo_parse_latex" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="streaming-ava" />
       <option name="ENV_FILES" value="" />
@@ -144,9 +187,9 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.realtime_server" />
         <item itemvalue="Python.openai-agent-demo" />
         <item itemvalue="Python.demo_parse_latex" />
-        <item itemvalue="Python.realtime_server" />
       </list>
     </recent_temporary>
   </component>
@@ -169,10 +212,31 @@
       <workItem from="1776324768365" duration="11364000" />
       <workItem from="1776416033267" duration="114410000" />
     </task>
+    <task id="LOCAL-00001" summary="重构llm-tts 模块">
+      <option name="closed" value="true" />
+      <created>1778724425299</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1778724425299</updated>
+    </task>
+    <task id="LOCAL-00002" summary="重构llm-tts 模块">
+      <option name="closed" value="true" />
+      <created>1778724433342</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1778724433342</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="重构llm-tts 模块" />
+    <option name="LAST_COMMIT_MESSAGE" value="重构llm-tts 模块" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -204,6 +268,6 @@
     <SUITE FILE_PATH="coverage/streaming_ava$demo_parse_latex.coverage" NAME="demo_parse_latex 覆盖结果" MODIFIED="1777015159962" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
     <SUITE FILE_PATH="coverage/streaming_ava$openai_agent_demo.coverage" NAME="openai-agent-demo 覆盖结果" MODIFIED="1777426119269" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
     <SUITE FILE_PATH="coverage/streaming_ava$cl.coverage" NAME="cl 覆盖结果" MODIFIED="1778636658363" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$USER_HOME$/eval_batch/outputs - 副本" />
-    <SUITE FILE_PATH="coverage/streaming_ava$realtime_server.coverage" NAME="realtime_server 覆盖结果" MODIFIED="1776765771907" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/streaming_ava$realtime_server.coverage" NAME="realtime_server 覆盖结果" MODIFIED="1778745357710" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

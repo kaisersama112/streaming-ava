@@ -1,4 +1,10 @@
-﻿"""Run the router model directly without a service wrapper."""
+"""Run the router model directly without a service wrapper.
+
+The router is the first model call in a turn. Its job is deliberately narrow:
+classify the current turn, choose the scene/intent, and return a compact `plan`
+payload that downstream generation can lock onto. It should not produce user
+visible answer text.
+"""
 
 from __future__ import annotations
 
@@ -54,6 +60,7 @@ def _build_router_messages(
     *,
     text_only: bool = False,
 ) -> list[dict[str, object]]:
+    """Build the router prompt with the smallest context needed for planning."""
     runtime_context = build_router_runtime_context(snapshot)
     messages: list[dict[str, object]] = [
         {"role": "system", "content": build_router_system_prompt(prompt_center)},
@@ -71,6 +78,7 @@ def _build_router_messages(
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
+    """Parse a router JSON object even when the model wraps it in prose."""
     text = text.strip()
     if not text:
         raise ValueError("empty router output")
@@ -104,12 +112,21 @@ def route_with_context(
     multimodal_model: str | None = None,
     timeout: int | None = None,
 ) -> tuple[RouteDecision, Any]:
+    """Route one turn and return the normalized decision plus enriched context.
+
+    The returned context carries `router_plan`, which lets generation reuse the
+    router's reasoning without asking another planning model. A future long-term
+    memory retriever should feed compact, planning-safe facts into the snapshot
+    before this function builds messages.
+    """
     selected_api_base = api_base or settings.openai_config.api_base
     selected_api_key = api_key or settings.openai_config.api_key
     selected_model_name = model or settings.runtime.router_model or settings.openai_config.model or settings.openai_config.intent_model
     selected_multimodal_model = str(multimodal_model or settings.openai_config.multimodal_model or selected_model_name).strip() or selected_model_name
     selected_timeout = timeout or settings.runtime.router_timeout
 
+    # The router profile intentionally keeps history and multimodal context
+    # compact. It is optimized for choosing a path, not answering the user.
     context = snapshot or build_context_snapshot(
         state,
         turn_input,
@@ -118,6 +135,9 @@ def route_with_context(
         max_context_messages=max_context_messages,
         profile="router",
     )
+    # Some fresh artifact uploads should be routed as a new object even when the
+    # previous session was in an education flow. This prevents stale continuity
+    # memory from forcing the wrong branch.
     isolate_current_artifact_context = should_isolate_current_artifact_context(
         state,
         context,
@@ -133,6 +153,8 @@ def route_with_context(
             turn_records=[],
         )
 
+    # If an upstream artifact brief already summarizes the visual content, the
+    # router can often use the text model and avoid re-sending media.
     artifact_brief = dict(getattr(route_context, "router_artifact_brief", {}) or {})
     artifact_brief_source = str(artifact_brief.get("source") or "").strip()
     text_only_router = artifact_brief_source in {"turn_result", "llm_brief"}

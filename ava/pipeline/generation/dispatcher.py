@@ -1,4 +1,10 @@
-﻿"""Build a turn plan directly from the router's single-round model plan."""
+"""Build a turn plan directly from the router's single-round model plan.
+
+`TurnPlan` is the handoff object between routing and execution. Once built, the
+rest of the pipeline should treat the selected strategy as stable for the turn;
+any memory updates should be recorded after the turn completes, not by changing
+the plan mid-stream.
+"""
 
 from __future__ import annotations
 
@@ -56,8 +62,11 @@ def build_turn_plan(
     snapshot: ContextSnapshot | None = None,
     current_turn_id: int | None = None,
 ) -> TurnPlan:
+    """Convert a routed turn into responder messages and strategy metadata."""
     previous_snapshot = snapshot
     if snapshot is None or getattr(snapshot, "context_profile", "full") == "router":
+        # Router context is intentionally small. The responder gets a fresh
+        # context profile so it can see the history/media needed to answer.
         snapshot = build_context_snapshot(
             state,
             turn_input,
@@ -71,11 +80,15 @@ def build_turn_plan(
             profile="responder_minimal",
         )
         if previous_snapshot is not None:
+            # Keep expensive router-side artifact analysis and the model plan so
+            # the responder does not recompute planning information.
             snapshot = replace(
                 snapshot,
                 router_artifact_brief=dict(getattr(previous_snapshot, "router_artifact_brief", {}) or {}),
                 router_plan=dict(getattr(previous_snapshot, "router_plan", {}) or {}),
             )
+    # Strategy construction translates the generic router plan into the prompt
+    # center's concrete branch/module/style vocabulary.
     strategy = build_strategy_from_model_plan(prompt_center, decision, snapshot)
     plan = TurnPlan(
         decision=decision,
@@ -101,6 +114,8 @@ def build_turn_plan(
         "object_scope": frame.get("object_scope", ""),
         "object_continuity": frame.get("object_continuity", ""),
     }
+    # Trace the compact plan rather than raw full prompts; raw prompts can be
+    # large and may include user-provided media/text.
     append_trace_log(
         "orchestration.turn_plan.built",
         {

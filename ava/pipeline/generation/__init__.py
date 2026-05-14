@@ -1,4 +1,14 @@
-"""Pipeline response generation entrypoints."""
+"""Response generation entrypoints.
+
+Generation is split into two phases:
+
+1. `build_turn_plan` converts router output into a locked `TurnPlan`.
+2. reply helpers execute that plan through either direct LLM calls or the
+   optional Agents SDK backend.
+
+The plan is the stable contract between routing, prompt construction, memory
+projection, and realtime TTS submission.
+"""
 
 from .dispatcher import build_turn_plan
 from .types import TurnPlan

@@ -126,9 +126,9 @@ def build_router_runtime_context(snapshot: ContextSnapshot) -> dict[str, Any]:
 
 
 def build_responder_runtime_context(
-    snapshot: ContextSnapshot,
-    strategy: BranchStrategy,
-    decision: RouteDecision | None = None,
+        snapshot: ContextSnapshot,
+        strategy: BranchStrategy,
+        decision: RouteDecision | None = None,
 ) -> dict[str, Any]:
     payload = _base_runtime_context(snapshot, phase="responder")
     analysis = dict(getattr(strategy, "analysis", {}) or {})
@@ -178,7 +178,7 @@ def build_runtime_context_message(payload: dict[str, Any]) -> dict[str, str]:
     return {
         "role": "system",
         "content": (
-            "Runtime context (JSON, internal only):\n"
-            + json.dumps(payload, ensure_ascii=False)
+                "Runtime context (JSON, internal only):\n"
+                + json.dumps(payload, ensure_ascii=False)
         ),
     }

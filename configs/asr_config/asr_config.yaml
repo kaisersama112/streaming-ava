@@ -1,0 +1,36 @@
+asr_config:
+  provider: "dou_bao" # qwen3_asr / dou_bao
+  qwen3_asr:
+    api_key: "sk-150866734fa64b428e4d7e642db1270b"
+    model: "qwen3-asr-flash-realtime"
+    input_audio_format: "pcm"
+    sample_rate: 16000
+    language: "zh"
+    websocket_url: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+    websocket_connect_timeout_sec: 10.0
+    websocket_ping_interval_sec: 15.0
+    websocket_ping_timeout_sec: 8.0
+    enable_turn_detection: true
+    turn_detection_threshold: 0.45
+    turn_detection_silence_duration_ms: 850
+  dou_bao:
+    x_api_key: "d451d376-9f73-4d04-bf4a-2873339e5832"
+    x_api_resource_id: "volc.seedasr.sauc.duration"
+    x_api_request_id: ""
+    ws_url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+    uid: "streaming_ava"
+    audio:
+      format: "pcm"
+      codec: "raw"
+      rate: 16000
+      bits: 16
+      channel: 1
+      language: "zh-CN"
+    request:
+      model_name: "bigmodel"
+      enable_itn: true
+      enable_punc: true
+      enable_ddc: false
+      show_utterances: true
+      enable_nonstream: false
+      enable_emotion_detection: false

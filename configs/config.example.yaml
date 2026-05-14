@@ -1,3 +1,0 @@
-config_files:
-  - "configs/model_config.example.yaml"
-  - "configs/system_config.example.yaml"

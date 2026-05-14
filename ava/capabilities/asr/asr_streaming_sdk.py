@@ -6,7 +6,7 @@ import base64
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 
 class ASRError(RuntimeError):
@@ -17,20 +17,29 @@ class ASRError(RuntimeError):
 @dataclass(frozen=True)
 class ASRConfig:
     """ASR configuration."""
-    api_key: str
+    api_key: str = ""
+    provider: str = "qwen3_asr"
     model: str = "qwen3-asr-flash-realtime"
     language: str = "zh"
     sample_rate: int = 16000
     input_audio_format: str = "pcm"
     websocket_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+    websocket_connect_timeout_sec: float = 10.0
     websocket_ping_interval_sec: float = 15.0
     websocket_ping_timeout_sec: float = 8.0
     enable_turn_detection: bool = True
     turn_detection_threshold: float = 0.0
     turn_detection_silence_duration_ms: int = 400
+    doubao_x_api_key: str = ""
+    doubao_resource_id: str = "volc.seedasr.sauc.duration"
+    doubao_request_id: str = ""
+    doubao_ws_url: str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+    doubao_uid: str = "streaming_ava"
+    doubao_audio: dict[str, Any] | None = None
+    doubao_request: dict[str, Any] | None = None
 
 
-class StreamingASR:
+class StreamingQwenASR:
     """Thin wrapper around DashScope Qwen-ASR-Realtime with normalized errors."""
 
     def __init__(self, config: ASRConfig):
@@ -53,7 +62,7 @@ class StreamingASR:
         self.config = config
         self.conversation = None
         self.callback = None
-        self._user_callback: Optional[Callable[[str, bool], None]] = None
+        self._user_callback: Optional[Callable[..., None]] = None
         self._last_error: Optional[str] = None
 
     @property
@@ -119,7 +128,7 @@ class StreamingASR:
         )
         conversation.thread.start()
 
-        timeout = 5.0
+        timeout = max(0.5, float(self.config.websocket_connect_timeout_sec or 10.0))
         start_time = time.time()
         while (
             not (conversation.ws.sock and conversation.ws.sock.connected)
@@ -128,12 +137,12 @@ class StreamingASR:
             time.sleep(0.1)
         if not (conversation.ws.sock and conversation.ws.sock.connected):
             raise TimeoutError(
-                "websocket connection could not established within 5s. "
+                f"websocket connection could not established within {timeout:.1f}s. "
                 "Please check your network connection, firewall settings, or server status."
             )
         conversation.callback.on_open()
 
-    def start(self, callback: Callable[[str, bool], None]) -> None:
+    def start(self, callback: Callable[..., None]) -> None:
         try:
             from dashscope.audio.qwen_omni import (
                 OmniRealtimeConversation,
@@ -281,3 +290,44 @@ class StreamingASR:
                 except Exception:
                     pass
                 self.conversation = None
+
+
+def _normalize_provider(provider: str) -> str:
+    value = str(provider or "qwen3_asr").strip().lower().replace("-", "_")
+    if value in {"qwen", "qwen_asr", "qwen3", "qwen3_asr", "dashscope"}:
+        return "qwen3_asr"
+    if value in {"doubao", "dou_bao", "volc", "volcengine", "volcengine_doubao"}:
+        return "dou_bao"
+    return value
+
+
+class StreamingASR:
+    """Provider-dispatching ASR facade consumed by StreamingASRClient."""
+
+    def __init__(self, config: ASRConfig):
+        provider = _normalize_provider(config.provider)
+        if provider == "qwen3_asr":
+            self._impl = StreamingQwenASR(config)
+            return
+        if provider == "dou_bao":
+            from .doubao_streaming import StreamingDoubaoASR
+
+            self._impl = StreamingDoubaoASR(config)
+            return
+        raise ASRError(f"Unsupported ASR provider: {config.provider}")
+
+    @property
+    def ready(self) -> bool:
+        return bool(self._impl.ready)
+
+    def start(self, callback: Callable[..., None]) -> None:
+        self._impl.start(callback)
+
+    def send_audio(self, audio_data: bytes) -> None:
+        self._impl.send_audio(audio_data)
+
+    def commit(self) -> None:
+        self._impl.commit()
+
+    def stop(self) -> None:
+        self._impl.stop()

@@ -10,7 +10,7 @@ from ava.core.session import load_state, persist_turn, prepare_state_for_turn
 from ava.pipeline.generation import build_turn_plan
 from ava.capabilities.prompt import build_prompt_center
 from ava.pipeline.generation import generate_reply_sync
-from ava.pipeline.routing import route_with_context
+from ava.domain.routing import route_with_context
 from ava.pipeline.speech import build_speech_text
 from ava.interfaces.cli.audio_playback import maybe_play_audio
 from ava.capabilities import tts as tts_client

@@ -4,7 +4,7 @@ import unittest
 
 from ava.capabilities.tts.base import TTSError, TTSRuntimeOptions
 from ava.capabilities.tts.doubao_streaming import StreamingDoubaoTTS
-from configs.tts import DoubaoTTSReqParams
+from configs.tts_config.doubao import DoubaoTTSReqParams
 
 
 def _client() -> StreamingDoubaoTTS:

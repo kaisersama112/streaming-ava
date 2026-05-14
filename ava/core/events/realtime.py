@@ -39,13 +39,13 @@ class AsrPartialEvent(BaseRealtimeEvent):
     end_ms: int | None = None
 
     def __init__(
-        self,
-        text: str,
-        stability: float | None = None,
-        start_ms: int | None = None,
-        end_ms: int | None = None,
-        turn_id: int | None = None,
-        ts: float | None = None,
+            self,
+            text: str,
+            stability: float | None = None,
+            start_ms: int | None = None,
+            end_ms: int | None = None,
+            turn_id: int | None = None,
+            ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "asr_partial")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
@@ -65,14 +65,14 @@ class AsrFinalEvent(BaseRealtimeEvent):
     attachments: list[dict[str, Any]] = field(default_factory=list)
 
     def __init__(
-        self,
-        text: str,
-        stability: float | None = None,
-        start_ms: int | None = None,
-        end_ms: int | None = None,
-        attachments: list[dict[str, Any]] | None = None,
-        turn_id: int | None = None,
-        ts: float | None = None,
+            self,
+            text: str,
+            stability: float | None = None,
+            start_ms: int | None = None,
+            end_ms: int | None = None,
+            attachments: list[dict[str, Any]] | None = None,
+            turn_id: int | None = None,
+            ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "asr_final")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
@@ -108,16 +108,16 @@ class RouteDecisionEvent(BaseRealtimeEvent):
     ui_mode: str = ""
 
     def __init__(
-        self,
-        session_scene: str,
-        turn_scene: str,
-        confidence: float,
-        handler: str,
-        strategy_id: str = "",
-        delivery_mode: str = "",
-        ui_mode: str = "",
-        turn_id: int | None = None,
-        ts: float | None = None,
+            self,
+            session_scene: str,
+            turn_scene: str,
+            confidence: float,
+            handler: str,
+            strategy_id: str = "",
+            delivery_mode: str = "",
+            ui_mode: str = "",
+            turn_id: int | None = None,
+            ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "route")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
@@ -137,11 +137,11 @@ class ContextDebugEvent(BaseRealtimeEvent):
     artifacts: list[dict[str, Any]] = field(default_factory=list)
 
     def __init__(
-        self,
-        multimodal_summary: str,
-        artifacts: list[dict[str, Any]],
-        turn_id: int | None = None,
-        ts: float | None = None,
+            self,
+            multimodal_summary: str,
+            artifacts: list[dict[str, Any]],
+            turn_id: int | None = None,
+            ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "debug_context")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
@@ -160,15 +160,15 @@ class PromptDebugEvent(BaseRealtimeEvent):
     ui_mode: str = ""
 
     def __init__(
-        self,
-        handler: str,
-        system_prompt: str,
-        strategy_id: str = "",
-        render_template: str = "",
-        delivery_mode: str = "",
-        ui_mode: str = "",
-        turn_id: int | None = None,
-        ts: float | None = None,
+            self,
+            handler: str,
+            system_prompt: str,
+            strategy_id: str = "",
+            render_template: str = "",
+            delivery_mode: str = "",
+            ui_mode: str = "",
+            turn_id: int | None = None,
+            ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "debug_prompt")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
@@ -196,20 +196,20 @@ class StrategyDebugEvent(BaseRealtimeEvent):
     artifact_text: str = ""
 
     def __init__(
-        self,
-        branch: str,
-        strategy_id: str,
-        strategy_name: str,
-        strategy_source: str,
-        render_template: str,
-        delivery_mode: str,
-        ui_mode: str,
-        user_followup_type: str,
-        artifact_subject_hint: str = "",
-        artifact_task_hint: str = "",
-        artifact_text: str = "",
-        turn_id: int | None = None,
-        ts: float | None = None,
+            self,
+            branch: str,
+            strategy_id: str,
+            strategy_name: str,
+            strategy_source: str,
+            render_template: str,
+            delivery_mode: str,
+            ui_mode: str,
+            user_followup_type: str,
+            artifact_subject_hint: str = "",
+            artifact_task_hint: str = "",
+            artifact_text: str = "",
+            turn_id: int | None = None,
+            ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "debug_strategy")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
@@ -236,14 +236,14 @@ class MetricsDebugEvent(BaseRealtimeEvent):
     timeline_ms: dict[str, float | None] = field(default_factory=dict)
 
     def __init__(
-        self,
-        asr_final_latency_ms: float | None = None,
-        first_token_latency_ms: float | None = None,
-        first_audio_latency_ms: float | None = None,
-        interrupt_count: int = 0,
-        timeline_ms: dict[str, float | None] | None = None,
-        turn_id: int | None = None,
-        ts: float | None = None,
+            self,
+            asr_final_latency_ms: float | None = None,
+            first_token_latency_ms: float | None = None,
+            first_audio_latency_ms: float | None = None,
+            interrupt_count: int = 0,
+            timeline_ms: dict[str, float | None] | None = None,
+            turn_id: int | None = None,
+            ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "debug_metrics")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
@@ -286,12 +286,12 @@ class TtsChunkEvent(BaseRealtimeEvent):
     pcm_base64: str | None = None
 
     def __init__(
-        self,
-        bytes_len: int,
-        turn_id: int | None = None,
-        ts: float | None = None,
-        sample_rate: int | None = None,
-        pcm_base64: str | None = None,
+            self,
+            bytes_len: int,
+            turn_id: int | None = None,
+            ts: float | None = None,
+            sample_rate: int | None = None,
+            pcm_base64: str | None = None,
     ):
         object.__setattr__(self, "event_type", "tts_chunk")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)

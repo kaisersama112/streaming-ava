@@ -1,4 +1,9 @@
-﻿"""Shared reply-generation helpers for CLI and realtime paths."""
+"""Shared reply-generation helpers for CLI and realtime paths.
+
+This module is the execution boundary after a `TurnPlan` has been locked. It
+chooses between the optional Agents SDK backend and the direct LLM backend, then
+returns final assistant text or streamed tokens to the caller.
+"""
 
 from __future__ import annotations
 
@@ -25,12 +30,15 @@ from configs import settings
 
 @dataclass
 class ReplyExecutionResult:
+    """Normalized result from either direct LLM or Agents SDK execution."""
+
     assistant_text: str
     backend: str
     debug: dict[str, Any] = field(default_factory=dict)
 
 
 def _agents_sdk_enabled_for_plan(plan: TurnPlan, *, api_base: str, api_key: str) -> bool:
+    """Gate Agents SDK usage by install status, config, branch, and module."""
     if not _AGENTS_SDK_AVAILABLE:
         return False
     if not bool(getattr(settings.runtime, "agents_sdk_enabled", False)):
@@ -77,6 +85,7 @@ def _messages_have_direct_media(messages: list[dict[str, object]]) -> bool:
 
 
 def _select_reply_model(default_model: str, plan: TurnPlan) -> str:
+    """Use the multimodal model only when responder messages contain media."""
     if _messages_have_direct_media(plan.responder_messages):
         return default_model
     return str(settings.openai_config.model or default_model).strip() or default_model
@@ -116,6 +125,7 @@ def generate_reply_sync(
     timeout: int,
     current_turn_id: int | None = None,
 ) -> ReplyExecutionResult:
+    """Generate a full reply for non-streaming callers such as CLI paths."""
     use_agents_sdk = _agents_sdk_enabled_for_plan(plan, api_base=api_base, api_key=api_key)
     if use_agents_sdk and _has_multimodal_execution_context(snapshot):
         _append_multimodal_bypass_trace(
@@ -126,6 +136,8 @@ def generate_reply_sync(
         )
     if use_agents_sdk and not _has_multimodal_execution_context(snapshot):
         try:
+            # Agents SDK can propose bounded state patches through tools. Those
+            # patches are applied only after a successful run.
             result: AgentsExecutionResult = run_agents_sdk_sync(
                 state=state,
                 turn_input=turn_input,
@@ -147,6 +159,8 @@ def generate_reply_sync(
                 },
             )
         except Exception as exc:
+            # Agents are optional. A failure here falls back to the direct LLM
+            # path so the user turn can still complete.
             append_trace_log(
                 "agents_sdk.run.fallback",
                 {
@@ -186,6 +200,7 @@ def stream_reply_with_callbacks(
     current_turn_id: int | None = None,
     stop_event=None,
 ) -> ReplyExecutionResult:
+    """Stream a reply and call `on_token` as soon as text is available."""
     use_agents_sdk = _agents_sdk_enabled_for_plan(plan, api_base=api_base, api_key=api_key) and bool(
         getattr(settings.runtime, "agents_sdk_realtime_enabled", False)
     )
@@ -198,6 +213,8 @@ def stream_reply_with_callbacks(
         )
     if use_agents_sdk and not _has_multimodal_execution_context(snapshot):
         try:
+            # In realtime mode this backend must still honor stop_event so
+            # barge-in can cancel the turn promptly.
             result: AgentsExecutionResult = run_agents_sdk_stream(
                 state=state,
                 turn_input=turn_input,
@@ -221,6 +238,8 @@ def stream_reply_with_callbacks(
                 },
             )
         except Exception as exc:
+            # Preserve realtime responsiveness by falling back to token
+            # streaming instead of surfacing the agent error to TTS.
             append_trace_log(
                 "agents_sdk.stream.fallback",
                 {

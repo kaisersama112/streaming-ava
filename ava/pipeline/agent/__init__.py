@@ -1,4 +1,10 @@
-"""Pipeline agent execution package."""
+"""Optional OpenAI Agents SDK execution path.
+
+The normal responder path is a direct chat/streaming call. This package is a
+drop-in execution backend for selected turns where tool use, specialist agents,
+or state patch proposals are useful. Imports are lazy so projects without the
+Agents SDK installed can still use the rest of the pipeline.
+"""
 
 __all__ = [
     "AgentsExecutionResult",

@@ -1,10 +1,14 @@
-"""TTS configuration schemas."""
-
-from __future__ import annotations
+"""
+@Project ：streaming-ava 
+@File    ：doubao.py
+@IDE     ：PyCharm 
+@Author  ：潘尚国
+@Date    ：2026/5/13 21:07 
+"""
 
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class DoubaoTTSAudioParams(BaseModel):
@@ -74,25 +78,6 @@ class DoubaoTTSReqParams(BaseModel):
     mix_speaker: Optional[Dict[str, Any]] = Field(default=None, description="混音参数，仅适用于 TTS 1.0 音色")
 
 
-class Cosyvoice(BaseModel):
-    api_base: str = Field(
-        "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer",
-        description="TTS 接口地址",
-    )
-    api_key: str = Field("", description="TTS 接口密钥")
-    model: str = Field("cosyvoice-v3-flash", description="TTS 模型名称")
-    voice: str = Field("longanyang", description="发音人")
-    instruction: str = Field("", description="语音指令")
-
-
-class StepFun(BaseModel):
-    api_key: str = Field("", description="StepFun TTS API Key")
-    ws_url: str = Field("wss://api.stepfun.com/v1/realtime/audio", description="StepFun TTS WebSocket 地址")
-    model: str = Field("stepaudio-2.5-tts", description="StepFun TTS 模型名称")
-    voice: str = Field("cixingnansheng", description="StepFun TTS 音色")
-    instruction: str = Field("", description="StepFun TTS 语音指令")
-
-
 class DouBao(BaseModel):
     x_api_key: str = Field("", description="豆包语音 X-Api-Key")
     x_api_resource_id: str = Field("seed-tts-2.0", description="豆包语音 X-Api-Resource-Id")
@@ -101,24 +86,7 @@ class DouBao(BaseModel):
         default_factory=lambda: DoubaoTTSReqParams(speaker=""),
         description="豆包语音请求体 req_params 配置",
     )
-    ws_url: str = Field("wss://openspeech.bytedance.com/api/v3/tts/bidirection", description="豆包语音双向 WebSocket 地址")
-    sse_url: str = Field("https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse", description="豆包语音单向 SSE 地址")
-
-
-class VoiceConfig(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    provider: str = Field("cosyvoice", description="TTS provider: cosyvoice / stepfun / doubao")
-    cosyvoice: Cosyvoice = Field(default_factory=Cosyvoice, description="TTS cosyvoice")
-    step_fun: StepFun = Field(default_factory=StepFun, description="TTS stepfun")
-    dou_bao: DouBao = Field(
-        default_factory=DouBao,
-        validation_alias=AliasChoices("dou_bao", "doubao"),
-        description="TTS DouBao",
-    )
-    volume: int = Field(50, description="音量调节")
-    speech_rate: float = Field(1.0, description="语速调节")
-    pitch_rate: float = Field(1.0, description="语调调节")
-    format: str = Field("wav", description="音频格式")
-    sample_rate: int = Field(24000, description="音频采样率")
-    timeout: int = Field(120, description="TTS 超时时间（秒）")
+    ws_url: str = Field("wss://openspeech.bytedance.com/api/v3/tts/bidirection",
+                        description="豆包语音双向 WebSocket 地址")
+    sse_url: str = Field("https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse",
+                         description="豆包语音单向 SSE 地址")

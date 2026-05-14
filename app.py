@@ -20,7 +20,8 @@ from ava.core.session import load_state
 from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
 from ava.interfaces.websocket import PlayerConfig, get_bridge
 from ava.capabilities.asr.asr_streaming_client import StreamingASRClient
-from ava.capabilities.asr.asr_streaming_sdk import ASRConfig, ASRError
+from ava.capabilities.asr.asr_streaming_sdk import ASRError
+from ava.capabilities.asr.factory import build_asr_config
 from ava.pipeline.streaming import RealtimeConversationSession
 from configs import settings
 
@@ -374,26 +375,8 @@ def create_app() -> FastAPI:
         ws_closed = asyncio.Event()
         session_id = _resolve_session_id(ws.query_params.get("session_id"))
 
-        # 从配置中组装 ASRConfig，兼容动态配置项
-        ws_url = getattr(settings.asr_config, "websocket_url", None)
-        asr_cfg = ASRConfig(
-            api_key=settings.asr_config.api_key,
-            model=settings.asr_config.model,
-            sample_rate=int(getattr(settings.asr_config, "sample_rate", 16000) or 16000),
-            language=getattr(settings.asr_config, "language", "zh") or "zh",
-            websocket_url=ws_url or ASRConfig.websocket_url,
-            websocket_ping_interval_sec=float(
-                getattr(settings.asr_config, "websocket_ping_interval_sec", 15.0) or 15.0
-            ),
-            websocket_ping_timeout_sec=float(
-                getattr(settings.asr_config, "websocket_ping_timeout_sec", 8.0) or 8.0
-            ),
-            enable_turn_detection=bool(getattr(settings.asr_config, "enable_turn_detection", True)),
-            turn_detection_threshold=float(getattr(settings.asr_config, "turn_detection_threshold", 0.45) or 0.45),
-            turn_detection_silence_duration_ms=int(
-                getattr(settings.asr_config, "turn_detection_silence_duration_ms", 850) or 850
-            ),
-        )
+        # 从配置中组装 ASRConfig，兼容旧的扁平配置和新的 provider 配置。
+        asr_cfg = build_asr_config(settings.asr_config)
 
         # 创建实时会话与播放器桥接
         session, player_url = _build_bridge_session(ws, session_id)
@@ -401,7 +384,7 @@ def create_app() -> FastAPI:
 
         # 临时 PCM 缓冲区：将前端持续发送的小块音频拼成适合 ASR 上传的帧大小
         pcm_buffer = bytearray()
-        frame_bytes = 3200  # 约 0.1 秒，PCM16 / 16kHz / 单声道
+        frame_bytes = max(320, int(asr_cfg.sample_rate * 2 * 0.1))  # 约 0.1 秒，PCM16 / 单声道
 
         async def _asr_result_loop():
             """Poll ASR results and forward them into the realtime session."""

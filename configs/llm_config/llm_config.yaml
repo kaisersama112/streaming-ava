@@ -1,0 +1,13 @@
+openai_config:
+  api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: "sk-150866734fa64b428e4d7e642db1270b"
+  model: "qwen-plus"
+  multimodal_model: "qwen3.5-omni-flash"
+  timeout: 60
+
+bigmodel_config:
+  api_base: "https://open.bigmodel.cn/api/paas/v4"
+  api_key: "6d85ed0363004343ab06ea0734df03fc.UeN22P8QbLrEbWED"
+  model: "glm-4.6v-flash"
+  timeout: 15
+  enabled: false

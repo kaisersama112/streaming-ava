@@ -2,7 +2,7 @@
 
 from ava.capabilities.tts.base import StreamingTTSClient, TTSError, TTSRuntimeOptions
 from ava.capabilities.tts.tts_rest_client import download_audio, synthesize
-from ava.capabilities.tts.tts_streaming_sdk import (
+from ava.capabilities.tts.cosyvoice_streaming_sdk import (
     CosyVoiceSDKError,
     StreamingCosyVoice,
     synthesize_text,

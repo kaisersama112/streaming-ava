@@ -77,17 +77,17 @@ def _manager_instructions(plan: TurnPlan):
                 f"\nanswer_boundary={analysis.get('answer_boundary', '')}"
             )
         return (
-            f"{base_prompt}\n\n"
-            "你正在一个由上游 Router 驱动的执行层中工作。\n"
-            "上游已经完成当前轮意图识别和资产选择，你不能重新做场景改写，只能把已选计划执行好。\n"
-            f"{branch_guidance}\n"
-            "当前锁定计划：\n- " + "\n- ".join(locked) + "\n\n"
-            "工作方式：\n"
-            "- 如果当前输入或继承上下文里已经带了图片，你可以直接使用这些图片，不要要求用户重复上传。\n"
-            "- 先按需调用工具恢复最近历史、计划边界和参考素材。\n"
-            "- 需要额外分析时，可调用 specialists 作为 tools。\n"
-            "- 最终直接向用户回答，不要暴露内部工具、JSON 或分析链路。\n"
-            "- 如果你发现某个轻量教育状态值得更新，可调用 note_state_patch 提建议。\n"
+                f"{base_prompt}\n\n"
+                "你正在一个由上游 Router 驱动的执行层中工作。\n"
+                "上游已经完成当前轮意图识别和资产选择，你不能重新做场景改写，只能把已选计划执行好。\n"
+                f"{branch_guidance}\n"
+                "当前锁定计划：\n- " + "\n- ".join(locked) + "\n\n"
+                "工作方式：\n"
+                "- 如果当前输入或继承上下文里已经带了图片，你可以直接使用这些图片，不要要求用户重复上传。\n"
+                "- 先按需调用工具恢复最近历史、计划边界和参考素材。\n"
+                "- 需要额外分析时，可调用 specialists 作为 tools。\n"
+                "- 最终直接向用户回答，不要暴露内部工具、JSON 或分析链路。\n"
+                "- 如果你发现某个轻量教育状态值得更新，可调用 note_state_patch 提建议。\n"
         ).strip()
 
     return _instructions
@@ -135,10 +135,10 @@ def _has_multimodal_context(snapshot: ContextSnapshot) -> bool:
 
 
 def build_manager_agent(
-    plan: TurnPlan,
-    snapshot: ContextSnapshot,
-    *,
-    model_config: AgentsModelConfig | None = None,
+        plan: TurnPlan,
+        snapshot: ContextSnapshot,
+        *,
+        model_config: AgentsModelConfig | None = None,
 ) -> Agent[AvaAgentContext]:
     model = build_agents_sdk_model(
         snapshot,

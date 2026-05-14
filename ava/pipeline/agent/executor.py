@@ -1,4 +1,10 @@
-﻿"""Execution helpers that run selected turns through OpenAI Agents SDK."""
+"""Execution helpers that run selected turns through OpenAI Agents SDK.
+
+Agents are an optional execution backend behind the same `TurnPlan` contract as
+direct LLM generation. They may call tools and propose small continuity-state
+patches, but they should not mutate `ConversationState` directly while a run is
+in progress.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +31,8 @@ from .sessions import build_agent_session, seed_agent_session_from_snapshot
 
 @dataclass
 class AgentsExecutionResult:
+    """Normalized output returned to `reply_service` after an agent run."""
+
     assistant_text: str
     backend: str = "openai_agents_sdk"
     debug_events: list[dict[str, Any]] = field(default_factory=list)
@@ -32,6 +40,7 @@ class AgentsExecutionResult:
 
 
 def _apply_pending_state_patches(runtime: AvaAgentContext) -> list[dict[str, Any]]:
+    """Apply a guarded subset of tool-requested patches after success only."""
     applied: list[dict[str, Any]] = []
     allowed_education_keys = {"knowledge_point", "stage", "last_problem", "level"}
     for patch in runtime.pending_state_patches:
@@ -64,6 +73,7 @@ def _build_runtime_context(
     current_turn_id: int | None,
     stop_event=None,
 ) -> AvaAgentContext:
+    """Build local context shared by agent instructions, tools, and callbacks."""
     return AvaAgentContext(
         session_id=state.session_id,
         turn_id=current_turn_id,
@@ -121,6 +131,7 @@ def run_agents_sdk_sync(
     timeout: int,
     current_turn_id: int | None = None,
 ) -> AgentsExecutionResult:
+    """Run the selected plan to completion through the Agents SDK."""
     runtime = _build_runtime_context(
         state=state,
         snapshot=snapshot,
@@ -156,6 +167,8 @@ def run_agents_sdk_sync(
     )
 
     async def _run() -> Any:
+        # Seed the SDK session from the same visible context used by the normal
+        # responder path so both backends see comparable recent history.
         await seed_agent_session_from_snapshot(session, snapshot)
         try:
             return await asyncio.wait_for(
@@ -215,6 +228,7 @@ def run_agents_sdk_stream(
     current_turn_id: int | None = None,
     stop_event=None,
 ) -> AgentsExecutionResult:
+    """Run the selected plan through the Agents SDK and stream text deltas."""
     runtime = _build_runtime_context(
         state=state,
         snapshot=snapshot,
@@ -263,6 +277,8 @@ def run_agents_sdk_stream(
         try:
             async for event in stream.stream_events():
                 if stop_event is not None and stop_event.is_set():
+                    # Realtime barge-in must stop agent streaming quickly; the
+                    # caller will persist the turn as interrupted.
                     stream.cancel()
                     runtime.add_event("stream.cancelled", {})
                     break

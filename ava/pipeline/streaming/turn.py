@@ -1,4 +1,9 @@
-﻿"""Realtime turn control primitives."""
+"""Realtime turn control primitives.
+
+These objects are intentionally small because they are shared by the ASR event
+handler, LLM worker thread, TTS feeder, and audio pump. Keep this module free of
+business logic; it should only expose turn state and cancellation primitives.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +19,8 @@ if TYPE_CHECKING:
 
 
 class TurnStatus(str, enum.Enum):
+    """External session state reported to UI/debug subscribers."""
+
     IDLE = "idle"
     LISTENING = "listening"
     THINKING = "thinking"
@@ -24,7 +31,11 @@ class TurnStatus(str, enum.Enum):
 
 @dataclass
 class TurnControl:
-    """Control surface for stopping an in-flight turn quickly."""
+    """Control surface and timing record for one in-flight realtime turn.
+
+    The `t0`-`t7` timestamps form the latency timeline used by metrics/debug
+    events. They should be set at the exact boundary where each stage finishes.
+    """
 
     turn_id: int
     stop_event: threading.Event

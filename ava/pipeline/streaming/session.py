@@ -26,7 +26,7 @@ from ava.pipeline.generation import build_turn_plan
 from ava.pipeline.generation import stream_reply_with_callbacks
 
 # 路由决策
-from ava.pipeline.routing import route_with_context
+from ava.domain.routing import route_with_context
 
 # 数学语音缓冲与口语化处理
 from ava.pipeline.speech import LatexAwareSpeechBuffer, should_apply_math_oralizer
@@ -478,6 +478,7 @@ class RealtimeConversationSession:
             end_ms: int | None = None,
             ts: float | None = None,
     ) -> None:
+        """Handle unstable ASR text without committing a new user turn."""
         active = self.active
         if bool(getattr(settings.runtime, "trace_log_asr_partials", True)):
             append_trace_log(
@@ -511,7 +512,8 @@ class RealtimeConversationSession:
                 ts=ts,
             )
         )
-        # 鍏佽鍦?SPEAKING 鎴?THINKING 闃舵瑙﹀彂 barge-in 鎵撴柇
+        # Allow barge-in while the assistant is thinking or speaking. The
+        # detector only gates the decision; `interrupt` stops LLM/TTS/playback.
         _is_active = bool(
             active is not None
             and active.status in (TurnStatus.SPEAKING, TurnStatus.THINKING)
@@ -534,6 +536,7 @@ class RealtimeConversationSession:
             ts: float | None = None,
             source: str = "realtime_web",
     ) -> int | None:
+        """Commit final ASR text and start a new realtime turn."""
         normalized = " ".join((text or "").split()).strip()
         final_ts = time.monotonic() if ts is None else ts
         if self._shutdown.is_set():
@@ -602,6 +605,7 @@ class RealtimeConversationSession:
             asr_final_at: float | None = None,
             asr_final_latency_ms: float | None = None,
     ) -> int | None:
+        """Create a TurnControl, persist the pending user turn, and start work."""
         normalized = turn_input.normalized_text()
         if self._shutdown.is_set():
             return None
@@ -617,6 +621,9 @@ class RealtimeConversationSession:
 
         ctrl = self.begin_turn(user_text=user_text or normalized or turn_input.multimodal_summary())
         ctrl.t0_submit_at = time.monotonic()
+        # Persist the user side immediately so interrupted/error turns still
+        # have a recoverable trace. Long-term memory writes should happen only
+        # after finalization, when the turn result and strategy are known.
         self.state.upsert_realtime_user_turn(ctrl.turn_id, turn_input)
         append_trace_log(
             "realtime.turn.submitted",
@@ -717,6 +724,7 @@ class RealtimeConversationSession:
         )
 
     def _create_tts_pipeline(self) -> StreamingVoicePipeline | None:
+        """Create the provider-neutral TTS feeder for this turn."""
         try:
             return StreamingVoicePipeline(
                 VoiceStreamConfig(
@@ -733,6 +741,7 @@ class RealtimeConversationSession:
             return None
 
     def _start_audio_pump(self, ctrl: TurnControl, tts_pipeline: StreamingVoicePipeline) -> threading.Thread:
+        """Start the thread that drains provider chunks into WebSocket PCM frames."""
         sample_rate = int(getattr(self.bridge.config, "sample_rate", settings.voice_config.sample_rate) or 24000)
         frame_ms = int(getattr(settings.runtime, "realtime_audio_frame_ms", 60) or 60)
         frame_ms = max(20, min(200, frame_ms))
@@ -1090,6 +1099,18 @@ class RealtimeConversationSession:
         return ratio >= echo_threshold
 
     def _run_turn(self, ctrl: TurnControl, turn_input: TurnInput) -> None:
+        """Execute one realtime turn from prepared state through persistence.
+
+        Stage order:
+        1. prepare short-term state and assemble router context
+        2. route the turn and build a locked `TurnPlan`
+        3. stream LLM tokens into UI and TTS
+        4. drain/close TTS and audio pump
+        5. persist the completed/interrupted/error turn
+
+        Future long-term memory extraction should be triggered after step 5 so
+        it never delays ASR, routing, token streaming, or audio playback.
+        """
         assistant_text = ""
         decision = None
         plan = None
@@ -1105,6 +1126,8 @@ class RealtimeConversationSession:
         oralizer_enabled = False
 
         try:
+            # Short-term state repair and heuristic slot updates happen before
+            # routing so router prompts can see the latest working memory.
             prepare_state_for_turn(self.state, turn_input)
             ctrl.t1_prepare_state_done_at = time.monotonic()
             append_trace_log(
@@ -1116,6 +1139,8 @@ class RealtimeConversationSession:
                 turn_id=ctrl.turn_id,
                 scope="realtime_turn",
             )
+            # Router context is compact and planning-oriented. Responder context
+            # is rebuilt later by `build_turn_plan` if more detail is needed.
             snapshot = build_context_snapshot(
                 self.state,
                 turn_input,
@@ -1159,6 +1184,8 @@ class RealtimeConversationSession:
             if ctrl.stop_event.is_set():
                 return
 
+            # The turn plan locks strategy, prompt policy, and responder
+            # messages for the rest of this turn.
             plan = build_turn_plan(
                 state=self.state,
                 turn_input=turn_input,
@@ -1228,6 +1255,8 @@ class RealtimeConversationSession:
                 )
             )
 
+            # TTS is optional: text streaming still works when provider config
+            # is missing or the provider cannot be initialized.
             tts_pipeline = self._create_tts_pipeline()
             if tts_pipeline is not None:
                 self.attach_tts(ctrl, tts_pipeline)
@@ -1257,6 +1286,7 @@ class RealtimeConversationSession:
             first_token = True
 
             def _submit_tts_text(text: str) -> None:
+                """Submit already-speech-safe text to the TTS feeder."""
                 if tts_pipeline is None or not text:
                     return
                 if ctrl.t5_first_tts_submit_at is None:
@@ -1275,6 +1305,7 @@ class RealtimeConversationSession:
                 tts_pipeline.submit(text)
 
             def _handle_token(token: str) -> None:
+                """Fan out one streamed model token to UI, metrics, and TTS."""
                 nonlocal assistant_text, token_count, token_chars, first_token
                 if ctrl.stop_event.is_set():
                     return
@@ -1359,6 +1390,8 @@ class RealtimeConversationSession:
                 scope="realtime_llm",
             )
 
+            # The LaTeX-aware buffer may hold a partial formula until the model
+            # stream ends; flush it before closing TTS.
             if tts_pipeline is not None and speech_buffer is not None and not ctrl.stop_event.is_set():
                 for chunk in speech_buffer.flush_final():
                     _submit_tts_text(chunk)
@@ -1552,6 +1585,9 @@ class RealtimeConversationSession:
             if decision is not None:
                 evaluation = build_evaluation_tags(self.state, turn_input, decision, plan.strategy)
                 evaluation["turn_result"] = "interrupted" if interrupted else "completed"
+                # This is the safest point to enqueue long-term memory writes:
+                # we have user input, final assistant text, route, strategy, and
+                # the final turn status.
                 self.state.complete_realtime_turn(
                     ctrl.turn_id,
                     turn_input=turn_input,
