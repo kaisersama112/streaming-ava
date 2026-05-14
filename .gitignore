@@ -11,3 +11,5 @@
 /state/*.jsonl
 !/state/.gitkeep
 /outputs/
+/configs/model_config.example.yaml
+/configs/system_config.example.yaml

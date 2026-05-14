@@ -6,21 +6,17 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
+from typing import Any
 
-from ava.capabilities.tts import CosyVoiceSDKError, StreamingCosyVoice
+from ava.capabilities.tts import CosyVoiceSDKError, StreamingTTSClient, TTSError
+from ava.capabilities.tts.factory import build_streaming_tts, normalize_tts_error
 
 
 @dataclass(frozen=True)
 class VoiceStreamConfig:
-    api_key: str
-    model: str
-    voice: str
-    volume: int
-    speech_rate: float
-    pitch_rate: float
-    instruction: str
-    audio_format: str
-    sample_rate: int
+    voice: Any
+    audio_format: str = "pcm"
+    sample_rate: int | None = None
     synth_segment_chars: int = 48
     synth_burst_chars: int = 96
     synth_feed_pause_seconds: float = 0.04
@@ -75,15 +71,9 @@ class StreamingVoicePipeline:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
-    def _create_synth(self) -> StreamingCosyVoice:
-        return StreamingCosyVoice(
-            api_key=self._config.api_key,
-            model=self._config.model,
-            voice=self._config.voice,
-            volume=self._config.volume,
-            speech_rate=self._config.speech_rate,
-            pitch_rate=self._config.pitch_rate,
-            instruction=self._config.instruction,
+    def _create_synth(self) -> StreamingTTSClient:
+        return build_streaming_tts(
+            self._config.voice,
             audio_format=self._config.audio_format,
             sample_rate=self._config.sample_rate,
         )
@@ -281,7 +271,7 @@ class StreamingVoicePipeline:
     def _complete_synth(self) -> None:
         try:
             self._synth.complete(timeout_millis=self._synth_complete_timeout_millis)
-        except CosyVoiceSDKError as exc:
+        except (CosyVoiceSDKError, TTSError) as exc:
             if not self._is_soft_complete_timeout(exc):
                 raise
             with self._stats_lock:
@@ -352,7 +342,7 @@ class StreamingVoicePipeline:
                 elif self._should_flush(buffer):
                     buffer = self._flush_buffer(buffer)
         except Exception as exc:
-            self._error = CosyVoiceSDKError(str(exc))
+            self._error = normalize_tts_error(exc)
         finally:
             with self._stats_lock:
                 self._completed_at = time.monotonic()

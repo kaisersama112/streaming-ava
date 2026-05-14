@@ -75,7 +75,7 @@ from ava.domain.conversation.state import ConversationState
 from ava.interfaces.websocket import RealtimeAudioBridge
 
 # TTS SDK 异常
-from ava.capabilities.tts import CosyVoiceSDKError
+from ava.capabilities.tts import CosyVoiceSDKError, TTSError
 
 # 全局配置
 from configs import settings
@@ -717,18 +717,10 @@ class RealtimeConversationSession:
         )
 
     def _create_tts_pipeline(self) -> StreamingVoicePipeline | None:
-        if not settings.voice_config.api_key:
-            return None
         try:
             return StreamingVoicePipeline(
                 VoiceStreamConfig(
-                    api_key=settings.voice_config.api_key,
-                    model=settings.voice_config.model,
-                    voice=settings.voice_config.voice,
-                    volume=settings.voice_config.volume,
-                    speech_rate=settings.voice_config.speech_rate,
-                    pitch_rate=settings.voice_config.pitch_rate,
-                    instruction=settings.voice_config.instruction,
+                    voice=settings.voice_config,
                     audio_format="pcm",
                     sample_rate=settings.voice_config.sample_rate,
                     synth_complete_timeout_millis=int(
@@ -736,7 +728,7 @@ class RealtimeConversationSession:
                     ),
                 )
             )
-        except CosyVoiceSDKError as exc:
+        except (CosyVoiceSDKError, TTSError) as exc:
             self.events.publish(ErrorEvent(scope="tts", message=str(exc)))
             return None
 
