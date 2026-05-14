@@ -5,7 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="61f03ad6-fb28-44d5-84b9-9ae3752b0d4e" name="更改" comment="">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/tts/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/tts/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/voice_stream.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/voice_stream.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config.example.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/state/trace.jsonl" beforeDir="false" afterPath="$PROJECT_DIR$/state/trace.jsonl" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,23 +40,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.demo_parse_latex.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.openai-agent-demo.executor&quot;: &quot;Run&quot;,
-    &quot;Python.realtime_server.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;//wsl$/Ubuntu/app/streaming-ava/ava/infrastructure&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settingsdialog.project.grazie&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.demo_parse_latex.executor": "Debug",
+    "Python.openai-agent-demo.executor": "Run",
+    "Python.realtime_server.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "multimodal-latency-spike",
+    "last_opened_file_path": "//wsl$/Ubuntu/app/streaming-ava/ava/infrastructure",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "reference.settingsdialog.project.grazie",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\ava\infrastructure" />
@@ -56,6 +66,7 @@
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\ava\application\routing" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="\\wsl$\Ubuntu\app\streaming-ava\configs" />
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\temp" />
       <recent name="\\wsl$\Ubuntu\app\streaming-ava" />
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\ava" />
@@ -177,11 +188,6 @@
           <option name="timeStamp" value="7" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/ava/domain/routing/policy.py</url>
-          <line>39</line>
-          <option name="timeStamp" value="8" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/ava/application/orchestration/dispatcher.py</url>
           <line>75</line>
           <option name="timeStamp" value="9" />
@@ -197,6 +203,7 @@
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/streaming_ava$demo_parse_latex.coverage" NAME="demo_parse_latex 覆盖结果" MODIFIED="1777015159962" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
     <SUITE FILE_PATH="coverage/streaming_ava$openai_agent_demo.coverage" NAME="openai-agent-demo 覆盖结果" MODIFIED="1777426119269" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
+    <SUITE FILE_PATH="coverage/streaming_ava$cl.coverage" NAME="cl 覆盖结果" MODIFIED="1778636658363" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$USER_HOME$/eval_batch/outputs - 副本" />
     <SUITE FILE_PATH="coverage/streaming_ava$realtime_server.coverage" NAME="realtime_server 覆盖结果" MODIFIED="1776765771907" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

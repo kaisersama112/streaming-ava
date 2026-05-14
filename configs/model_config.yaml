@@ -1,0 +1,68 @@
+openai_config:
+  api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: "sk-150866734fa64b428e4d7e642db1270b"
+  model: "qwen-plus"
+  multimodal_model: "qwen3.5-omni-flash"
+  timeout: 60
+
+bigmodel_config:
+  api_base: "https://open.bigmodel.cn/api/paas/v4"
+  api_key: "6d85ed0363004343ab06ea0734df03fc.UeN22P8QbLrEbWED"
+  model: "glm-4.6v-flash"
+  timeout: 15
+  enabled: false
+
+voice_config:
+  provider: "doubao" # cosyvoice / stepfun / doubao
+  volume: 50
+  speech_rate: 1.0
+  pitch_rate: 1.0
+  format: "wav"
+  sample_rate: 24000
+  timeout: 1200
+  cosyvoice:
+    api_base: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    api_key: "sk-150866734fa64b428e4d7e642db1270b"
+    model: "cosyvoice-v3-flash"
+    voice: "longanhuan"
+    instruction: "你说话的角色是温和客服，你说话的情感是neutral。"
+  step_fun:
+    api_key: "gTWpvu3Odj7HqKzeacQOFsFmo4vAAkqVkwGKD76vdcXtn61rQQ8BvZ6x5GBxtIgI"
+    ws_url: "wss://api.stepfun.com/v1/realtime/audio"
+    model: "stepaudio-2.5-tts"
+    voice: "cixingnansheng"
+    instruction: "你说话的角色是温和客服，你说话的情感是neutral。"
+  dou_bao:
+    x_api_key: "d451d376-9f73-4d04-bf4a-2873339e5832"
+    x_api_resource_id: "seed-tts-2.0"
+    model: "seed-tts-2.0"
+    req_params:
+      model: ""
+      speaker: "saturn_zh_male_shuanglangshaonian_tob"
+      audio_params:
+        format: "pcm"
+        sample_rate: 24000
+        speech_rate: 0
+        loudness_rate: 0
+      additions:
+        disable_markdown_filter: true
+        enable_latex_tn: true
+        latex_parser: true
+        context_texts:
+          - "嗯，你的语气再欢乐一点"
+    ws_url: "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
+    sse_url: "https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse"
+
+asr_config:
+  api_key: "sk-150866734fa64b428e4d7e642db1270b"
+  model: "qwen3-asr-flash-realtime"
+  format: "pcm"
+  sample_rate: 16000
+  language: "zh"
+  websocket_url: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+  websocket_connect_timeout_sec: 10.0
+  websocket_ping_interval_sec: 15.0
+  websocket_ping_timeout_sec: 8.0
+  enable_turn_detection: true
+  turn_detection_threshold: 0.45
+  turn_detection_silence_duration_ms: 850

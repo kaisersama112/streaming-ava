@@ -1,0 +1,65 @@
+server:
+  title: "streaming-ava"
+  host: "0.0.0.0"
+  port: 7002
+  reload: false
+  workers: 1
+
+runtime:
+  state_file: "state/memory.json"
+  default_session_id: "default"
+  evaluation_log_file: "state/evaluation.jsonl"
+  trace_log_file: "state/trace.jsonl"
+  trace_log_enabled: true
+  trace_log_asr_partials: true
+  trace_max_text_chars: 12000
+  history_window: 8
+  max_context_messages: 16
+  router_max_context_messages: 8
+  responder_max_context_messages: 16
+  output_dir: "outputs"
+  prompt_dir: "prompt-plugin"
+  router_model: ""
+  router_timeout: 30
+  agents_sdk_enabled: true
+  agents_sdk_realtime_enabled: true
+  agents_sdk_tracing_enabled: false
+  agents_sdk_timeout: 45
+  agents_sdk_max_turns: 6
+  agents_sdk_model: ""
+  agents_sdk_multimodal_model: ""
+  agents_sdk_session_db: "state/agents_sessions.json"
+  agents_sdk_branches:
+    - "education"
+    - "general_qa"
+    - "clarify"
+  agents_sdk_education_modules:
+    - "solve"
+    - "check"
+    - "explain"
+    - "answer"
+    - "qa"
+  realtime_audio_host: "0.0.0.0"
+  realtime_audio_port: 7860
+  realtime_audio_public_url: ""
+  debug_audio_dump: true
+  realtime_audio_frame_ms: 60
+  realtime_audio_max_lead_seconds: 0.05
+  realtime_tts_complete_timeout_millis: 45000
+  realtime_tts_done_drain_grace_seconds: 2.0
+  realtime_tts_close_timeout_seconds: 45.0
+  realtime_audio_pump_drain_timeout_seconds: 45.0
+  realtime_audio_rebuild_on_interrupt: true
+  barge_in_partial_chars: 2
+  barge_in_stability_threshold: 0.3
+  barge_in_cooldown_ms: 500
+  echo_detection_window_seconds: 0.5
+  echo_detection_min_chars: 4
+  echo_detection_similarity_threshold: 0.85
+
+speech_postprocess:
+  enabled: true
+  math_oralizer_enabled: true
+  latex_span_only: true
+  math_stream_buffer_enabled: true
+  stream_flush_chars: 72
