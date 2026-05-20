@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 
 class InferenceEvent:
@@ -14,9 +15,9 @@ class OutputTextDelta(InferenceEvent):
 class InferenceCompleted(InferenceEvent):
     text: str
     finish_reason: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
 class InferenceError(InferenceEvent):
     error: str
-

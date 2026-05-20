@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ava.domain.conversation import ContextSnapshot
-from ava.domain.routing import RouteDecision
+from ava.context_engine.types import ContextSnapshot
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.strategy import (
     BranchStrategy,
     EducationTurnFrame,

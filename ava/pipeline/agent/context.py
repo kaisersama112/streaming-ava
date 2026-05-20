@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 import threading
 from typing import Any
 
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing import RouteDecision
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
 

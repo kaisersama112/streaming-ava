@@ -27,10 +27,11 @@ class ConversationState:
         self.memory = SessionMemory(memory_size=memory_size)
         self.intent_counter: dict[str, int] = {}
         self.turn_count: int = 0
-        self.history: list[dict[str, Any]] = []
         self.turn_records: list[dict[str, Any]] = []
         self.session_scene: str = "general"
         self.turn_scene: str = "general_qa"
+        self.responder_conversation_id: str = ""
+        self.responder_previous_response_id: str = ""
 
     @classmethod
     def normalize_session_id(cls, session_id: str | None) -> str:
@@ -44,24 +45,26 @@ class ConversationState:
         self.memory.reset()
         self.intent_counter = {}
         self.turn_count = 0
-        self.history = []
         self.turn_records = []
         self.session_scene = "general"
         self.turn_scene = "general_qa"
+        self.responder_conversation_id = ""
+        self.responder_previous_response_id = ""
 
     def _session_payload(self) -> dict[str, Any]:
         return {
             "session_id": self.session_id,
             "intent_counter": self.intent_counter,
             "turn_count": self.turn_count,
-            "history": self.history[-40:],
             "turn_records": self._serialize_turn_records_for_save(self.turn_records[-40:]),
             "session_scene": self.session_scene,
             "turn_scene": self.turn_scene,
+            "llm_state": {
+                "responder_conversation_id": self.responder_conversation_id,
+                "responder_previous_response_id": self.responder_previous_response_id,
+            },
             "memory": self.memory.to_payload(
-                history=self.history,
                 turn_records=self.turn_records,
-                summarize_turn_records=self._summarize_turn_records,
             ),
             "updated_at": datetime.now().isoformat(timespec="seconds"),
         }
@@ -210,24 +213,18 @@ class ConversationState:
     def _load_from_payload(self, data: dict[str, Any]) -> None:
         self.intent_counter = data.get("intent_counter", {})
         self.turn_count = data.get("turn_count", 0)
-        self.history = data.get("history", [])
         self.turn_records = self._normalize_loaded_turn_records(data.get("turn_records", []))
         self.session_scene = data.get("session_scene", "general")
         self.turn_scene = data.get("turn_scene", "general_qa")
+        llm_state = dict(data.get("llm_state") or {})
+        self.responder_conversation_id = str(llm_state.get("responder_conversation_id", "") or "").strip()
+        self.responder_previous_response_id = str(llm_state.get("responder_previous_response_id", "") or "").strip()
         self.memory.load_payload(
             data,
-            history=self.history,
             turn_records=self.turn_records,
-            summarize_turn_records=self._summarize_turn_records,
         )
         self._normalize_loaded_route_state()
-        if not self.turn_records and self.history:
-            self.turn_records = self._rebuild_turn_records_from_history(self.history)
-            self.memory.refresh_summaries(
-                history=self.history,
-                turn_records=self.turn_records,
-                summarize_turn_records=self._summarize_turn_records,
-            )
+        self.memory.refresh_summaries(turn_records=self.turn_records)
 
     def _derive_artifact_analysis_from_turn(
         self,
@@ -405,11 +402,7 @@ class ConversationState:
         self._reset_fields()
 
     def _refresh_summaries(self) -> None:
-        self.memory.refresh_summaries(
-            history=self.history,
-            turn_records=self.turn_records,
-            summarize_turn_records=self._summarize_turn_records,
-        )
+        self.memory.refresh_summaries(turn_records=self.turn_records)
         self.save()
 
     def apply_route(
@@ -423,13 +416,48 @@ class ConversationState:
         self.turn_scene = turn_scene
         self.memory.apply_route_transition(should_preserve_teaching_state=should_preserve_teaching_state)
 
+    def responder_conversation_state(self) -> dict[str, str]:
+        return {
+            "conversation_id": self.responder_conversation_id,
+            "previous_response_id": self.responder_previous_response_id,
+        }
+
+    def update_responder_conversation_state(
+        self,
+        *,
+        conversation_id: str | None = None,
+        previous_response_id: str | None = None,
+    ) -> None:
+        if conversation_id is not None:
+            self.responder_conversation_id = str(conversation_id or "").strip()
+        if previous_response_id is not None:
+            self.responder_previous_response_id = str(previous_response_id or "").strip()
+
+    def clear_responder_conversation_state(self) -> None:
+        self.responder_conversation_id = ""
+        self.responder_previous_response_id = ""
+
     def post_turn(self, user_text: str, assistant_text: str, intent: str) -> None:
         """Append turn content and refresh derived summary fields."""
         self.turn_count += 1
         self.intent_counter[intent] = self.intent_counter.get(intent, 0) + 1
         self.memory.recent_topics.append(user_text[:24])
-        self.history.append({"role": "user", "content": user_text})
-        self.history.append({"role": "assistant", "content": assistant_text})
+        self.turn_records.append(
+            {
+                "role": "turn",
+                "source": "legacy_text",
+                "user_text": user_text,
+                "multimodal_summary": user_text,
+                "artifacts": [],
+                "assistant_text": assistant_text,
+                "intent": intent,
+                "decision": {},
+                "strategy": {},
+                "evaluation": {},
+                "turn_status": "completed",
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+            }
+        )
         self._refresh_summaries()
 
     def post_multimodal_turn(
@@ -441,6 +469,7 @@ class ConversationState:
         strategy: dict[str, Any] | None = None,
         evaluation: dict[str, Any] | None = None,
         turn_status: str = "completed",
+        llm_response_state: dict[str, Any] | None = None,
     ) -> None:
         """Persist a structured turn record alongside chat history."""
         self.turn_count += 1
@@ -456,8 +485,6 @@ class ConversationState:
 
         user_history_text = turn_input.history_text()
         self.memory.recent_topics.append(user_history_text[:24])
-        self.history.append({"role": "user", "content": user_history_text})
-        self.history.append({"role": "assistant", "content": assistant_text})
         self.turn_records.append(
             {
                 "role": "turn",
@@ -474,6 +501,11 @@ class ConversationState:
                 "created_at": datetime.now().isoformat(timespec="seconds"),
             }
         )
+        if turn_status == "completed":
+            self.update_responder_conversation_state(
+                conversation_id=(llm_response_state or {}).get("conversation_id"),
+                previous_response_id=(llm_response_state or {}).get("response_id"),
+            )
         self._refresh_summaries()
 
     def upsert_realtime_user_turn(
@@ -493,7 +525,6 @@ class ConversationState:
         if record is None:
             self.turn_count += 1
             self.memory.recent_topics.append(user_history_text[:24])
-            self.history.append({"role": "user", "content": user_history_text, "turn_id": turn_id})
             self.turn_records.append(
                 {
                     "role": "turn",
@@ -516,8 +547,6 @@ class ConversationState:
             record["user_text"] = turn_input.normalized_text()
             record["multimodal_summary"] = turn_input.multimodal_summary()
             record["artifacts"] = [self._artifact_to_record(artifact) for artifact in turn_input.artifacts]
-            if not any(item.get("role") == "user" and item.get("turn_id") == turn_id for item in self.history):
-                self.history.append({"role": "user", "content": user_history_text, "turn_id": turn_id})
         if refresh_summaries:
             self._refresh_summaries()
 
@@ -533,6 +562,7 @@ class ConversationState:
         evaluation: dict[str, Any] | None = None,
         turn_status: str = "completed",
         persist: bool = True,
+        llm_response_state: dict[str, Any] | None = None,
     ) -> None:
         """Finalize a realtime turn previously inserted by upsert_realtime_user_turn."""
         record = next((item for item in reversed(self.turn_records) if item.get("turn_id") == turn_id), None)
@@ -545,6 +575,7 @@ class ConversationState:
                 strategy=strategy,
                 evaluation=evaluation,
                 turn_status=turn_status,
+                llm_response_state=llm_response_state,
             )
             if persist:
                 self.save()
@@ -584,38 +615,14 @@ class ConversationState:
             self.memory.update_education_state_from_strategy(strategy or {}, turn_input=turn_input)
 
         if assistant_text.strip() and turn_status == "completed":
-            if not any(item.get("role") == "assistant" and item.get("turn_id") == turn_id for item in self.history):
-                self.history.append({"role": "assistant", "content": assistant_text, "turn_id": turn_id})
+            self.update_responder_conversation_state(
+                conversation_id=(llm_response_state or {}).get("conversation_id"),
+                previous_response_id=(llm_response_state or {}).get("response_id"),
+            )
 
         self._refresh_summaries()
         if persist:
             self.save()
-
-    def _rebuild_turn_records_from_history(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        records: list[dict[str, Any]] = []
-        idx = 0
-        while idx < len(history):
-            user = history[idx]
-            assistant = history[idx + 1] if idx + 1 < len(history) else {"role": "assistant", "content": ""}
-            if user.get("role") != "user":
-                idx += 1
-                continue
-            user_content = str(user.get("content", ""))
-            records.append(
-                {
-                    "role": "turn",
-                    "source": "legacy",
-                    "user_text": user_content,
-                    "multimodal_summary": user_content,
-                    "artifacts": [],
-                    "assistant_text": str(assistant.get("content", "")),
-                    "intent": "",
-                    "decision": {},
-                    "created_at": "",
-                }
-            )
-            idx += 2
-        return records
 
     def _summarize_turn_records(self, turn_records: list[dict[str, Any]]) -> str:
         if not turn_records:

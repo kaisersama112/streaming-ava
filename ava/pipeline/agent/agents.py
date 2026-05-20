@@ -7,7 +7,7 @@ from typing import Any
 from agents import Agent
 
 from ava.pipeline.generation.types import TurnPlan
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
 from ava.domain.multimodal import TurnInput
 
 from .context import AvaAgentContext

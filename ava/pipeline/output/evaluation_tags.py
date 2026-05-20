@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing import RouteDecision
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
 

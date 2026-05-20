@@ -1,4 +1,4 @@
-"""Utilities for compressing recent history into a router-friendly summary."""
+"""Utilities for compressing conversation records into compact summaries."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from typing import Any
 
 
 def _clip(text: str, limit: int = 48) -> str:
-    text = " ".join(text.split())
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1] + "…"
+    normalized = " ".join(str(text or "").split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 1] + "…"
 
 
 def _content_to_text(content: Any) -> str:
@@ -20,13 +20,14 @@ def _content_to_text(content: Any) -> str:
         for item in content:
             if not isinstance(item, dict):
                 continue
-            if item.get("type") == "text":
+            item_type = str(item.get("type", "") or "").strip()
+            if item_type in {"text", "input_text"}:
                 pieces.append(str(item.get("text", "")))
-            elif item.get("type") == "image_url":
+            elif item_type in {"image_url", "input_image"}:
                 pieces.append("[image]")
-            elif item.get("type") == "input_audio":
+            elif item_type == "input_audio":
                 pieces.append("[audio]")
-            elif item.get("type") == "video":
+            elif item_type == "video":
                 pieces.append("[video]")
         return " ".join(piece for piece in pieces if piece).strip()
     if isinstance(content, dict):
@@ -47,4 +48,25 @@ def summarize_history(history: list[dict[str, Any]], max_messages: int = 8) -> s
         content = _clip(_content_to_text(item.get("content", "")))
         if content:
             lines.append(f"{role}: {content}")
+    return "\n".join(lines) if lines else "无"
+
+
+def summarize_turn_records(turn_records: list[dict[str, Any]], max_turns: int = 4) -> str:
+    recent = turn_records[-max_turns:]
+    if not recent:
+        return "无"
+
+    lines: list[str] = []
+    for record in recent:
+        user_text = str(record.get("user_text", "") or "").strip()
+        multimodal_summary = str(record.get("multimodal_summary", "") or "").strip()
+        assistant_text = str(record.get("assistant_text", "") or "").strip()
+        turn_status = str(record.get("turn_status", "completed") or "completed").strip()
+        label = user_text or multimodal_summary
+        if not label:
+            continue
+        if assistant_text and turn_status == "completed":
+            lines.append(f"用户: {_clip(label, 80)}\n助手: {_clip(assistant_text, 80)}")
+        else:
+            lines.append(f"用户: {_clip(label, 80)}")
     return "\n".join(lines) if lines else "无"

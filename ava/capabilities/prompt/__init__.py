@@ -1,11 +1,6 @@
-﻿"""Prompt capability facade."""
+"""Prompt capability facade."""
 
 from .factories import build_prompt_center
-from .runtime_context import (
-    build_responder_runtime_context,
-    build_router_runtime_context,
-    build_runtime_context_message,
-)
 from .prompt_builder import (
     build_responder_system_prompt,
     build_router_system_prompt,
@@ -16,7 +11,6 @@ from .prompt_loader import PromptCenter
 from .prompt_runtime import (
     ComposedPromptRuntime,
     SimpleBranchPromptRuntime,
-
 )
 
 __all__ = [
@@ -25,10 +19,7 @@ __all__ = [
     "PromptCenterConfig",
     "SimpleBranchPromptRuntime",
     "build_prompt_center",
-    "build_responder_runtime_context",
-    "build_runtime_context_message",
     "build_responder_system_prompt",
-    "build_router_runtime_context",
     "build_router_system_prompt",
     "build_router_user_message",
 ]

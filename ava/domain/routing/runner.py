@@ -1,4 +1,4 @@
-"""Run the router model directly without a service wrapper.
+"""Run the router model through the unified LLM service.
 
 The router is the first model call in a turn. Its job is deliberately narrow:
 classify the current turn, choose the scene/intent, and return a compact `plan`
@@ -12,22 +12,20 @@ from dataclasses import replace
 import json
 from typing import Any
 
-from ava.core.context.continuity import (
+from ava.context_engine.compiler import ContextCompiler
+from ava.context_engine.continuity import (
     select_router_model,
     should_isolate_current_artifact_context,
 )
-from ava.core.context.snapshot import build_context_snapshot
-from ava.capabilities.prompt import (
-    build_router_runtime_context,
-    build_runtime_context_message,
-)
+from ava.context_engine.types import ContextSnapshot, SnapshotCompileOptions
+from ava.capabilities.llm.service import LLMService
+from ava.capabilities.llm.types import InferenceTask
 from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
-from ava.domain.conversation import ContextSnapshot
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing import RouteDecision, apply_confidence_policy
+from ava.domain.routing.policy import apply_confidence_policy
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
-from ava.capabilities.llm import client as llm_client
-from ava.capabilities.prompt import PromptCenter, build_router_system_prompt, build_router_user_message
+from ava.capabilities.prompt import PromptCenter
 from configs import settings
 
 
@@ -52,29 +50,6 @@ def _compact_router_messages_trace(messages: list[dict[str, Any]]) -> dict[str, 
         "first_message_preview": sanitize_value(messages[0].get("content", ""), text_limit=400),
         "last_message_preview": sanitize_value(messages[-1].get("content", ""), text_limit=400),
     }
-
-
-def _build_router_messages(
-    prompt_center: PromptCenter,
-    snapshot: ContextSnapshot,
-    *,
-    text_only: bool = False,
-) -> list[dict[str, object]]:
-    """Build the router prompt with the smallest context needed for planning."""
-    runtime_context = build_router_runtime_context(snapshot)
-    messages: list[dict[str, object]] = [
-        {"role": "system", "content": build_router_system_prompt(prompt_center)},
-        build_runtime_context_message(runtime_context),
-    ]
-    if snapshot.history_messages:
-        messages.extend(snapshot.history_messages)
-    messages.append(
-        build_router_user_message(
-            snapshot,
-            text_only=text_only,
-        )
-    )
-    return messages
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -111,6 +86,7 @@ def route_with_context(
     model: str | None = None,
     multimodal_model: str | None = None,
     timeout: int | None = None,
+    compiler: ContextCompiler | None = None,
 ) -> tuple[RouteDecision, Any]:
     """Route one turn and return the normalized decision plus enriched context.
 
@@ -119,6 +95,7 @@ def route_with_context(
     memory retriever should feed compact, planning-safe facts into the snapshot
     before this function builds messages.
     """
+    context_compiler = compiler or ContextCompiler()
     selected_api_base = api_base or settings.openai_config.api_base
     selected_api_key = api_key or settings.openai_config.api_key
     selected_model_name = model or settings.runtime.router_model or settings.openai_config.model or settings.openai_config.intent_model
@@ -127,13 +104,15 @@ def route_with_context(
 
     # The router profile intentionally keeps history and multimodal context
     # compact. It is optimized for choosing a path, not answering the user.
-    context = snapshot or build_context_snapshot(
-        state,
-        turn_input,
-        history_window,
-        current_turn_id=current_turn_id,
-        max_context_messages=max_context_messages,
-        profile="router",
+    context = snapshot or context_compiler.build_snapshot(
+        state=state,
+        turn_input=turn_input,
+        options=SnapshotCompileOptions(
+            history_window=history_window,
+            current_turn_id=current_turn_id,
+            max_context_messages=max_context_messages,
+            profile="router",
+        ),
     )
     # Some fresh artifact uploads should be routed as a new object even when the
     # previous session was in an education flow. This prevents stale continuity
@@ -179,11 +158,20 @@ def route_with_context(
         scope="router",
     )
 
-    messages = _build_router_messages(
-        prompt_center,
-        route_context,
+    router_envelope = context_compiler.compile_router_envelope(
+        prompt_center=prompt_center,
+        state=state,
+        turn_input=route_context.turn_input,
+        options=SnapshotCompileOptions(
+            history_window=history_window,
+            current_turn_id=current_turn_id,
+            max_context_messages=max_context_messages,
+            profile=route_context.context_profile,
+        ),
+        snapshot=route_context,
         text_only=text_only_router,
     )
+    messages = router_envelope.messages
     append_trace_log(
         "router.route.request",
         {
@@ -198,15 +186,26 @@ def route_with_context(
     )
 
     try:
-        raw = llm_client.chat(
-            api_base=selected_api_base,
-            api_key=selected_api_key,
-            model=chosen_model,
-            messages=messages,
-            timeout=selected_timeout,
-            temperature=0.1,
-            modalities=["text"],
+        llm_service = LLMService(
+            prompt_center=prompt_center,
+            context_compiler=context_compiler,
         )
+        llm_context = llm_service.build_context(
+            task=InferenceTask.ROUTE,
+            state=state,
+            turn_input=route_context.turn_input,
+            history_window=history_window,
+            max_context_messages=max_context_messages,
+            current_turn_id=current_turn_id,
+            visible_context=route_context,
+            metadata={
+                "api_base": selected_api_base,
+                "api_key": selected_api_key,
+                "timeout": selected_timeout,
+                "model_override": chosen_model,
+            },
+        )
+        raw = llm_service.route(llm_context).text
         append_trace_log(
             "router.route.raw_response",
             {"raw": raw},

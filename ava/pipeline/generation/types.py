@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from ava.domain.routing import RouteDecision
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.strategy import BranchStrategy
 
 

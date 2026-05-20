@@ -11,17 +11,20 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 
-from ava.core.context.snapshot import build_context_snapshot
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.compiler import ContextCompiler
+from ava.context_engine.types import (
+    CompiledContextEnvelope,
+    ContextSnapshot,
+    SnapshotCompileOptions,
+)
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing import RouteDecision
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.core.tracing import append_trace_log, sanitize_value
 from ava.capabilities.prompt import PromptCenter
 from configs import settings
 
 from ava.pipeline.generation.model_plan_builder import build_strategy_from_model_plan
-from ava.pipeline.generation.common import build_responder_messages
 from .types import TurnPlan
 
 
@@ -61,23 +64,27 @@ def build_turn_plan(
     max_context_messages: int | None = None,
     snapshot: ContextSnapshot | None = None,
     current_turn_id: int | None = None,
+    compiler: ContextCompiler | None = None,
 ) -> TurnPlan:
     """Convert a routed turn into responder messages and strategy metadata."""
+    context_compiler = compiler or ContextCompiler()
     previous_snapshot = snapshot
     if snapshot is None or getattr(snapshot, "context_profile", "full") == "router":
         # Router context is intentionally small. The responder gets a fresh
         # context profile so it can see the history/media needed to answer.
-        snapshot = build_context_snapshot(
-            state,
-            turn_input,
-            history_window,
-            current_turn_id=current_turn_id,
-            max_context_messages=(
-                max_context_messages
-                or getattr(settings.runtime, "responder_max_context_messages", 0)
-                or getattr(settings.runtime, "max_context_messages", 16)
+        snapshot = context_compiler.build_snapshot(
+            state=state,
+            turn_input=turn_input,
+            options=SnapshotCompileOptions(
+                history_window=history_window,
+                current_turn_id=current_turn_id,
+                max_context_messages=(
+                    max_context_messages
+                    or getattr(settings.runtime, "responder_max_context_messages", 0)
+                    or getattr(settings.runtime, "max_context_messages", 16)
+                ),
+                profile="responder_minimal",
             ),
-            profile="responder_minimal",
         )
         if previous_snapshot is not None:
             # Keep expensive router-side artifact analysis and the model plan so
@@ -90,11 +97,30 @@ def build_turn_plan(
     # Strategy construction translates the generic router plan into the prompt
     # center's concrete branch/module/style vocabulary.
     strategy = build_strategy_from_model_plan(prompt_center, decision, snapshot)
+    responder_envelope: CompiledContextEnvelope = context_compiler.compile_responder_envelope(
+        prompt_center=prompt_center,
+        state=state,
+        turn_input=snapshot.turn_input,
+        strategy=strategy,
+        decision=decision,
+        options=SnapshotCompileOptions(
+            history_window=history_window,
+            current_turn_id=current_turn_id,
+            max_context_messages=(
+                max_context_messages
+                or getattr(settings.runtime, "responder_max_context_messages", 0)
+                or getattr(settings.runtime, "max_context_messages", 16)
+            ),
+            profile=snapshot.context_profile,
+        ),
+        snapshot=snapshot,
+        previous_snapshot=previous_snapshot,
+    )
     plan = TurnPlan(
         decision=decision,
         orchestrator_name="Model Planned Turn Orchestrator",
         strategy=strategy,
-        responder_messages=build_responder_messages(prompt_center, snapshot, strategy, decision),
+        responder_messages=responder_envelope.messages,
     )
     strategy_analysis = dict(plan.strategy.analysis or {})
     frame = dict(strategy_analysis.get("education_turn_frame") or strategy_analysis.get("task_frame") or {})

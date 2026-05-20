@@ -1,6 +1,6 @@
 """Conversation domain models."""
 
-from ava.domain.conversation.models import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import (
     BranchStrategy,

@@ -17,9 +17,9 @@ from openai.types.responses import ResponseTextDeltaEvent
 
 from ava.pipeline.generation.types import TurnPlan
 from ava.core.tracing import append_trace_log, sanitize_value
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing import RouteDecision
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from configs import settings
 

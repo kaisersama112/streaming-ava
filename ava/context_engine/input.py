@@ -1,4 +1,4 @@
-"""Application helpers for constructing multimodal turn inputs."""
+"""Input normalization helpers for unified context construction."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from ava.domain.multimodal import MediaArtifact, TurnInput
 
 @dataclass(frozen=True)
 class AttachmentPayload:
-    """Raw attachment payload captured by a presentation layer."""
+    """Raw attachment captured at the presentation layer."""
 
     name: str
     mime_type: str
@@ -21,7 +21,7 @@ class AttachmentPayload:
     uri: str | None = None
 
 
-_MATH_HINTS = ("数学", "函数", "几何", "方程", "极限", "导数", "数列", "解析式", "三角形", "坐标")
+_MATH_HINTS = ("数学", "函数", "几何", "方程", "极限", "导数", "数列", "解析", "三角形", "坐标")
 _ENGLISH_HINTS = ("英语", "英文", "单词", "句子", "语法", "完形", "阅读", "翻译", "A.", "B.", "C.", "D.")
 _CHINESE_HINTS = ("语文", "作文", "文言文", "阅读理解", "病句", "修辞", "古诗")
 _PHYSICS_HINTS = ("物理", "实验", "电路", "受力", "电流", "电压", "滑轮", "杠杆")
@@ -29,7 +29,7 @@ _HISTORY_HINTS = ("历史", "朝代", "史记", "左传", "战国", "古代史",
 _LESSON_HINTS = ("课堂", "课上", "课程", "老师讲", "视频片段", "这一段", "例题讲解", "lesson")
 _STUDENT_SOLUTION_HINTS = ("学生作答", "学生答案", "我的答案", "我的解答", "我做的", "草稿", "列式", "演算", "步骤")
 _PROBLEM_HINTS = ("题目", "这道题", "求", "选择题", "填空题", "解答题", "例题", "problem")
-_SUB_PROBLEM_HINTS = ("第一小问", "第二小问", "第三小问", "第一问", "第二问", "第1问", "第2问", "小问")
+_SUB_PROBLEM_HINTS = ("第一小问", "第二小问", "第三小问", "第一问", "第二问", "第三问", "小问")
 _CONCEPT_HINTS = ("知识点", "概念", "定义", "原理", "讲义", "总结")
 
 
@@ -85,13 +85,13 @@ def _problem_count_hint(text: str) -> int:
     return len(numbered)
 
 
-def _artifact_metadata(name: str, mime_type: str, summary: str, *, kind: str) -> dict[str, object]:
+def _artifact_metadata(name: str, summary: str, *, kind: str) -> dict[str, object]:
     evidence_text = " ".join(part for part in (name, summary) if part).strip().lower()
     student_solution = _contains_any(evidence_text, _STUDENT_SOLUTION_HINTS)
     lesson_context = _contains_any(evidence_text, _LESSON_HINTS)
     task_hint = _task_hint(evidence_text, has_student_solution=student_solution, has_lesson_context=lesson_context)
     role = _artifact_role(kind, evidence_text, has_student_solution=student_solution, has_lesson_context=lesson_context)
-    metadata: dict[str, object] = {
+    return {
         "size_bytes": 0,
         "artifact_role": role,
         "subject_hint": _subject_hint(evidence_text),
@@ -103,7 +103,6 @@ def _artifact_metadata(name: str, mime_type: str, summary: str, *, kind: str) ->
         "contains_problem_statement": _contains_any(evidence_text, _PROBLEM_HINTS),
         "problem_count_hint": _problem_count_hint(evidence_text),
     }
-    return metadata
 
 
 def _to_data_url(mime_type: str, data: bytes) -> str:
@@ -116,6 +115,8 @@ def build_turn_input(
     attachments: Iterable[AttachmentPayload] | None = None,
     source: str = "web",
 ) -> TurnInput:
+    """Build a normalized multimodal turn input from raw presentation data."""
+
     artifacts: list[MediaArtifact] = []
     for attachment in attachments or ():
         if attachment.mime_type.startswith("image/"):
@@ -137,7 +138,6 @@ def build_turn_input(
                 metadata={
                     **_artifact_metadata(
                         attachment.name,
-                        attachment.mime_type,
                         attachment.summary,
                         kind=kind,
                     ),

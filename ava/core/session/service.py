@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
-from ava.core.context.input import build_turn_input
+from ava.context_engine.input import build_turn_input
 from ava.pipeline.output import append_evaluation_log, build_evaluation_tags
 from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing import RouteDecision
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
 from configs import BASE_DIR, settings
@@ -49,6 +49,7 @@ def persist_turn(
     assistant_text: str,
     decision: RouteDecision,
     strategy: BranchStrategy | None = None,
+    llm_response_state: dict | None = None,
 ) -> None:
     if isinstance(turn_input, str):
         turn_input = build_turn_input(turn_input)
@@ -70,6 +71,7 @@ def persist_turn(
         decision=decision.model_dump(),
         strategy=(strategy.to_metadata() if strategy is not None else None),
         evaluation=evaluation,
+        llm_response_state=llm_response_state,
     )
     state.save()
     append_trace_log(
@@ -81,8 +83,8 @@ def persist_turn(
             "decision": sanitize_value(decision),
             "strategy": sanitize_value(strategy.to_metadata() if strategy is not None else {}),
             "evaluation": sanitize_value(evaluation),
-            "history_size": len(state.history),
             "turn_records_size": len(state.turn_records),
+            "conversation_state": sanitize_value(state.responder_conversation_state()),
         },
         scope="state",
     )

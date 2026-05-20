@@ -20,11 +20,14 @@ except Exception:
     _AGENTS_SDK_AVAILABLE = False
 from ava.pipeline.generation.types import TurnPlan
 from ava.core.tracing import append_trace_log
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
+from ava.capabilities.llm.service import LLMService
+from ava.capabilities.llm.streaming.events import InferenceCompleted, OutputTextDelta
+from ava.capabilities.llm.types import InferenceTask
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing import RouteDecision
+from ava.domain.routing.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
-from ava.capabilities.llm import client as llm_client
+from ava.capabilities.prompt import build_prompt_center
 from configs import settings
 
 
@@ -84,8 +87,11 @@ def _messages_have_direct_media(messages: list[dict[str, object]]) -> bool:
     return False
 
 
+def _build_llm_service() -> LLMService:
+    return LLMService(prompt_center=build_prompt_center())
+
+
 def _select_reply_model(default_model: str, plan: TurnPlan) -> str:
-    """Use the multimodal model only when responder messages contain media."""
     if _messages_have_direct_media(plan.responder_messages):
         return default_model
     return str(settings.openai_config.model or default_model).strip() or default_model
@@ -173,16 +179,27 @@ def generate_reply_sync(
             )
 
     reply_model = _select_reply_model(model, plan)
-    reply = llm_client.chat(
-        api_base=api_base,
-        api_key=api_key,
-        model=reply_model,
-        messages=plan.responder_messages,
-        timeout=timeout,
-        temperature=0.7,
-        modalities=["text"],
+    llm_service = _build_llm_service()
+    llm_context = llm_service.build_context(
+        task=InferenceTask.GENERATE,
+        state=state,
+        turn_input=turn_input,
+        decision=decision,
+        plan=plan,
+        visible_context=snapshot,
+        metadata={
+            "api_base": api_base,
+            "api_key": api_key,
+            "timeout": timeout,
+            "model_override": reply_model,
+        },
     )
-    return ReplyExecutionResult(assistant_text=reply, backend="llm_chat")
+    result = llm_service.generate(llm_context)
+    return ReplyExecutionResult(
+        assistant_text=result.text,
+        backend="llm_chat",
+        debug={"llm_response_state": dict(result.metadata or {})},
+    )
 
 
 def stream_reply_with_callbacks(
@@ -252,23 +269,38 @@ def stream_reply_with_callbacks(
             )
 
     text_parts: list[str] = []
+    llm_response_state: dict[str, Any] = {}
     reply_model = _select_reply_model(model, plan)
-    for token in llm_client.chat_stream(
-        api_base=api_base,
-        api_key=api_key,
-        model=reply_model,
-        messages=plan.responder_messages,
-        timeout=timeout,
-        temperature=0.7,
-        modalities=["text"],
-        stream_options={"include_usage": True},
+    llm_service = _build_llm_service()
+    llm_context = llm_service.build_context(
+        task=InferenceTask.GENERATE,
+        state=state,
+        turn_input=turn_input,
+        decision=decision,
+        plan=plan,
+        current_turn_id=current_turn_id,
+        visible_context=snapshot,
+        metadata={
+            "api_base": api_base,
+            "api_key": api_key,
+            "timeout": timeout,
+            "model_override": reply_model,
+        },
+    )
+    for event in llm_service.stream_generate(
+        llm_context,
         stop_event=stop_event,
     ):
-        text_parts.append(token)
-        on_token(token)
+        if isinstance(event, OutputTextDelta):
+            text_parts.append(event.text)
+            on_token(event.text)
+        elif isinstance(event, InferenceCompleted):
+            llm_response_state = dict(event.metadata or {})
+            break
     return ReplyExecutionResult(
         assistant_text="".join(text_parts),
         backend="llm_chat_stream",
+        debug={"llm_response_state": llm_response_state},
     )
 
 

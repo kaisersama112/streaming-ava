@@ -9,11 +9,9 @@ import time
 from typing import Any
 
 # 上下文构建相关工具
-from ava.core.context import (
-    AttachmentPayload,
-    build_context_snapshot,
-    build_turn_input,
-)
+from ava.context_engine.compiler import ContextCompiler
+from ava.context_engine.input import AttachmentPayload
+from ava.context_engine.types import SnapshotCompileOptions
 
 # 会话状态加载与预处理
 from ava.core.session import load_state, prepare_state_for_turn
@@ -26,7 +24,7 @@ from ava.pipeline.generation import build_turn_plan
 from ava.pipeline.generation import stream_reply_with_callbacks
 
 # 路由决策
-from ava.domain.routing import route_with_context
+from ava.domain.routing.runner import route_with_context
 
 # 数学语音缓冲与口语化处理
 from ava.pipeline.speech import LatexAwareSpeechBuffer, should_apply_math_oralizer
@@ -266,6 +264,7 @@ class RealtimeConversationSession:
 
         # Prompt 中心
         self.prompt_center = build_prompt_center()
+        self.context_compiler = ContextCompiler()
 
         # 实时事件总线
         self.events = RealtimeEventBus()
@@ -552,7 +551,7 @@ class RealtimeConversationSession:
             )
             return None
 
-        turn_input = build_turn_input(normalized, attachments=attachments, source=source)
+        turn_input = self.context_compiler.build_turn_input(normalized, attachments=attachments, source=source)
         if not normalized and not turn_input.artifacts:
             return None
 
@@ -1141,13 +1140,15 @@ class RealtimeConversationSession:
             )
             # Router context is compact and planning-oriented. Responder context
             # is rebuilt later by `build_turn_plan` if more detail is needed.
-            snapshot = build_context_snapshot(
-                self.state,
-                turn_input,
-                self.history_window,
-                current_turn_id=ctrl.turn_id,
-                max_context_messages=self.router_max_context_messages,
-                profile="router",
+            snapshot = self.context_compiler.build_snapshot(
+                state=self.state,
+                turn_input=turn_input,
+                options=SnapshotCompileOptions(
+                    history_window=self.history_window,
+                    current_turn_id=ctrl.turn_id,
+                    max_context_messages=self.router_max_context_messages,
+                    profile="router",
+                ),
             )
             append_trace_log(
                 "realtime.context.assembled",
@@ -1170,6 +1171,7 @@ class RealtimeConversationSession:
                 max_context_messages=self.router_max_context_messages,
                 current_turn_id=ctrl.turn_id,
                 snapshot=snapshot,
+                compiler=self.context_compiler,
             )
             ctrl.t2_router_done_at = time.monotonic()
             append_trace_log(
@@ -1195,6 +1197,7 @@ class RealtimeConversationSession:
                 max_context_messages=self.responder_max_context_messages,
                 snapshot=snapshot,
                 current_turn_id=ctrl.turn_id,
+                compiler=self.context_compiler,
             )
             ctrl.t3_turn_plan_done_at = time.monotonic()
             append_trace_log(
@@ -1597,6 +1600,7 @@ class RealtimeConversationSession:
                     strategy=plan.strategy.to_metadata(),
                     evaluation=evaluation,
                     turn_status=("interrupted" if interrupted else "completed"),
+                    llm_response_state=reply_result.debug.get("llm_response_state", {}),
                 )
                 turn_finalized = True
             self.events.publish(
@@ -1631,6 +1635,7 @@ class RealtimeConversationSession:
                     strategy=None,
                     evaluation=evaluation,
                     turn_status="error",
+                    llm_response_state={},
                 )
                 turn_finalized = True
             self.events.publish(ErrorEvent(scope="turn", message=str(exc), turn_id=ctrl.turn_id))
@@ -1651,6 +1656,7 @@ class RealtimeConversationSession:
                     strategy=(plan.strategy.to_metadata() if plan is not None else None),
                     evaluation=evaluation,
                     turn_status=turn_status,
+                    llm_response_state=(reply_result.debug.get("llm_response_state", {}) if 'reply_result' in locals() else {}),
                 )
                 append_trace_log(
                     "realtime.turn.persisted",

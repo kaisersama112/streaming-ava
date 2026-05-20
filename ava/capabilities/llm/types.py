@@ -28,13 +28,14 @@ class InferenceRequest:
     task: InferenceTask
     model: str
     instructions: str
-    input: str | list[dict[str, Any]]
-    history: list[dict[str, Any]] = field(default_factory=list)
+    input_items: list[dict[str, Any]] = field(default_factory=list)
+    conversation: str | dict[str, Any] | None = None
+    previous_response_id: str | None = None
     response_format: dict[str, Any] | None = None
     tools: list[dict[str, Any]] = field(default_factory=list)
     stream: bool = False
     temperature: float | None = None
-    max_tokens: int | None = None
+    max_output_tokens: int | None = None
     timeout: float | None = None
     modalities: list[str] = field(default_factory=lambda: ["text"])
     extra_body: dict[str, Any] = field(default_factory=dict)
@@ -48,4 +49,3 @@ class InferenceResult:
     usage: Any | None = None
     finish_reason: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-

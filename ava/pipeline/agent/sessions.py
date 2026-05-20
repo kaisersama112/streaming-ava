@@ -15,7 +15,7 @@ except Exception:
     SessionSettings = Any  # type: ignore[assignment]
     TResponseInputItem = Any  # type: ignore[assignment]
 
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
 from configs import BASE_DIR, settings
 
 _SESSION_CONTAINER_KEY = "sessions"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
 from ava.domain.conversation.strategy import BranchStrategy
 
 from .prompt_loader import PromptCenter
@@ -106,10 +106,6 @@ def _build_prompt_shell_from_spec(
         if rendered_contract:
             blocks.append(rendered_contract)
 
-    rendered_template = prompt_center.render_path(spec.renderer_file, shell_variables).strip()
-    if rendered_template:
-        blocks.append(rendered_template)
-
     return "\n\n".join(block for block in blocks if block).strip()
 
 
@@ -135,7 +131,31 @@ def _build_system_prompt_from_spec(
     if spec is None:
         raise ValueError("resolved_prompt_spec is required")
 
-    return _build_prompt_shell(prompt_center, strategy).strip()
+    shell = _build_prompt_shell(prompt_center, strategy).strip()
+    profile_lines = [
+        "Current responder profile:",
+        f"- branch = {strategy.branch}",
+    ]
+    if strategy.mode:
+        profile_lines.append(f"- mode = {strategy.mode}")
+    if strategy.module:
+        profile_lines.append(f"- module = {strategy.module}")
+    if strategy.subject:
+        profile_lines.append(f"- subject = {strategy.subject}")
+    if strategy.style:
+        profile_lines.append(f"- style = {strategy.style}")
+    if strategy.delivery_mode:
+        profile_lines.append(f"- delivery_mode = {strategy.delivery_mode}")
+    if strategy.ui_mode:
+        profile_lines.append(f"- ui_mode = {strategy.ui_mode}")
+    if strategy.response_shape:
+        profile_lines.append(f"- response_shape = {strategy.response_shape}")
+    if strategy.teaching_objective:
+        profile_lines.append(f"- objective = {strategy.teaching_objective}")
+    if snapshot.user_text:
+        profile_lines.append(f"- current_user_text = {snapshot.user_text}")
+    profile = "\n".join(profile_lines).strip()
+    return "\n\n".join(block for block in (shell, profile) if block).strip()
 
 
 def build_responder_system_prompt(

@@ -1,10 +1,10 @@
 """Thin adapter around the single SymPy-backed LaTeX oralizer."""
 
-from __future__ import annotations
+
 
 import re
 
-from ava.domain.speech.math_ir import MathSpeechIR, build_math_speech_ir
+from .math_ir import MathSpeechIR, build_math_speech_ir
 
 from .math_latex_oralizer import oralize_latex_with_trace
 

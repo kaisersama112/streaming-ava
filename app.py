@@ -15,7 +15,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from ava.core.context import AttachmentPayload, build_turn_input
+from ava.context_engine.compiler import ContextCompiler
+from ava.context_engine.input import AttachmentPayload, build_turn_input
 from ava.core.session import load_state
 from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
 from ava.interfaces.websocket import PlayerConfig, get_bridge
@@ -621,7 +622,7 @@ def create_app() -> FastAPI:
                     text = str(obj.get("text", "")).strip()
                     attachments = await _decode_attachments(obj.get("attachments", []) or [])
                     if text or attachments:
-                        turn_input = build_turn_input(text, attachments, source="realtime_web_text")
+                        turn_input = ContextCompiler().build_turn_input(text, attachments, source="realtime_web_text")
                         append_trace_log(
                             "ws.command.text",
                             {"turn_input": sanitize_turn_input(turn_input)},

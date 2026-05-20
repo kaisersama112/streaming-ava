@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from openai import AsyncOpenAI
 from agents import ModelSettings, OpenAIChatCompletionsModel, RunConfig
 
-from ava.domain.conversation import ContextSnapshot
+from ava.context_engine.types import ContextSnapshot
 from configs import settings
 
 
