@@ -441,7 +441,7 @@ class ConversationState:
         """Append turn content and refresh derived summary fields."""
         self.turn_count += 1
         self.intent_counter[intent] = self.intent_counter.get(intent, 0) + 1
-        self.memory.recent_topics.append(user_text[:24])
+        self.memory.append_recent_topic(user_text)
         self.turn_records.append(
             {
                 "role": "turn",
@@ -484,7 +484,7 @@ class ConversationState:
             self.memory.remember_artifact_analysis(turn_input.artifacts, derived_artifact_analysis)
 
         user_history_text = turn_input.history_text()
-        self.memory.recent_topics.append(user_history_text[:24])
+        self.memory.append_recent_topic(user_history_text)
         self.turn_records.append(
             {
                 "role": "turn",
@@ -524,7 +524,7 @@ class ConversationState:
         record = next((item for item in reversed(self.turn_records) if item.get("turn_id") == turn_id), None)
         if record is None:
             self.turn_count += 1
-            self.memory.recent_topics.append(user_history_text[:24])
+            self.memory.append_recent_topic(user_history_text)
             self.turn_records.append(
                 {
                     "role": "turn",

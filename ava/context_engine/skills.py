@@ -289,18 +289,6 @@ class SkillRegistry:
                 ),
             ),
             BuiltinSkillSpec(
-                skill_id="memory_personalization",
-                title="Memory Personalization",
-                instruction_fragment=(
-                    "Use stable user memory only when it improves relevance, tone, or continuity. "
-                    "Do not overfit to memory when the current request clearly asks for something else."
-                ),
-                phases=("router", "responder"),
-                matcher=lambda _phase, snapshot, _strategy: bool(
-                    dict(dict(getattr(snapshot, "memory_projection", {}) or {}).get("facts") or {})
-                ),
-            ),
-            BuiltinSkillSpec(
                 skill_id="history_grounding",
                 title="History Grounding",
                 instruction_fragment=(

@@ -29,7 +29,6 @@ def prepare_state_for_turn(state: ConversationState, turn_input: TurnInput | str
     if isinstance(turn_input, str):
         turn_input = build_turn_input(turn_input)
     state.repair_route_state_from_turn_records()
-    state.memory.update_fact_slots(turn_input.normalized_text())
     append_trace_log(
         "state.prepare_for_turn",
         {

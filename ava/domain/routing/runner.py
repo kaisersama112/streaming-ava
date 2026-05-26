@@ -92,7 +92,7 @@ def route_with_context(
 
     The returned context carries `router_plan`, which lets generation reuse the
     router's reasoning without asking another planning model. A future long-term
-    memory retriever should feed compact, planning-safe facts into the snapshot
+    memory retriever should feed compact, planning-safe session memory into the snapshot
     before this function builds messages.
     """
     context_compiler = compiler or ContextCompiler()

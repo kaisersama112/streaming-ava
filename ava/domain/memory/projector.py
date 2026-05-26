@@ -1,0 +1,91 @@
+"""Model-visible memory projection builder."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ava.domain.memory.types import ArtifactMemoryEntry, MemoryProjection
+from ava.domain.multimodal import MediaArtifact, TurnInput
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return str(value)
+
+
+def _trim_dict(source: dict[str, Any], *, allowed_keys: tuple[str, ...]) -> dict[str, Any]:
+    return {
+        key: source.get(key)
+        for key in allowed_keys
+        if source.get(key) not in (None, "", [], {}, ())
+    }
+
+
+class MemoryProjector:
+    def build(
+            self,
+            memory,
+            turn_input: TurnInput,
+            *,
+            profile: str,
+            current_artifacts: tuple[MediaArtifact, ...] = (),
+            reference_artifacts: tuple[MediaArtifact, ...] = (),
+    ) -> MemoryProjection:
+        target = current_artifacts or reference_artifacts
+        artifact_memory: list[dict[str, Any]] = []
+        if target:
+            analysis = memory.cached_or_metadata_artifact_analysis(target)
+            if analysis:
+                artifact_memory.append(
+                    ArtifactMemoryEntry(
+                        artifact_bundle_key=memory.artifact_bundle_key(target),
+                        analysis=_json_safe(analysis),
+                    ).to_payload()
+                )
+
+        retrieved_memories = [
+            item.to_payload()
+            for item in memory.retrieve_relevant_memories(
+                turn_input,
+                current_artifacts=current_artifacts,
+                reference_artifacts=reference_artifacts,
+            )
+        ]
+
+        projection = MemoryProjection(
+            recent_topics=list(memory.recent_topics or []),
+            context_summary=str(memory.context_summary or "").strip(),
+            multimodal_context_summary=str(memory.multimodal_context_summary or "").strip(),
+            education_state=dict(memory.education_state or {}),
+            artifact_memory=artifact_memory,
+            retrieved_memories=[_json_safe(item) for item in retrieved_memories],
+        )
+        if profile == "router":
+            return MemoryProjection(
+                recent_topics=list(projection.recent_topics)[:4],
+                education_state=_trim_dict(
+                    dict(projection.education_state),
+                    allowed_keys=(
+                        "subject",
+                        "knowledge_point",
+                        "stage",
+                        "learning_scenario",
+                        "learning_objects",
+                        "object_scope",
+                        "object_continuity",
+                        "primary_action",
+                        "answer_boundary",
+                        "previous_strategy_id",
+                        "previous_policy_id",
+                    ),
+                ),
+                artifact_memory=list(projection.artifact_memory)[:1],
+                retrieved_memories=list(projection.retrieved_memories)[:3],
+            )
+
+        return projection

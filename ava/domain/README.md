@@ -35,10 +35,14 @@ This layer is not responsible for:
 - `ConversationState`
   - session flow state, turn records, route continuity, realtime lifecycle
 - `SessionMemory`
-  - facts, education state, summaries, artifact analysis cache
+  - education state, summaries, artifact analysis cache
 
 Official access path:
 
 ```python
 state.memory.*
 ```
+
+Memory internals:
+
+- `ava/domain/memory/ARCHITECTURE.md`

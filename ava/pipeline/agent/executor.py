@@ -50,7 +50,7 @@ def _apply_pending_state_patches(runtime: AvaAgentContext) -> list[dict[str, Any
         if not key or not value:
             continue
         if key in allowed_education_keys:
-            runtime.state.memory.education_state[key] = value[:160]
+            runtime.state.memory.set_education_state_value(key, value[:160])
             applied.append({"key": key, "value": value[:160], "reason": reason})
     return applied
 
