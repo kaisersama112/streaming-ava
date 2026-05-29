@@ -16,17 +16,16 @@ from agents import RawResponsesStreamEvent, RunItemStreamEvent, Runner
 from openai.types.responses import ResponseTextDeltaEvent
 
 from ava.pipeline.generation.types import TurnPlan
-from ava.core.tracing import append_trace_log, sanitize_value
-from ava.context_engine.types import ContextSnapshot
+from ava.multi_turn_context_builder.types import ConversationContext
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing.schema import RouteDecision
+from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from configs import settings
 
 from .agents import build_manager_agent, current_user_input
 from .context import AvaAgentContext
 from .model_factory import AgentsModelConfig, build_agents_sdk_run_config
-from .sessions import build_agent_session, seed_agent_session_from_snapshot
+from .sessions import build_agent_session, seed_agent_session_from_context
 
 
 @dataclass
@@ -66,7 +65,7 @@ def _max_turns() -> int:
 def _build_runtime_context(
     *,
     state: ConversationState,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     decision: RouteDecision,
     plan: TurnPlan,
     turn_input: TurnInput,
@@ -78,7 +77,7 @@ def _build_runtime_context(
         session_id=state.session_id,
         turn_id=current_turn_id,
         state=state,
-        snapshot=snapshot,
+        context=context,
         decision=decision,
         strategy=plan.strategy,
         turn_input=turn_input,
@@ -124,7 +123,7 @@ def run_agents_sdk_sync(
     turn_input: TurnInput,
     decision: RouteDecision,
     plan: TurnPlan,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     api_base: str,
     api_key: str,
     model: str,
@@ -134,7 +133,7 @@ def run_agents_sdk_sync(
     """Run the selected plan to completion through the Agents SDK."""
     runtime = _build_runtime_context(
         state=state,
-        snapshot=snapshot,
+        context=context,
         decision=decision,
         plan=plan,
         turn_input=turn_input,
@@ -146,30 +145,17 @@ def run_agents_sdk_sync(
         model=model,
         timeout=timeout,
     )
-    manager = build_manager_agent(plan, snapshot, model_config=model_config)
+    manager = build_manager_agent(plan, context, model_config=model_config)
     session = build_agent_session(state.session_id)
     run_config = build_agents_sdk_run_config(
         workflow_name=_workflow_name(plan),
-        trace_id=f"{state.session_id}:{current_turn_id or 'cli'}",
     )
     payload = current_user_input(plan, turn_input)
-
-    append_trace_log(
-        "agents_sdk.run.start",
-        {
-            "session_id": state.session_id,
-            "turn_id": current_turn_id,
-            "strategy_id": plan.strategy.strategy_id,
-            "backend": "sync",
-        },
-        turn_id=current_turn_id,
-        scope="agents_sdk",
-    )
 
     async def _run() -> Any:
         # Seed the SDK session from the same visible context used by the normal
         # responder path so both backends see comparable recent history.
-        await seed_agent_session_from_snapshot(session, snapshot)
+        await seed_agent_session_from_context(session, context)
         try:
             return await asyncio.wait_for(
                 Runner.run(
@@ -193,19 +179,6 @@ def run_agents_sdk_sync(
         raise RuntimeError("OpenAI Agents SDK returned empty final output.")
 
     applied_patches = _apply_pending_state_patches(runtime)
-    append_trace_log(
-        "agents_sdk.run.completed",
-        {
-            "session_id": state.session_id,
-            "turn_id": current_turn_id,
-            "strategy_id": plan.strategy.strategy_id,
-            "assistant_text": assistant_text,
-            "applied_patches": sanitize_value(applied_patches),
-            "debug_events": sanitize_value(runtime.debug_events),
-        },
-        turn_id=current_turn_id,
-        scope="agents_sdk",
-    )
     return AgentsExecutionResult(
         assistant_text=assistant_text,
         debug_events=runtime.debug_events,
@@ -219,7 +192,7 @@ def run_agents_sdk_stream(
     turn_input: TurnInput,
     decision: RouteDecision,
     plan: TurnPlan,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     api_base: str,
     api_key: str,
     model: str,
@@ -231,7 +204,7 @@ def run_agents_sdk_stream(
     """Run the selected plan through the Agents SDK and stream text deltas."""
     runtime = _build_runtime_context(
         state=state,
-        snapshot=snapshot,
+        context=context,
         decision=decision,
         plan=plan,
         turn_input=turn_input,
@@ -244,28 +217,16 @@ def run_agents_sdk_stream(
         model=model,
         timeout=timeout,
     )
-    manager = build_manager_agent(plan, snapshot, model_config=model_config)
+    manager = build_manager_agent(plan, context, model_config=model_config)
     session = build_agent_session(state.session_id)
     run_config = build_agents_sdk_run_config(
         workflow_name=_workflow_name(plan),
-        trace_id=f"{state.session_id}:{current_turn_id or 'stream'}",
     )
     payload = current_user_input(plan, turn_input)
 
-    append_trace_log(
-        "agents_sdk.stream.start",
-        {
-            "session_id": state.session_id,
-            "turn_id": current_turn_id,
-            "strategy_id": plan.strategy.strategy_id,
-        },
-        turn_id=current_turn_id,
-        scope="agents_sdk",
-    )
-
     async def _run() -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
         text_parts: list[str] = []
-        await seed_agent_session_from_snapshot(session, snapshot)
+        await seed_agent_session_from_context(session, context)
         stream = Runner.run_streamed(
             manager,
             payload,
@@ -304,19 +265,6 @@ def run_agents_sdk_stream(
             await _close_model_client(manager.model)
 
     assistant_text, debug_events, applied_patches = asyncio.run(asyncio.wait_for(_run(), timeout=_timeout_seconds(timeout)))
-    append_trace_log(
-        "agents_sdk.stream.completed",
-        {
-            "session_id": state.session_id,
-            "turn_id": current_turn_id,
-            "strategy_id": plan.strategy.strategy_id,
-            "assistant_text": assistant_text,
-            "applied_patches": sanitize_value(applied_patches),
-            "debug_events": sanitize_value(debug_events),
-        },
-        turn_id=current_turn_id,
-        scope="agents_sdk",
-    )
     return AgentsExecutionResult(
         assistant_text=assistant_text,
         debug_events=debug_events,

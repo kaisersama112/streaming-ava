@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ava.context_engine.types import ContextSnapshot
-from ava.domain.routing.schema import RouteDecision
+from ava.capabilities.prompt import BranchPromptRuntime, PromptCenter
+from ava.multi_turn_context_builder.types import ConversationContext
+from ava.pipeline.generation.education_resolver import EducationPlanResolver
+from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.strategy import (
     BranchStrategy,
     EducationTurnFrame,
@@ -15,11 +17,10 @@ from ava.domain.conversation.strategy import (
     ScenarioPolicy,
     SelectionTraceStep,
 )
-from ava.capabilities.prompt import ComposedPromptRuntime, PromptCenter, SimpleBranchPromptRuntime
 
 
-def _plan(snapshot: ContextSnapshot) -> dict[str, Any]:
-    return dict(getattr(snapshot, "router_plan", {}) or {})
+def _plan(router_plan: dict[str, Any] | None) -> dict[str, Any]:
+    return dict(router_plan or {})
 
 
 def _string_list(value: Any) -> tuple[str, ...]:
@@ -40,10 +41,12 @@ def _pick_mode(branch: str, plan: dict[str, Any]) -> str:
 def _build_mode_strategy_from_plan(
     prompt_center: PromptCenter,
     decision: RouteDecision,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
+    *,
+    router_plan: dict[str, Any],
 ) -> BranchStrategy:
-    plan = _plan(snapshot)
-    runtime = SimpleBranchPromptRuntime(prompt_center)
+    plan = _plan(router_plan)
+    runtime = BranchPromptRuntime(prompt_center)
     plugin = runtime.load_plugin(decision.turn_scene)
     mode = _pick_mode(decision.turn_scene, plan)
     try:
@@ -131,69 +134,55 @@ def _build_mode_strategy_from_plan(
 def _build_education_strategy_from_plan(
     prompt_center: PromptCenter,
     decision: RouteDecision,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
+    *,
+    router_plan: dict[str, Any],
 ) -> BranchStrategy:
-    plan = _plan(snapshot)
-    runtime = ComposedPromptRuntime(prompt_center)
-    plugin = runtime.load_plugin()
-
-    module = str(plan.get("module") or "solve").strip() or "solve"
-    try:
-        module_asset = runtime.load_module(module)
-    except FileNotFoundError:
-        module = "solve"
-        module_asset = runtime.load_module(module)
-
-    subject = str(plan.get("subject") or "general").strip() or "general"
-    try:
-        subject_asset = runtime.load_subject(module, subject)
-    except FileNotFoundError:
-        subject = "general"
-        subject_asset = runtime.load_subject(module, subject)
-
-    style = str(plan.get("style") or "step_by_step").strip() or "step_by_step"
-    try:
-        style_asset = runtime.load_style(module, style)
-    except FileNotFoundError:
-        style = "step_by_step"
-        style_asset = runtime.load_style(module, style)
-
-    output_defaults = dict(module_asset.output_defaults or {})
-    style_output = dict(style_asset.output_adjustments or {})
-    subject_ui_hints = dict(subject_asset.ui_hints or {})
-    delivery_mode = str(output_defaults.get("delivery_mode", "speech_ui_dual")).strip() or "speech_ui_dual"
-    module_ui_mode = str(output_defaults.get("ui_mode", "")).strip()
-    if module_ui_mode == "none":
-        ui_mode = "none"
-    else:
-        ui_mode = str(subject_ui_hints.get("ui_mode_default", "")).strip() or module_ui_mode or "learning_card"
-
-    answer_boundary = str(plan.get("answer_boundary") or "direct_explain").strip() or "direct_explain"
-    policy_id = str(plan.get("policy_id") or "").strip()
-    prompt_overrides = _string_list(plan.get("prompt_overrides"))
-    learning_objects = _string_list(plan.get("learning_objects")) or ("problem",)
+    resolver = EducationPlanResolver()
+    resolved_plan = resolver.resolve(
+        prompt_center=prompt_center,
+        decision=decision,
+        context=context,
+        router_plan=router_plan,
+    )
+    education_plan = resolved_plan.plan
+    assets = resolved_plan.assets
+    plugin = assets.branch
+    module_asset = assets.module
+    subject_asset = assets.subject
+    pedagogy_asset = assets.pedagogy
+    module = education_plan.module
+    subject = education_plan.subject
+    pedagogy = education_plan.pedagogy
+    policy_id = education_plan.policy_id
+    prompt_overrides = education_plan.prompt_overrides
+    learning_objects = education_plan.learning_objects or ("problem",)
     turn_frame = EducationTurnFrame(
-        primary_scenario=str(plan.get("primary_scenario") or "practice").strip() or "practice",
+        primary_scenario=education_plan.primary_scenario,
         learning_objects=learning_objects,
-        object_scope=str(plan.get("object_scope") or "whole_problem").strip() or "whole_problem",
-        object_continuity=str(plan.get("object_continuity") or "uncertain").strip() or "uncertain",
-        primary_action=str(plan.get("primary_action") or "solve_current_problem").strip() or "solve_current_problem",
-        secondary_actions=_string_list(plan.get("secondary_actions")),
+        object_scope=education_plan.object_scope,
+        object_continuity=education_plan.object_continuity,
+        primary_action=education_plan.primary_action,
+        secondary_actions=education_plan.secondary_actions,
         evidence_sources=("current_turn", "recent_history"),
         scenario_policy=ScenarioPolicy(
             preserve_current_scenario=(decision.session_scene == "education"),
             allow_scene_switch=False,
-            answer_boundary=answer_boundary,
+            answer_boundary=education_plan.answer_boundary,
         ),
         domain_hint=subject,
-        primary_modality=("multimodal" if snapshot.artifacts or snapshot.reference_artifacts else "text"),
-        requires_context=bool(snapshot.history_messages or snapshot.turn_records),
-        requires_artifact=bool(snapshot.artifacts or snapshot.reference_artifacts),
-        style_change_only=False,
-        question_kind=str(plan.get("question_kind") or "").strip() or None,
-        confidence=float(plan.get("confidence") or decision.confidence or 0.85),
+        primary_modality=("multimodal" if context.current.artifacts else "text"),
+        requires_context=bool(context.conversation),
+        requires_artifact=bool(context.current.artifacts),
+        pedagogy_change_only=False,
+        question_kind=education_plan.question_kind,
+        confidence=float(education_plan.confidence or decision.confidence or 0.85),
         source="router_model",
-        resolver_trace={"plan_reason": str(plan.get("plan_reason") or "").strip()},
+        resolver_trace={
+            "plan_reason": education_plan.plan_reason,
+            "learner_state": education_plan.learner_state,
+            "artifact_role": education_plan.artifact_role or "",
+        },
     )
 
     final_analysis = {
@@ -204,18 +193,20 @@ def _build_education_strategy_from_plan(
         "object_scope": turn_frame.object_scope,
         "object_continuity": turn_frame.object_continuity,
         "answer_boundary": turn_frame.scenario_policy.answer_boundary,
+        "learner_state": education_plan.learner_state,
         "module": module,
         "scene": module,
         "subject_axis": subject,
-        "style": style,
-        "selected_strategy_id": f"{decision.turn_scene}.{module}.{subject}.{style}",
+        "pedagogy": pedagogy,
+        "selected_strategy_id": f"{decision.turn_scene}.{module}.{subject}.{pedagogy}",
         "selected_policy_id": policy_id,
         "selected_strategy_source": "router_model_plan",
         "education_turn_frame": turn_frame.to_metadata(),
         "task_frame": turn_frame.to_metadata(),
         "scenario_prompt_overrides": list(prompt_overrides),
         "prompt_context_policy": {},
-        "router_plan": plan,
+        "router_plan": _plan(router_plan),
+        "education_turn_plan": education_plan.to_metadata(),
     }
 
     instructions = tuple(
@@ -225,30 +216,30 @@ def _build_education_strategy_from_plan(
                 *module_asset.global_rules,
                 *module_asset.instructions,
                 *subject_asset.instructions,
-                *style_asset.instructions,
+                *pedagogy_asset.instructions,
                 *prompt_overrides,
             ]
         )
     )
     subject_focus = tuple(subject_asset.focus)
-    strategy_id = f"{decision.turn_scene}.{module}.{subject}.{style}"
+    strategy_id = f"{decision.turn_scene}.{module}.{subject}.{pedagogy}"
     selection = PromptSelection(
         branch=decision.turn_scene,
         strategy_id=strategy_id,
-        delivery_mode=delivery_mode,
-        ui_mode=ui_mode,
+        delivery_mode=resolved_plan.delivery_mode,
+        ui_mode=resolved_plan.ui_mode,
         policy_id=policy_id,
         module=module,
         scene=module,
         subject=subject,
-        style=style,
+        pedagogy=pedagogy,
     )
     selection_trace = PromptSelectionTrace(
         branch=decision.turn_scene,
         steps=(
             SelectionTraceStep(stage="module", selected=module, rule_path="router_model_plan", confidence=decision.confidence),
             SelectionTraceStep(stage="subject", selected=subject, rule_path="router_model_plan", confidence=decision.confidence),
-            SelectionTraceStep(stage="style", selected=style, rule_path="router_model_plan", confidence=decision.confidence),
+            SelectionTraceStep(stage="pedagogy", selected=pedagogy, rule_path="router_model_plan", confidence=decision.confidence),
         ),
     )
     resolved_prompt_spec = ResolvedPromptSpec(
@@ -258,46 +249,42 @@ def _build_education_strategy_from_plan(
             "core/base/persona.md",
             "core/base/multimodal_rules.md",
         ),
-        contract_file=f"core/contracts/{delivery_mode}.md",
+        contract_file=f"core/contracts/{resolved_plan.delivery_mode}.md",
         renderer_file="core/renderer/education_renderer.md",
         variables={
             "plugin": plugin,
             "module": module_asset,
             "subject": subject_asset,
-            "style": style_asset,
+            "pedagogy": pedagogy_asset,
+            "education_plan": education_plan.to_metadata(),
         },
     )
     return BranchStrategy(
         branch=decision.turn_scene,
         strategy_id=strategy_id,
-        name=f"{module_asset.name} / {subject_asset.name} / {style_asset.name}",
-        description=f"{decision.turn_scene} 单次模型规划策略: module={module}, subject={subject}, style={style}",
+        name=f"{module_asset.name} / {subject_asset.name} / {pedagogy_asset.name}",
+        description=f"{decision.turn_scene} 单次模型规划策略: module={module}, subject={subject}, pedagogy={pedagogy}",
         render_template="core/renderer/education_renderer.md",
-        delivery_mode=delivery_mode,
-        ui_mode=ui_mode,
+        delivery_mode=resolved_plan.delivery_mode,
+        ui_mode=resolved_plan.ui_mode,
         policy_id=policy_id,
         module=module,
         scene=module,
         subject=subject,
-        style=style,
+        pedagogy=pedagogy,
         response_shape=" / ".join(module_asset.response_structure),
         teaching_objective=module_asset.goal,
         student_snapshot="由 router 单次模型规划直接确定当前轮教学动作与表达方式。",
         prompt_guidance=instructions,
         teacher_moves=subject_focus,
-        interaction_rules=tuple(dict.fromkeys([*module_asset.interaction_policy, *style_asset.constraints])),
+        interaction_rules=tuple(dict.fromkeys([*module_asset.interaction_policy, *pedagogy_asset.constraints])),
         common_misconceptions=subject_asset.common_mistakes,
         behavior_do=module_asset.global_rules,
         success_criteria=subject_focus,
         next_turn_goal="围绕当前轮规划直接回答，不再追加第二轮策略判定。",
-        response_contract={
-            "module": module,
-            "style": style,
-            **output_defaults,
-            **style_output,
-        },
-        speech_policy={"tone": style_asset.tone, "plugin": plugin.asset_id, "policy_id": policy_id},
-        ui_policy={"ui_mode_default": ui_mode},
+        response_contract=dict(resolved_plan.response_contract),
+        speech_policy={"tone": pedagogy_asset.tone, "plugin": plugin.asset_id, **dict(resolved_plan.speech_policy)},
+        ui_policy={"ui_mode_default": resolved_plan.ui_mode},
         analysis=final_analysis,
         source="router_model_plan",
         selection=selection,
@@ -309,8 +296,20 @@ def _build_education_strategy_from_plan(
 def build_strategy_from_model_plan(
     prompt_center: PromptCenter,
     decision: RouteDecision,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
+    *,
+    router_plan: dict[str, Any] | None = None,
 ) -> BranchStrategy:
     if decision.turn_scene == "education":
-        return _build_education_strategy_from_plan(prompt_center, decision, snapshot)
-    return _build_mode_strategy_from_plan(prompt_center, decision, snapshot)
+        return _build_education_strategy_from_plan(
+            prompt_center,
+            decision,
+            context,
+            router_plan=dict(router_plan or {}),
+        )
+    return _build_mode_strategy_from_plan(
+        prompt_center,
+        decision,
+        context,
+        router_plan=dict(router_plan or {}),
+    )

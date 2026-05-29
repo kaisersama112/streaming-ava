@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ava.context_engine.types import ContextSnapshot
+from ava.multi_turn_context_builder.types import ConversationContext
 from ava.domain.conversation.strategy import BranchStrategy
 
 from .prompt_loader import PromptCenter
@@ -18,31 +18,25 @@ def build_router_system_prompt(prompt_center: PromptCenter) -> str:
 
 
 def _router_context_text(
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
 ) -> str:
-    return snapshot.user_text or "无"
+    return context.current.user_text or "无"
 
 
 def build_router_user_message(
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     *,
     text_only: bool = False,
 ) -> dict[str, object]:
     user_content: list[dict[str, object]] = [
-        {"type": "text", "text": _router_context_text(snapshot)}
+        {"type": "text", "text": _router_context_text(context)}
     ]
 
     if not text_only:
-        for artifact in snapshot.artifacts:
+        for artifact in context.artifacts.current:
             block = artifact.to_message_block()
             if block:
                 user_content.append(block)
-
-        if not snapshot.artifacts and snapshot.reference_artifacts:
-            for artifact in snapshot.reference_artifacts:
-                block = artifact.to_message_block()
-                if block:
-                    user_content.append(block)
 
     return {"role": "user", "content": user_content}
 
@@ -124,7 +118,7 @@ def _build_prompt_shell(
 
 def _build_system_prompt_from_spec(
     prompt_center: PromptCenter,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     strategy: BranchStrategy,
 ) -> str:
     spec = strategy.resolved_prompt_spec
@@ -142,8 +136,8 @@ def _build_system_prompt_from_spec(
         profile_lines.append(f"- module = {strategy.module}")
     if strategy.subject:
         profile_lines.append(f"- subject = {strategy.subject}")
-    if strategy.style:
-        profile_lines.append(f"- style = {strategy.style}")
+    if strategy.pedagogy:
+        profile_lines.append(f"- pedagogy = {strategy.pedagogy}")
     if strategy.delivery_mode:
         profile_lines.append(f"- delivery_mode = {strategy.delivery_mode}")
     if strategy.ui_mode:
@@ -152,19 +146,19 @@ def _build_system_prompt_from_spec(
         profile_lines.append(f"- response_shape = {strategy.response_shape}")
     if strategy.teaching_objective:
         profile_lines.append(f"- objective = {strategy.teaching_objective}")
-    if snapshot.user_text:
-        profile_lines.append(f"- current_user_text = {snapshot.user_text}")
+    if context.current.user_text:
+        profile_lines.append(f"- current_user_text = {context.current.user_text}")
     profile = "\n".join(profile_lines).strip()
     return "\n\n".join(block for block in (shell, profile) if block).strip()
 
 
 def build_responder_system_prompt(
     prompt_center: PromptCenter,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     strategy: BranchStrategy,
 ) -> str:
     if strategy.resolved_prompt_spec is not None:
-        return _build_system_prompt_from_spec(prompt_center, snapshot, strategy)
+        return _build_system_prompt_from_spec(prompt_center, context, strategy)
 
     raise ValueError(f"Branch strategy {strategy.strategy_id} is missing resolved_prompt_spec")
 

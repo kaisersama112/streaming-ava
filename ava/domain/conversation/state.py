@@ -113,7 +113,9 @@ class ConversationState:
                 "primary_modality": frame.get("primary_modality", ""),
                 "requires_context": bool(frame.get("requires_context", False)),
                 "requires_artifact": bool(frame.get("requires_artifact", False)),
-                "style_change_only": bool(frame.get("style_change_only", False)),
+                "pedagogy_change_only": bool(
+                    frame.get("pedagogy_change_only", frame.get("style_change_only", False))
+                ),
                 "question_kind": frame.get("question_kind", ""),
                 "confidence": frame.get("confidence", 0.0),
                 "source": frame.get("source", ""),
@@ -139,7 +141,12 @@ class ConversationState:
                 "artifact_continuity": continuity.get("artifact_continuity", ""),
                 "carry_reference_artifacts": bool(continuity.get("carry_reference_artifacts", False)),
                 "allow_fast_path": bool(continuity.get("allow_fast_path", False)),
-                "user_requests_style_change_only": bool(continuity.get("user_requests_style_change_only", False)),
+                "user_requests_pedagogy_change_only": bool(
+                    continuity.get(
+                        "user_requests_pedagogy_change_only",
+                        continuity.get("user_requests_style_change_only", False),
+                    )
+                ),
                 "explicit_topic_switch": bool(continuity.get("explicit_topic_switch", False)),
             }
         compact = {
@@ -153,7 +160,7 @@ class ConversationState:
             "module": str(strategy.get("module") or "").strip(),
             "scene": str(strategy.get("scene") or "").strip(),
             "subject": str(strategy.get("subject") or "").strip(),
-            "style": str(strategy.get("style") or "").strip(),
+            "pedagogy": str(strategy.get("pedagogy") or strategy.get("style") or "").strip(),
             "source": str(strategy.get("source") or "").strip(),
             "analysis": compact_analysis,
         }
@@ -171,7 +178,7 @@ class ConversationState:
             "policy_id",
             "module",
             "subject",
-            "style",
+            "pedagogy",
             "render_template",
             "delivery_mode",
             "ui_mode",

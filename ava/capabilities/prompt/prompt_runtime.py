@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 import re
 from typing import Any
 
@@ -57,7 +56,7 @@ class SubjectSpec:
 
 
 @dataclass(frozen=True)
-class StyleSpec:
+class PedagogySpec:
     asset_id: str
     version: int
     name: str
@@ -463,7 +462,7 @@ def _parse_subject(asset: MarkdownAsset) -> SubjectSpec:
     )
 
 
-def _parse_style(asset: MarkdownAsset) -> StyleSpec:
+def _parse_pedagogy(asset: MarkdownAsset) -> PedagogySpec:
     if asset.meta.get("type") != "style":
         raise ValueError(f"{asset.path}: expected type=style")
     asset_id = str(_require_meta(asset, "id"))
@@ -474,7 +473,7 @@ def _parse_style(asset: MarkdownAsset) -> StyleSpec:
         "output_adjustments": _parse_mapping_block(_require_section(asset, "Output Adjustments")),
         "instructions": _parse_list_block(_require_section(asset, "Instructions")),
     }
-    return StyleSpec(
+    return PedagogySpec(
         asset_id=asset_id,
         version=int(asset.meta.get("version", 1)),
         name=_require_section(asset, "Name"),
@@ -525,79 +524,3 @@ def _parse_mode(asset: MarkdownAsset) -> ModeSpec:
         ui_policy=dict(raw["ui_policy"]),
         raw=raw,
     )
-
-
-class SimpleBranchPromptRuntime:
-    def __init__(self, prompt_center: PromptCenter):
-        self.prompt_center = prompt_center
-        self._plugin_cache: dict[str, PluginSpec] = {}
-        self._mode_cache: dict[tuple[str, str], ModeSpec] = {}
-
-    def load_plugin(self, branch: str) -> PluginSpec:
-        if branch in self._plugin_cache:
-            return self._plugin_cache[branch]
-        plugin = _parse_plugin(self.prompt_center.load_markdown_asset(f"plugins/{branch}/plugin.md"))
-        self._plugin_cache[branch] = plugin
-        return plugin
-
-    def load_mode(self, branch: str, mode: str) -> ModeSpec:
-        cache_key = (branch, mode)
-        if cache_key in self._mode_cache:
-            return self._mode_cache[cache_key]
-        mode_spec = _parse_mode(self.prompt_center.load_markdown_asset(f"plugins/{branch}/modes/{mode}.md"))
-        self._mode_cache[cache_key] = mode_spec
-        return mode_spec
-
-
-class ComposedPromptRuntime:
-    def __init__(self, prompt_center: PromptCenter):
-        self.prompt_center = prompt_center
-        self._plugin_cache: dict[str, PluginSpec] = {}
-        self._module_cache: dict[str, ModuleSpec] = {}
-        self._subject_cache: dict[tuple[str, str], SubjectSpec] = {}
-        self._style_cache: dict[tuple[str, str], StyleSpec] = {}
-
-    def _module_root(self) -> Path:
-        return Path(self.prompt_center.config.prompt_dir) / "plugins" / "education" / "modules"
-
-    def load_plugin(self) -> PluginSpec:
-        if "education" in self._plugin_cache:
-            return self._plugin_cache["education"]
-        plugin = _parse_plugin(self.prompt_center.load_markdown_asset("plugins/education/plugin.md"))
-        self._plugin_cache["education"] = plugin
-        return plugin
-
-    def load_module(self, module: str) -> ModuleSpec:
-        if module in self._module_cache:
-            return self._module_cache[module]
-        module_spec = _parse_module(
-            self.prompt_center.load_markdown_asset(f"plugins/education/modules/{module}/module.md")
-        )
-        self._module_cache[module] = module_spec
-        return module_spec
-
-    def load_subject(self, module: str, subject: str) -> SubjectSpec:
-        cache_key = (module, subject)
-        if cache_key in self._subject_cache:
-            return self._subject_cache[cache_key]
-        relative_path = f"plugins/education/modules/{module}/subjects/{subject}.md"
-        try:
-            asset = self.prompt_center.load_markdown_asset(relative_path)
-        except FileNotFoundError:
-            asset = self.prompt_center.load_markdown_asset(f"plugins/education/modules/solve/subjects/{subject}.md")
-        subject_spec = _parse_subject(asset)
-        self._subject_cache[cache_key] = subject_spec
-        return subject_spec
-
-    def load_style(self, module: str, style: str) -> StyleSpec:
-        cache_key = (module, style)
-        if cache_key in self._style_cache:
-            return self._style_cache[cache_key]
-        relative_path = f"plugins/education/modules/{module}/styles/{style}.md"
-        try:
-            asset = self.prompt_center.load_markdown_asset(relative_path)
-        except FileNotFoundError:
-            asset = self.prompt_center.load_markdown_asset(f"plugins/education/modules/solve/styles/{style}.md")
-        style_spec = _parse_style(asset)
-        self._style_cache[cache_key] = style_spec
-        return style_spec

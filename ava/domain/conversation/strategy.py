@@ -29,7 +29,7 @@ class PromptSelection:
     module: str = ""
     scene: str = ""
     subject: str = ""
-    style: str = ""
+    pedagogy: str = ""
 
     def to_metadata(self) -> dict[str, Any]:
         return {
@@ -42,7 +42,7 @@ class PromptSelection:
             "module": self.module,
             "scene": self.scene,
             "subject": self.subject,
-            "style": self.style,
+            "pedagogy": self.pedagogy,
         }
 
 
@@ -132,7 +132,7 @@ class EducationTurnFrame:
     primary_modality: str
     requires_context: bool
     requires_artifact: bool
-    style_change_only: bool
+    pedagogy_change_only: bool
     question_kind: str | None = None
     confidence: float = 0.0
     source: str = "local"
@@ -152,7 +152,7 @@ class EducationTurnFrame:
             "primary_modality": self.primary_modality,
             "requires_context": self.requires_context,
             "requires_artifact": self.requires_artifact,
-            "style_change_only": self.style_change_only,
+            "pedagogy_change_only": self.pedagogy_change_only,
             "question_kind": self.question_kind or "",
             "confidence": round(float(self.confidence), 4),
             "source": self.source,
@@ -174,7 +174,7 @@ class BranchStrategy:
     module: str = ""
     scene: str = ""
     subject: str = ""
-    style: str = ""
+    pedagogy: str = ""
     response_shape: str = ""
     teaching_objective: str = ""
     student_snapshot: str = ""
@@ -210,7 +210,7 @@ class BranchStrategy:
             "module": self.module,
             "scene": self.scene,
             "subject": self.subject,
-            "style": self.style,
+            "pedagogy": self.pedagogy,
             "response_shape": self.response_shape,
             "teaching_objective": self.teaching_objective,
             "student_snapshot": self.student_snapshot,

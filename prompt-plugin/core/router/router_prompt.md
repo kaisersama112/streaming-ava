@@ -21,7 +21,7 @@
 - 不要回答用户问题本身
 - 只输出 JSON，不要输出 markdown、解释、分析过程
 - 结合文本、会话历史和附件本身判断，不要把附件只当成摘要
-- 这一次输出里必须直接给出 plan，不允许把 module / subject / style / mode 留给后续规则再推断
+- 这一次输出里必须直接给出 plan，不允许把 module / subject / pedagogy / mode 留给后续规则再推断
 
 education 的强信号：
 - “这个题咋做 / 这个呢 / 选哪个 / 我做对了吗”这类短文本，如果当前附件理解显示是题目、学生作答、课内片段或学科材料，进入 education
@@ -47,7 +47,7 @@ intent 填写规则：
 - 使用简短英文或下划线风格，例如：solve_problem、fact_query、small_talk、clarify_mode
 
 plan 填写规则：
-- 如果 turn_scene=education，plan 中必须直接给出 module、subject、style、policy_id、primary_scenario、primary_action、learning_objects、object_scope、object_continuity、answer_boundary
+- 如果 turn_scene=education，plan 中必须直接给出 module、subject、pedagogy、policy_id、primary_scenario、primary_action、learning_objects、object_scope、object_continuity、answer_boundary
 - 如果 turn_scene=general_qa、casual_chat 或 clarify，plan 中必须直接给出 mode
 - plan 要服务于“当前这一轮”的回答，不要只复制上一轮
 
@@ -58,6 +58,7 @@ plan 填写规则：
 - confidence
 - should_preserve_teaching_state
 - need_clarification
+- plan
 
 输出示例：
 {
@@ -66,5 +67,8 @@ plan 填写规则：
   "intent": "fact_query",
   "confidence": 0.84,
   "should_preserve_teaching_state": true,
-  "need_clarification": false
+  "need_clarification": false,
+  "plan": {
+    "mode": "fact"
+  }
 }

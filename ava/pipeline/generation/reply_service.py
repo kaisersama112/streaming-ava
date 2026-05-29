@@ -19,13 +19,12 @@ except Exception:
     run_agents_sdk_sync = None  # type: ignore[assignment]
     _AGENTS_SDK_AVAILABLE = False
 from ava.pipeline.generation.types import TurnPlan
-from ava.core.tracing import append_trace_log
-from ava.context_engine.types import ContextSnapshot
-from ava.capabilities.llm.service import LLMService
-from ava.capabilities.llm.streaming.events import InferenceCompleted, OutputTextDelta
-from ava.capabilities.llm.types import InferenceTask
+from ava.multi_turn_context_builder.types import ConversationContext
+from ava.llm_model_executor.service import LLMService
+from ava.llm_model_executor.types import InferenceCompleted, OutputTextDelta
+from ava.llm_model_executor.types import InferenceTask
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing.schema import RouteDecision
+from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.capabilities.prompt import build_prompt_center
 from configs import settings
@@ -69,8 +68,8 @@ def _agents_sdk_enabled_for_plan(plan: TurnPlan, *, api_base: str, api_key: str)
     return True
 
 
-def _has_multimodal_execution_context(snapshot: ContextSnapshot) -> bool:
-    return bool(snapshot.artifacts or snapshot.reference_artifacts)
+def _has_multimodal_execution_context(context: ConversationContext) -> bool:
+    return context.artifacts.has_any
 
 
 def _messages_have_direct_media(messages: list[dict[str, object]]) -> bool:
@@ -97,34 +96,13 @@ def _select_reply_model(default_model: str, plan: TurnPlan) -> str:
     return str(settings.openai_config.model or default_model).strip() or default_model
 
 
-def _append_multimodal_bypass_trace(
-    *,
-    current_turn_id: int | None,
-    strategy_id: str,
-    snapshot: ContextSnapshot,
-    scope: str,
-) -> None:
-    append_trace_log(
-        scope,
-        {
-            "turn_id": current_turn_id,
-            "strategy_id": strategy_id,
-            "reason": "multimodal_context",
-            "artifacts_count": len(snapshot.artifacts),
-            "reference_artifacts_count": len(snapshot.reference_artifacts),
-        },
-        turn_id=current_turn_id,
-        scope="agents_sdk",
-    )
-
-
 def generate_reply_sync(
     *,
     state: ConversationState,
     turn_input: TurnInput,
     decision: RouteDecision,
     plan: TurnPlan,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     api_base: str,
     api_key: str,
     model: str,
@@ -133,14 +111,7 @@ def generate_reply_sync(
 ) -> ReplyExecutionResult:
     """Generate a full reply for non-streaming callers such as CLI paths."""
     use_agents_sdk = _agents_sdk_enabled_for_plan(plan, api_base=api_base, api_key=api_key)
-    if use_agents_sdk and _has_multimodal_execution_context(snapshot):
-        _append_multimodal_bypass_trace(
-            current_turn_id=current_turn_id,
-            strategy_id=plan.strategy.strategy_id,
-            snapshot=snapshot,
-            scope="agents_sdk.run.skipped",
-        )
-    if use_agents_sdk and not _has_multimodal_execution_context(snapshot):
+    if use_agents_sdk and not _has_multimodal_execution_context(context):
         try:
             # Agents SDK can propose bounded state patches through tools. Those
             # patches are applied only after a successful run.
@@ -149,7 +120,7 @@ def generate_reply_sync(
                 turn_input=turn_input,
                 decision=decision,
                 plan=plan,
-                snapshot=snapshot,
+                context=context,
                 api_base=api_base,
                 api_key=api_key,
                 model=model,
@@ -164,19 +135,10 @@ def generate_reply_sync(
                     "agents_sdk_patches": result.applied_patches,
                 },
             )
-        except Exception as exc:
+        except Exception:
             # Agents are optional. A failure here falls back to the direct LLM
             # path so the user turn can still complete.
-            append_trace_log(
-                "agents_sdk.run.fallback",
-                {
-                    "turn_id": current_turn_id,
-                    "strategy_id": plan.strategy.strategy_id,
-                    "error": str(exc),
-                },
-                turn_id=current_turn_id,
-                scope="agents_sdk",
-            )
+            pass
 
     reply_model = _select_reply_model(model, plan)
     llm_service = _build_llm_service()
@@ -186,7 +148,7 @@ def generate_reply_sync(
         turn_input=turn_input,
         decision=decision,
         plan=plan,
-        visible_context=snapshot,
+        context=context,
         metadata={
             "api_base": api_base,
             "api_key": api_key,
@@ -208,7 +170,7 @@ def stream_reply_with_callbacks(
     turn_input: TurnInput,
     decision: RouteDecision,
     plan: TurnPlan,
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     api_base: str,
     api_key: str,
     model: str,
@@ -221,14 +183,7 @@ def stream_reply_with_callbacks(
     use_agents_sdk = _agents_sdk_enabled_for_plan(plan, api_base=api_base, api_key=api_key) and bool(
         getattr(settings.runtime, "agents_sdk_realtime_enabled", False)
     )
-    if use_agents_sdk and _has_multimodal_execution_context(snapshot):
-        _append_multimodal_bypass_trace(
-            current_turn_id=current_turn_id,
-            strategy_id=plan.strategy.strategy_id,
-            snapshot=snapshot,
-            scope="agents_sdk.stream.skipped",
-        )
-    if use_agents_sdk and not _has_multimodal_execution_context(snapshot):
+    if use_agents_sdk and not _has_multimodal_execution_context(context):
         try:
             # In realtime mode this backend must still honor stop_event so
             # barge-in can cancel the turn promptly.
@@ -237,7 +192,7 @@ def stream_reply_with_callbacks(
                 turn_input=turn_input,
                 decision=decision,
                 plan=plan,
-                snapshot=snapshot,
+                context=context,
                 api_base=api_base,
                 api_key=api_key,
                 model=model,
@@ -254,19 +209,10 @@ def stream_reply_with_callbacks(
                     "agents_sdk_patches": result.applied_patches,
                 },
             )
-        except Exception as exc:
+        except Exception:
             # Preserve realtime responsiveness by falling back to token
             # streaming instead of surfacing the agent error to TTS.
-            append_trace_log(
-                "agents_sdk.stream.fallback",
-                {
-                    "turn_id": current_turn_id,
-                    "strategy_id": plan.strategy.strategy_id,
-                    "error": str(exc),
-                },
-                turn_id=current_turn_id,
-                scope="agents_sdk",
-            )
+            pass
 
     text_parts: list[str] = []
     llm_response_state: dict[str, Any] = {}
@@ -279,7 +225,7 @@ def stream_reply_with_callbacks(
         decision=decision,
         plan=plan,
         current_turn_id=current_turn_id,
-        visible_context=snapshot,
+        context=context,
         metadata={
             "api_base": api_base,
             "api_key": api_key,

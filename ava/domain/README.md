@@ -7,7 +7,7 @@ It describes what the system is, not how a turn is executed.
 ## Current packages
 
 - `context/`
-  - `TurnInput`, `MediaArtifact`, `ContextSnapshot`
+  - `TurnInput`, `MediaArtifact`, `ConversationContext`
 - `routing/`
   - `RouteDecision`, routing schema, confidence policy
 - `session/`

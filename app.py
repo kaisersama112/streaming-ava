@@ -15,10 +15,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from ava.context_engine.compiler import ContextCompiler
-from ava.context_engine.input import AttachmentPayload, build_turn_input
+from ava.multi_turn_context_builder.compiler import ContextCompiler
+from ava.context_engine.input import AttachmentPayload
 from ava.core.session import load_state
-from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
 from ava.interfaces.websocket import PlayerConfig, get_bridge
 from ava.capabilities.asr.asr_streaming_client import StreamingASRClient
 from ava.capabilities.asr.asr_streaming_sdk import ASRError
@@ -185,15 +184,7 @@ async def _decode_attachments(items: list[dict[str, object]] | None) -> list[Att
             continue
         try:
             attachment = await asyncio.to_thread(_fetch_attachment_from_url, item)
-        except Exception as exc:
-            append_trace_log(
-                "ws.attachment_url_decode_failed",
-                {
-                    "uri": str(item.get("uri", "") or ""),
-                    "error": str(exc),
-                },
-                scope="websocket",
-            )
+        except Exception:
             continue
         if attachment is not None:
             attachments.append(attachment)
@@ -542,11 +533,6 @@ def create_app() -> FastAPI:
 
                 if mtype == "interrupt":
                     # 手动打断当前 assistant 响应 / TTS 播放
-                    append_trace_log(
-                        "ws.command.interrupt",
-                        {"reason": str(obj.get("reason", "manual"))},
-                        scope="ws",
-                    )
                     runtime.session.interrupt(reason=str(obj.get("reason", "manual")))
                     continue
 
@@ -565,15 +551,6 @@ def create_app() -> FastAPI:
 
                         runtime.asr.commit()
 
-                        append_trace_log(
-                            "ws.command.mic_stopped",
-                            {
-                                "tail_buffer_bytes": tail_len,
-                                "frame_bytes": frame_bytes,
-                                "committed": True,
-                            },
-                            scope="ws",
-                        )
                         await _safe_send_json(
                             ws,
                             {"type": "control", "action": "audio_input_committed"},
@@ -581,16 +558,6 @@ def create_app() -> FastAPI:
                         )
                     except ASRError as exc:
                         _LOG.exception("ASR commit on mic stop failed: %s", exc)
-                        append_trace_log(
-                            "ws.command.mic_stopped",
-                            {
-                                "tail_buffer_bytes": len(pcm_buffer),
-                                "frame_bytes": frame_bytes,
-                                "committed": False,
-                                "error": str(exc),
-                            },
-                            scope="ws",
-                        )
                         await _safe_send_json(
                             ws,
                             {"type": "error", "scope": "asr_commit", "message": str(exc)},
@@ -604,17 +571,6 @@ def create_app() -> FastAPI:
                     continue
 
                 if mtype == "playback_started":
-                    # 前端上报播放开始事件，写入 trace 便于排查时序问题
-                    append_trace_log(
-                        "realtime.playback.started",
-                        {
-                            "turn_id": obj.get("turn_id"),
-                            "timeline_ms": sanitize_value(obj.get("timeline_ms") or {}),
-                            "audio_context_time": obj.get("audio_context_time"),
-                        },
-                        turn_id=(int(obj.get("turn_id")) if str(obj.get("turn_id", "")).isdigit() else None),
-                        scope="realtime_frontend",
-                    )
                     continue
 
                 if mtype == "text":
@@ -623,11 +579,6 @@ def create_app() -> FastAPI:
                     attachments = await _decode_attachments(obj.get("attachments", []) or [])
                     if text or attachments:
                         turn_input = ContextCompiler().build_turn_input(text, attachments, source="realtime_web_text")
-                        append_trace_log(
-                            "ws.command.text",
-                            {"turn_input": sanitize_turn_input(turn_input)},
-                            scope="ws",
-                        )
                         runtime.session.submit_turn(turn_input, user_text=text or turn_input.multimodal_summary())
                     continue
 
@@ -635,11 +586,6 @@ def create_app() -> FastAPI:
                     # 仅暂存附件，不立即触发一轮对话
                     # 后续 ASR final 或 text 提交时可一并消费
                     runtime.staged_attachments = await _decode_attachments(obj.get("attachments", []) or [])
-                    append_trace_log(
-                        "ws.command.stage_attachments",
-                        {"attachments": sanitize_value(_attachment_payloads(runtime.staged_attachments))},
-                        scope="ws",
-                    )
                     await _safe_send_json(
                         ws,
                         {
@@ -653,11 +599,6 @@ def create_app() -> FastAPI:
 
                 if mtype == "clear_staged_attachments":
                     # 清空当前暂存附件
-                    append_trace_log(
-                        "ws.command.clear_staged_attachments",
-                        {"count": len(runtime.staged_attachments)},
-                        scope="ws",
-                    )
                     runtime.staged_attachments.clear()
                     await _safe_send_json(
                         ws,

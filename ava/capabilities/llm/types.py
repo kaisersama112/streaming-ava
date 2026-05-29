@@ -1,51 +1,25 @@
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+"""旧 LLM 类型入口，转发到 `ava.llm_model_executor.types`。"""
 
-from ava.domain.multimodal import TurnInput
+from ava.llm_model_executor.types import (
+    InferenceCompleted,
+    InferenceError,
+    InferenceEvent,
+    InferenceRequest,
+    InferenceResult,
+    InferenceTask,
+    LLMProvider,
+    ModelRequestContext,
+    OutputTextDelta,
+)
 
-
-class InferenceTask(str, Enum):
-    ROUTE = "route"
-    GENERATE = "generate"
-
-
-@dataclass(frozen=True)
-class LLMContext:
-    task: InferenceTask
-    session_id: str
-    current_input: TurnInput
-    history: list[dict[str, Any]]
-    memory: dict[str, Any] | None = None
-    multimodal: dict[str, Any] | None = None
-    strategy: dict[str, Any] | None = None
-    routing: dict[str, Any] | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class InferenceRequest:
-    task: InferenceTask
-    model: str
-    instructions: str
-    input_items: list[dict[str, Any]] = field(default_factory=list)
-    conversation: str | dict[str, Any] | None = None
-    previous_response_id: str | None = None
-    response_format: dict[str, Any] | None = None
-    tools: list[dict[str, Any]] = field(default_factory=list)
-    stream: bool = False
-    temperature: float | None = None
-    max_output_tokens: int | None = None
-    timeout: float | None = None
-    modalities: list[str] = field(default_factory=lambda: ["text"])
-    extra_body: dict[str, Any] = field(default_factory=dict)
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class InferenceResult:
-    text: str
-    raw: Any | None = None
-    usage: Any | None = None
-    finish_reason: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+__all__ = [
+    "InferenceCompleted",
+    "InferenceError",
+    "InferenceEvent",
+    "InferenceRequest",
+    "InferenceResult",
+    "InferenceTask",
+    "LLMProvider",
+    "ModelRequestContext",
+    "OutputTextDelta",
+]

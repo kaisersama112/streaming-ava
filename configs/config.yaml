@@ -9,10 +9,6 @@ runtime:
   state_file: "state/memory.json"
   default_session_id: "default"
   evaluation_log_file: "state/evaluation.jsonl"
-  trace_log_file: "state/trace.jsonl"
-  trace_log_enabled: true
-  trace_log_asr_partials: true
-  trace_max_text_chars: 12000
   history_window: 8
   max_context_messages: 16
   router_max_context_messages: 8
@@ -23,7 +19,6 @@ runtime:
   router_timeout: 30
   agents_sdk_enabled: true
   agents_sdk_realtime_enabled: true
-  agents_sdk_tracing_enabled: false
   agents_sdk_timeout: 45
   agents_sdk_max_turns: 6
   agents_sdk_model: ""

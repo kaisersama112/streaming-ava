@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 import threading
 from typing import Any
 
-from ava.context_engine.types import ContextSnapshot
+from ava.multi_turn_context_builder.types import ConversationContext
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing.schema import RouteDecision
+from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
 
@@ -25,7 +25,7 @@ class AvaAgentContext:
     session_id: str
     turn_id: int | None
     state: ConversationState
-    snapshot: ContextSnapshot
+    context: ConversationContext
     decision: RouteDecision
     strategy: BranchStrategy
     turn_input: TurnInput

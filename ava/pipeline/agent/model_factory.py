@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from openai import AsyncOpenAI
 from agents import ModelSettings, OpenAIChatCompletionsModel, RunConfig
 
-from ava.context_engine.types import ContextSnapshot
+from ava.multi_turn_context_builder.types import ConversationContext
 from configs import settings
 
 
@@ -37,8 +37,8 @@ def _resolve_model_config(
     )
 
 
-def _select_model_name(snapshot: ContextSnapshot, model_config: AgentsModelConfig) -> str:
-    has_multimodal_input = bool(snapshot.artifacts or snapshot.reference_artifacts)
+def _select_model_name(context: ConversationContext, model_config: AgentsModelConfig) -> str:
+    has_multimodal_input = context.artifacts.has_any
     if has_multimodal_input:
         return (
             str(getattr(settings.runtime, "agents_sdk_multimodal_model", "") or "").strip()
@@ -53,7 +53,7 @@ def _select_model_name(snapshot: ContextSnapshot, model_config: AgentsModelConfi
 
 
 def build_agents_sdk_model(
-    snapshot: ContextSnapshot,
+    context: ConversationContext,
     *,
     api_base: str | None = None,
     api_key: str | None = None,
@@ -74,7 +74,7 @@ def build_agents_sdk_model(
         timeout=model_config.timeout,
     )
     return OpenAIChatCompletionsModel(
-        model=_select_model_name(snapshot, model_config),
+        model=_select_model_name(context, model_config),
         openai_client=client,
     )
 
@@ -86,10 +86,8 @@ def build_agents_sdk_model_settings() -> ModelSettings:
     )
 
 
-def build_agents_sdk_run_config(*, workflow_name: str, trace_id: str | None = None) -> RunConfig:
-    tracing_enabled = bool(getattr(settings.runtime, "agents_sdk_tracing_enabled", False))
+def build_agents_sdk_run_config(*, workflow_name: str) -> RunConfig:
     return RunConfig(
         workflow_name=workflow_name,
-        trace_id=trace_id,
-        tracing_disabled=not tracing_enabled,
+        tracing_disabled=True,
     )

@@ -10,10 +10,15 @@ The plan is the stable contract between routing, prompt construction, memory
 projection, and realtime TTS submission.
 """
 
-from .dispatcher import build_turn_plan
+from ava.inference_runtime.turn_planner import build_turn_plan
+from .education_plan import EducationTurnPlan
+from .education_resolver import EducationPlanResolver, ResolvedEducationPlan
 from .types import TurnPlan
 
 __all__ = [
+    "EducationPlanResolver",
+    "EducationTurnPlan",
+    "ResolvedEducationPlan",
     "TurnPlan",
     "build_turn_plan",
     "ReplyExecutionResult",
@@ -24,7 +29,7 @@ __all__ = [
 
 def __getattr__(name: str):
     if name in {"ReplyExecutionResult", "generate_reply_sync", "stream_reply_with_callbacks"}:
-        from ava.pipeline.generation.reply_service import (
+        from ava.inference_runtime.reply_service import (
             ReplyExecutionResult,
             generate_reply_sync,
             stream_reply_with_callbacks,

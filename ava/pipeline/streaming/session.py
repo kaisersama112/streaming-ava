@@ -9,9 +9,9 @@ import time
 from typing import Any
 
 # 上下文构建相关工具
-from ava.context_engine.compiler import ContextCompiler
-from ava.context_engine.input import AttachmentPayload
-from ava.context_engine.types import SnapshotCompileOptions
+from ava.multi_turn_context_builder.compiler import ContextCompiler
+from ava.multi_turn_context_builder.input import AttachmentPayload
+from ava.multi_turn_context_builder.types import ConversationBuildOptions
 
 # 会话状态加载与预处理
 from ava.core.session import load_state, prepare_state_for_turn
@@ -24,7 +24,7 @@ from ava.pipeline.generation import build_turn_plan
 from ava.pipeline.generation import stream_reply_with_callbacks
 
 # 路由决策
-from ava.domain.routing.runner import route_with_context
+from ava.router_selector.service import RouterService
 
 # 数学语音缓冲与口语化处理
 from ava.pipeline.speech import LatexAwareSpeechBuffer, should_apply_math_oralizer
@@ -57,9 +57,6 @@ from ava.pipeline.streaming.turn import TurnControl, TurnStatus
 # Prompt 管理中心
 from ava.capabilities.prompt import build_prompt_center
 
-# Trace 日志工具
-from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
-
 # 流式语音播放 Pipeline
 from ava.pipeline.streaming.voice_stream import StreamingVoicePipeline, VoiceStreamConfig
 
@@ -80,28 +77,6 @@ from configs import settings
 
 # 日志实例
 _LOG = logging.getLogger("streaming_ava.realtime.session")
-
-
-def _compact_snapshot_trace(snapshot: Any) -> dict[str, Any]:
-    """
-    将 context snapshot 压缩为适合 trace 日志输出的轻量结构。
-
-    目的：
-    - 避免 trace 日志过大
-    - 保留关键上下文信息用于排查问题
-    """
-    return {
-        "session_id": getattr(snapshot, "session_id", ""),
-        "context_profile": getattr(snapshot, "context_profile", ""),
-        "user_text": getattr(snapshot, "user_text", ""),
-        "session_scene": getattr(snapshot, "session_scene", ""),
-        "turn_scene": getattr(snapshot, "turn_scene", ""),
-
-        # 只记录数量，不记录完整内容
-        "history_messages_count": len(getattr(snapshot, "history_messages", []) or []),
-        "artifacts_count": len(getattr(snapshot, "artifacts", ()) or ()),
-        "reference_artifacts_count": len(getattr(snapshot, "reference_artifacts", ()) or ()),
-    }
 
 
 def _compact_debug_prompt(text: str, limit: int = 1200) -> str:
@@ -265,6 +240,10 @@ class RealtimeConversationSession:
         # Prompt 中心
         self.prompt_center = build_prompt_center()
         self.context_compiler = ContextCompiler()
+        self.router_service = RouterService(
+            prompt_center=self.prompt_center,
+            compiler=self.context_compiler,
+        )
 
         # 实时事件总线
         self.events = RealtimeEventBus()
@@ -429,17 +408,6 @@ class RealtimeConversationSession:
             return
         if active.status not in (TurnStatus.SPEAKING, TurnStatus.THINKING):
             return
-        append_trace_log(
-            "realtime.turn.preempted_by_user_input",
-            {
-                "reason": reason,
-                "detail": detail[:120],
-                "active_turn_id": active.turn_id,
-                "active_status": active.status.value,
-            },
-            turn_id=active.turn_id,
-            scope="realtime_turn",
-        )
         self.interrupt(reason=reason)
 
     def attach_tts(self, ctrl: TurnControl, tts_pipeline: StreamingVoicePipeline | None) -> None:
@@ -479,19 +447,6 @@ class RealtimeConversationSession:
     ) -> None:
         """Handle unstable ASR text without committing a new user turn."""
         active = self.active
-        if bool(getattr(settings.runtime, "trace_log_asr_partials", True)):
-            append_trace_log(
-                "realtime.asr.partial",
-                {
-                    "text": text,
-                    "stability": stability,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                    "active_turn_id": (active.turn_id if active else None),
-                },
-                turn_id=(active.turn_id if active else None),
-                scope="realtime_asr",
-            )
         if self._looks_like_playback_echo(text, active):
             self.events.publish(
                 ControlEvent(
@@ -577,18 +532,6 @@ class RealtimeConversationSession:
                 ts=final_ts,
             )
         )
-        append_trace_log(
-            "realtime.asr.final",
-            {
-                "text": normalized,
-                "stability": stability,
-                "start_ms": start_ms,
-                "end_ms": end_ms,
-                "attachments": _artifacts_to_payload(turn_input, include_inline_data=False),
-                "asr_final_latency_ms": asr_final_latency_ms,
-            },
-            scope="realtime_asr",
-        )
         return self.submit_turn(
             turn_input,
             user_text=normalized or turn_input.multimodal_summary(),
@@ -624,17 +567,6 @@ class RealtimeConversationSession:
         # have a recoverable trace. Long-term memory writes should happen only
         # after finalization, when the turn result and strategy are known.
         self.state.upsert_realtime_user_turn(ctrl.turn_id, turn_input)
-        append_trace_log(
-            "realtime.turn.submitted",
-            {
-                "turn_input": sanitize_turn_input(turn_input),
-                "user_text": user_text or normalized or turn_input.multimodal_summary(),
-                "asr_final_at": asr_final_at,
-                "asr_final_latency_ms": asr_final_latency_ms,
-            },
-            turn_id=ctrl.turn_id,
-            scope="realtime_turn",
-        )
         ctrl.asr_final_at = asr_final_at
         ctrl.asr_final_latency_ms = asr_final_latency_ms
         self._emit_metrics(ctrl)
@@ -781,16 +713,6 @@ class RealtimeConversationSession:
                     self._emit_metrics(ctrl)
                 if ctrl.t7_first_push_pcm_at is None:
                     ctrl.t7_first_push_pcm_at = time.monotonic()
-                    append_trace_log(
-                        "realtime.turn.t7_first_push_pcm",
-                        {
-                            "timeline_ms": max(0.0, (
-                                    ctrl.t7_first_push_pcm_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
-                            "bytes_len": len(data),
-                        },
-                        turn_id=ctrl.turn_id,
-                        scope="realtime_audio",
-                    )
                     self._emit_metrics(ctrl)
                 self.bridge.push_pcm_bytes(data)
                 if debug_pcm is not None:
@@ -844,16 +766,6 @@ class RealtimeConversationSession:
                             last_chunk_time = time.monotonic()
                             if ctrl.t6_first_tts_chunk_at is None:
                                 ctrl.t6_first_tts_chunk_at = last_chunk_time
-                                append_trace_log(
-                                    "realtime.turn.t6_first_tts_chunk",
-                                    {
-                                        "timeline_ms": max(0.0, (ctrl.t6_first_tts_chunk_at - (
-                                                ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
-                                        "chunk_bytes": len(chunk),
-                                    },
-                                    turn_id=ctrl.turn_id,
-                                    scope="realtime_tts",
-                                )
                                 self._emit_metrics(ctrl)
 
                     if len(pending) >= frame_bytes:
@@ -869,15 +781,6 @@ class RealtimeConversationSession:
                                 ctrl.turn_id,
                                 tts_pipeline.error,
                                 snapshot,
-                            )
-                            append_trace_log(
-                                "realtime.tts.soft_timeout",
-                                {
-                                    "error": error_text,
-                                    "snapshot": snapshot,
-                                },
-                                turn_id=ctrl.turn_id,
-                                scope="realtime_tts",
                             )
                         else:
                             self.events.publish(
@@ -1129,60 +1032,36 @@ class RealtimeConversationSession:
             # routing so router prompts can see the latest working memory.
             prepare_state_for_turn(self.state, turn_input)
             ctrl.t1_prepare_state_done_at = time.monotonic()
-            append_trace_log(
-                "realtime.turn.t1_prepare_state_done",
-                {
-                    "timeline_ms": max(0.0, (
-                            ctrl.t1_prepare_state_done_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
-                },
-                turn_id=ctrl.turn_id,
-                scope="realtime_turn",
-            )
             # Router context is compact and planning-oriented. Responder context
             # is rebuilt later by `build_turn_plan` if more detail is needed.
-            snapshot = self.context_compiler.build_snapshot(
+            context = self.context_compiler.build_conversation_context(
                 state=self.state,
                 turn_input=turn_input,
-                options=SnapshotCompileOptions(
+                options=ConversationBuildOptions(
                     history_window=self.history_window,
                     current_turn_id=ctrl.turn_id,
                     max_context_messages=self.router_max_context_messages,
                     profile="router",
                 ),
             )
-            append_trace_log(
-                "realtime.context.assembled",
-                _compact_snapshot_trace(snapshot),
-                turn_id=ctrl.turn_id,
-                scope="realtime_turn",
-            )
             self.events.publish(
                 ContextDebugEvent(
-                    multimodal_summary=turn_input.multimodal_summary() or snapshot.user_text,
+                    multimodal_summary=turn_input.multimodal_summary() or context.current.user_text,
                     artifacts=_artifacts_to_payload(turn_input),
                     turn_id=ctrl.turn_id,
                 )
             )
-            decision, snapshot = route_with_context(
-                prompt_center=self.prompt_center,
+            route_result = self.router_service.route(
                 turn_input=turn_input,
                 state=self.state,
                 history_window=self.history_window,
                 max_context_messages=self.router_max_context_messages,
                 current_turn_id=ctrl.turn_id,
-                snapshot=snapshot,
-                compiler=self.context_compiler,
+                context=context,
             )
+            decision = route_result.decision
+            context = route_result.context
             ctrl.t2_router_done_at = time.monotonic()
-            append_trace_log(
-                "realtime.turn.t2_router_done",
-                {
-                    "timeline_ms": max(0.0, (ctrl.t2_router_done_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
-                    "decision": sanitize_value(decision.model_dump()),
-                },
-                turn_id=ctrl.turn_id,
-                scope="realtime_turn",
-            )
             if ctrl.stop_event.is_set():
                 return
 
@@ -1195,22 +1074,13 @@ class RealtimeConversationSession:
                 prompt_center=self.prompt_center,
                 history_window=self.history_window,
                 max_context_messages=self.responder_max_context_messages,
-                snapshot=snapshot,
+                context=context,
                 current_turn_id=ctrl.turn_id,
                 compiler=self.context_compiler,
+                router_plan=route_result.router_plan,
+                artifact_brief=route_result.artifact_brief,
             )
             ctrl.t3_turn_plan_done_at = time.monotonic()
-            append_trace_log(
-                "realtime.turn.t3_turn_plan_done",
-                {
-                    "timeline_ms": max(0.0,
-                                       (ctrl.t3_turn_plan_done_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
-                    "strategy_id": plan.strategy.strategy_id,
-                    "render_template": plan.strategy.render_template,
-                },
-                turn_id=ctrl.turn_id,
-                scope="realtime_turn",
-            )
             self.events.publish(
                 RouteDecisionEvent(
                     session_scene=decision.session_scene,
@@ -1265,17 +1135,6 @@ class RealtimeConversationSession:
                 self.attach_tts(ctrl, tts_pipeline)
                 pump_thread = self._start_audio_pump(ctrl, tts_pipeline)
                 oralizer_enabled = should_apply_math_oralizer(plan.strategy)
-                append_trace_log(
-                    "realtime.tts.oralizer.config",
-                    {
-                        "branch": plan.strategy.branch,
-                        "subject": plan.strategy.subject,
-                        "oralizer_enabled": oralizer_enabled,
-                        "math_stream_buffer_enabled": bool(settings.speech_postprocess.math_stream_buffer_enabled),
-                    },
-                    turn_id=ctrl.turn_id,
-                    scope="realtime_tts",
-                )
                 if (
                         oralizer_enabled
                         and settings.speech_postprocess.math_stream_buffer_enabled
@@ -1294,16 +1153,6 @@ class RealtimeConversationSession:
                     return
                 if ctrl.t5_first_tts_submit_at is None:
                     ctrl.t5_first_tts_submit_at = time.monotonic()
-                    append_trace_log(
-                        "realtime.turn.t5_first_tts_submit",
-                        {
-                            "timeline_ms": max(0.0, (
-                                    ctrl.t5_first_tts_submit_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
-                            "token_preview": text[:80],
-                        },
-                        turn_id=ctrl.turn_id,
-                        scope="realtime_tts",
-                    )
                     self._emit_metrics(ctrl)
                 tts_pipeline.submit(text)
 
@@ -1319,16 +1168,6 @@ class RealtimeConversationSession:
                 if ctrl.first_token_at is None:
                     ctrl.first_token_at = time.monotonic()
                     ctrl.t4_first_token_at = ctrl.first_token_at
-                    append_trace_log(
-                        "realtime.turn.t4_first_token",
-                        {
-                            "timeline_ms": max(0.0, (
-                                    ctrl.t4_first_token_at - (ctrl.t0_submit_at or ctrl.started_at)) * 1000.0),
-                            "token_preview": token[:80],
-                        },
-                        turn_id=ctrl.turn_id,
-                        scope="realtime_llm",
-                    )
                     self._emit_metrics(ctrl)
                 if first_token and tts_pipeline is None:
                     self._emit_state(TurnStatus.SPEAKING, turn_id=ctrl.turn_id, detail="text_streaming")
@@ -1346,7 +1185,7 @@ class RealtimeConversationSession:
                 turn_input=turn_input,
                 decision=decision,
                 plan=plan,
-                snapshot=snapshot,
+                context=context,
                 api_base=settings.openai_config.api_base,
                 api_key=settings.openai_config.api_key,
                 model=settings.openai_config.multimodal_model or settings.openai_config.model,
@@ -1368,29 +1207,6 @@ class RealtimeConversationSession:
                 int(max(0.0, ((llm_stream_finished_at or time.monotonic()) - (
                         llm_stream_started_at or ctrl.started_at)) * 1000.0)),
                 bool(ctrl.stop_event.is_set() or ctrl.interrupted),
-            )
-            append_trace_log(
-                "realtime.llm.stream.completed",
-                {
-                    "tokens": token_count,
-                    "token_chars": token_chars,
-                    "assistant_text": assistant_text,
-                    "assistant_chars": len(assistant_text),
-                    "llm_elapsed_ms": max(
-                        0.0,
-                        ((llm_stream_finished_at or time.monotonic()) - (llm_stream_started_at or ctrl.started_at))
-                        * 1000.0,
-                    ),
-                    "branch": (plan.strategy.branch if plan is not None else ""),
-                    "subject": (plan.strategy.subject if plan is not None else ""),
-                    "oralizer_enabled": oralizer_enabled,
-                    "speech_buffer": (speech_buffer.snapshot() if speech_buffer is not None else None),
-                    "backend": reply_result.backend,
-                    "executor_debug": sanitize_value(reply_result.debug),
-                    "interrupted": bool(ctrl.stop_event.is_set() or ctrl.interrupted),
-                },
-                turn_id=ctrl.turn_id,
-                scope="realtime_llm",
             )
 
             # The LaTeX-aware buffer may hold a partial formula until the model
@@ -1429,18 +1245,6 @@ class RealtimeConversationSession:
                     tts_before_close,
                     tts_after_close,
                 )
-                append_trace_log(
-                    "realtime.tts.close_summary",
-                    {
-                        "closed": closed,
-                        "interrupted": bool(ctrl.stop_event.is_set() or ctrl.interrupted),
-                        "close_ms": close_elapsed_ms,
-                        "before": tts_before_close,
-                        "after": tts_after_close,
-                    },
-                    turn_id=ctrl.turn_id,
-                    scope="realtime_tts",
-                )
                 if pump_thread is not None:
                     pump_join_started_at = time.monotonic()
                     pump_timeout_seconds = (
@@ -1473,16 +1277,6 @@ class RealtimeConversationSession:
                         forced_pump_stop,
                         ctrl.pump_metrics or {},
                     )
-                    append_trace_log(
-                        "realtime.audio_pump.summary",
-                        {
-                            "wait_ms": pump_wait_ms,
-                            "forced_stop": forced_pump_stop,
-                            "metrics": ctrl.pump_metrics or {},
-                        },
-                        turn_id=ctrl.turn_id,
-                        scope="realtime_audio",
-                    )
 
             interrupted = bool(ctrl.stop_event.is_set() or ctrl.interrupted)
             _LOG.info(
@@ -1512,79 +1306,6 @@ class RealtimeConversationSession:
                 ),
                 ctrl.pump_metrics or {},
             )
-            append_trace_log(
-                "realtime.turn.final_summary",
-                {
-                    "interrupted": interrupted,
-                    "forced_pump_stop": forced_pump_stop,
-                    "tokens": token_count,
-                    "token_chars": token_chars,
-                    "assistant_text": assistant_text,
-                    "assistant_chars": len(assistant_text),
-                    "llm_elapsed_ms": max(
-                        0.0,
-                        ((llm_stream_finished_at or time.monotonic()) - (llm_stream_started_at or ctrl.started_at))
-                        * 1000.0,
-                    ),
-                    "branch": (plan.strategy.branch if plan is not None else ""),
-                    "subject": (plan.strategy.subject if plan is not None else ""),
-                    "oralizer_enabled": oralizer_enabled,
-                    "speech_buffer": (speech_buffer.snapshot() if speech_buffer is not None else None),
-                    "first_token_ms": (
-                        max(0.0, (ctrl.first_token_at - ctrl.asr_final_at) * 1000.0)
-                        if ctrl.first_token_at is not None and ctrl.asr_final_at is not None
-                        else None
-                    ),
-                    "first_audio_ms": (
-                        max(0.0, (ctrl.first_audio_at - ctrl.asr_final_at) * 1000.0)
-                        if ctrl.first_audio_at is not None and ctrl.asr_final_at is not None
-                        else None
-                    ),
-                    "timeline_ms": {
-                        "t0_submit": 0.0 if ctrl.t0_submit_at is not None else None,
-                        "t1_prepare_state_done": (
-                            max(0.0, (ctrl.t1_prepare_state_done_at - ctrl.t0_submit_at) * 1000.0)
-                            if ctrl.t0_submit_at is not None and ctrl.t1_prepare_state_done_at is not None
-                            else None
-                        ),
-                        "t2_router_done": (
-                            max(0.0, (ctrl.t2_router_done_at - ctrl.t0_submit_at) * 1000.0)
-                            if ctrl.t0_submit_at is not None and ctrl.t2_router_done_at is not None
-                            else None
-                        ),
-                        "t3_turn_plan_done": (
-                            max(0.0, (ctrl.t3_turn_plan_done_at - ctrl.t0_submit_at) * 1000.0)
-                            if ctrl.t0_submit_at is not None and ctrl.t3_turn_plan_done_at is not None
-                            else None
-                        ),
-                        "t4_first_token": (
-                            max(0.0, (ctrl.t4_first_token_at - ctrl.t0_submit_at) * 1000.0)
-                            if ctrl.t0_submit_at is not None and ctrl.t4_first_token_at is not None
-                            else None
-                        ),
-                        "t5_first_tts_submit": (
-                            max(0.0, (ctrl.t5_first_tts_submit_at - ctrl.t0_submit_at) * 1000.0)
-                            if ctrl.t0_submit_at is not None and ctrl.t5_first_tts_submit_at is not None
-                            else None
-                        ),
-                        "t6_first_tts_chunk": (
-                            max(0.0, (ctrl.t6_first_tts_chunk_at - ctrl.t0_submit_at) * 1000.0)
-                            if ctrl.t0_submit_at is not None and ctrl.t6_first_tts_chunk_at is not None
-                            else None
-                        ),
-                        "t7_first_push_pcm": (
-                            max(0.0, (ctrl.t7_first_push_pcm_at - ctrl.t0_submit_at) * 1000.0)
-                            if ctrl.t0_submit_at is not None and ctrl.t7_first_push_pcm_at is not None
-                            else None
-                        ),
-                    },
-                    "pump_metrics": ctrl.pump_metrics or {},
-                    "decision": sanitize_value(decision.model_dump() if decision is not None else {}),
-                    "strategy": sanitize_value(plan.strategy.to_metadata() if plan is not None else {}),
-                },
-                turn_id=ctrl.turn_id,
-                scope="realtime_turn",
-            )
             if decision is not None:
                 evaluation = build_evaluation_tags(self.state, turn_input, decision, plan.strategy)
                 evaluation["turn_result"] = "interrupted" if interrupted else "completed"
@@ -1612,17 +1333,6 @@ class RealtimeConversationSession:
             )
         except Exception as exc:
             _LOG.exception("Realtime turn failed.")
-            append_trace_log(
-                "realtime.turn.error",
-                {
-                    "error": str(exc),
-                    "assistant_text": assistant_text,
-                    "decision": sanitize_value(decision.model_dump() if decision is not None else {}),
-                    "strategy": sanitize_value(plan.strategy.to_metadata() if plan is not None else {}),
-                },
-                turn_id=ctrl.turn_id,
-                scope="realtime_turn",
-            )
             if decision is not None:
                 evaluation = build_evaluation_tags(self.state, turn_input, decision, None)
                 evaluation["turn_result"] = "error"
@@ -1657,18 +1367,6 @@ class RealtimeConversationSession:
                     evaluation=evaluation,
                     turn_status=turn_status,
                     llm_response_state=(reply_result.debug.get("llm_response_state", {}) if 'reply_result' in locals() else {}),
-                )
-                append_trace_log(
-                    "realtime.turn.persisted",
-                    {
-                        "turn_status": turn_status,
-                        "assistant_text": assistant_text,
-                        "decision": sanitize_value((decision.model_dump() if decision is not None else {})),
-                        "strategy": sanitize_value((plan.strategy.to_metadata() if plan is not None else {})),
-                        "evaluation": sanitize_value(evaluation or {}),
-                    },
-                    turn_id=ctrl.turn_id,
-                    scope="realtime_turn",
                 )
             if tts_pipeline is not None and tts_pipeline.error is not None:
                 error_text = str(tts_pipeline.error)

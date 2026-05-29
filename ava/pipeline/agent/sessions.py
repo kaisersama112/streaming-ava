@@ -15,7 +15,7 @@ except Exception:
     SessionSettings = Any  # type: ignore[assignment]
     TResponseInputItem = Any  # type: ignore[assignment]
 
-from ava.context_engine.types import ContextSnapshot
+from ava.multi_turn_context_builder.types import ConversationContext
 from configs import BASE_DIR, settings
 
 _SESSION_CONTAINER_KEY = "sessions"
@@ -132,9 +132,9 @@ def build_agent_session(session_id: str) -> JsonFileSession:
     )
 
 
-async def seed_agent_session_from_snapshot(session: JsonFileSession, snapshot: ContextSnapshot) -> None:
+async def seed_agent_session_from_context(session: JsonFileSession, context: ConversationContext) -> None:
     seed_items: list[dict[str, object]] = []
-    for item in snapshot.history_messages:
+    for item in context.conversation:
         role = str(item.get("role", "") or "").strip()
         content = item.get("content", "")
         if role not in {"user", "assistant", "system"}:

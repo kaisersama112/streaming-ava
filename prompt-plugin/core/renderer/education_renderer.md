@@ -34,19 +34,19 @@
 {% for item in subject.instructions %}- {{ item }}
 {% endfor %}
 
-当前风格：{{ style.name }}
-- 语气：{{ style.tone }}
+当前教学风格：{{ pedagogy.name }}
+- 语气：{{ pedagogy.tone }}
 - 风格约束：
-{% for item in style.constraints %}- {{ item }}
+{% for item in pedagogy.constraints %}- {{ item }}
 {% endfor %}
 - 风格指令：
-{% for item in style.instructions %}- {{ item }}
+{% for item in pedagogy.instructions %}- {{ item }}
 {% endfor %}
 
 输出边界：
 {% for key, value in module.output_defaults.items() %}- {{ key }} = {{ value }}
 {% endfor %}
-{% for key, value in style.output_adjustments.items() %}- {{ key }} = {{ value }}
+{% for key, value in pedagogy.output_adjustments.items() %}- {{ key }} = {{ value }}
 {% endfor %}
 
 必须避免：

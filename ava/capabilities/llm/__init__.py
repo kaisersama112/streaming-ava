@@ -1,6 +1,31 @@
-"""LLM capability facade."""
+"""LLM 能力层导出。"""
 
-from ava.capabilities.llm import chat_client as client
-from ava.capabilities.llm.chat_client import chat, chat_stream
+from ava.llm_model_executor.provider import OpenAIResponsesProvider
+from ava.llm_model_executor.request import InferenceRequestBuilder, RequestPolicy
+from ava.llm_model_executor.service import LLMService, RequestContextBuilder
+from ava.llm_model_executor.types import (
+    InferenceCompleted,
+    InferenceError,
+    InferenceRequest,
+    InferenceResult,
+    InferenceTask,
+    LLMProvider,
+    ModelRequestContext,
+    OutputTextDelta,
+)
 
-__all__ = ["client", "chat", "chat_stream"]
+__all__ = [
+    "InferenceCompleted",
+    "InferenceError",
+    "InferenceRequest",
+    "InferenceRequestBuilder",
+    "InferenceResult",
+    "InferenceTask",
+    "LLMProvider",
+    "LLMService",
+    "ModelRequestContext",
+    "RequestContextBuilder",
+    "OpenAIResponsesProvider",
+    "OutputTextDelta",
+    "RequestPolicy"
+]

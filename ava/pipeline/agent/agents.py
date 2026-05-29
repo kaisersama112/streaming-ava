@@ -7,7 +7,7 @@ from typing import Any
 from agents import Agent
 
 from ava.pipeline.generation.types import TurnPlan
-from ava.context_engine.types import ContextSnapshot
+from ava.multi_turn_context_builder.types import ConversationContext
 from ava.domain.multimodal import TurnInput
 
 from .context import AvaAgentContext
@@ -64,14 +64,14 @@ def _manager_instructions(plan: TurnPlan):
             f"mode={runtime.strategy.mode or '-'}",
             f"module={runtime.strategy.module or '-'}",
             f"subject={runtime.strategy.subject or '-'}",
-            f"style={runtime.strategy.style or '-'}",
+            f"pedagogy={runtime.strategy.pedagogy or '-'}",
             f"policy_id={runtime.strategy.policy_id or '-'}",
         ]
         branch_guidance = "当前是通用执行分支。"
         if runtime.strategy.branch == "education":
             analysis = dict(runtime.strategy.analysis or {})
             branch_guidance = (
-                "当前是教育执行分支。你必须严格遵守上游已经选定的教学边界，不要擅自改 module/subject/style。"
+                "当前是教育执行分支。你必须严格遵守上游已经选定的教学边界，不要擅自改 module/subject/pedagogy。"
                 f"\nprimary_action={analysis.get('primary_action', '')}"
                 f"\nprimary_scenario={analysis.get('primary_scenario', '')}"
                 f"\nanswer_boundary={analysis.get('answer_boundary', '')}"
@@ -120,7 +120,7 @@ def _strategy_specialist_instructions(context, agent) -> str:
     runtime = context.context
     return (
         "你是回答策略执行专家，不直接回答用户。\n"
-        "你不能改写上游已锁定的 branch/module/subject/style/mode。\n"
+        "你不能改写上游已锁定的 branch/module/subject/pedagogy/mode。\n"
         "你的任务是把当前 strategy 转成一个清晰的回答计划，包括：\n"
         "1. 这轮应先做什么\n"
         "2. 应该直接答、提示、核对还是解释\n"
@@ -130,18 +130,18 @@ def _strategy_specialist_instructions(context, agent) -> str:
     )
 
 
-def _has_multimodal_context(snapshot: ContextSnapshot) -> bool:
-    return bool(snapshot.artifacts or snapshot.reference_artifacts)
+def _has_multimodal_context(context: ConversationContext) -> bool:
+    return context.artifacts.has_any
 
 
 def build_manager_agent(
         plan: TurnPlan,
-        snapshot: ContextSnapshot,
+        context: ConversationContext,
         *,
         model_config: AgentsModelConfig | None = None,
 ) -> Agent[AvaAgentContext]:
     model = build_agents_sdk_model(
-        snapshot,
+        context,
         api_base=model_config.api_base if model_config is not None else None,
         api_key=model_config.api_key if model_config is not None else None,
         model=model_config.model if model_config is not None else None,
@@ -150,7 +150,7 @@ def build_manager_agent(
     )
     model_settings = build_agents_sdk_model_settings()
     nested_run_config = build_agents_sdk_run_config(workflow_name=f"specialist:{plan.strategy.strategy_id}")
-    allow_specialists = not _has_multimodal_context(snapshot)
+    allow_specialists = not _has_multimodal_context(context)
 
     history_specialist = Agent[AvaAgentContext](
         name="History Recovery Specialist",

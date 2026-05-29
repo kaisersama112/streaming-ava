@@ -29,7 +29,7 @@ def get_turn_plan(context: RunContextWrapper[AvaAgentContext]) -> str:
         "mode": runtime.strategy.mode,
         "module": runtime.strategy.module,
         "subject": runtime.strategy.subject,
-        "style": runtime.strategy.style,
+        "pedagogy": runtime.strategy.pedagogy,
         "policy_id": runtime.strategy.policy_id,
         "analysis": dict(runtime.strategy.analysis or {}),
     }
@@ -42,7 +42,7 @@ def get_recent_history(context: RunContextWrapper[AvaAgentContext], limit: int =
     """Return recent user and assistant turns that matter for the current turn."""
     runtime = context.context
     window = max(2, min(int(limit or 8), 12))
-    history = runtime.snapshot.history_messages[-window:]
+    history = runtime.context.conversation[-window:]
     runtime.add_event("tool.get_recent_history", {"limit": window, "items": len(history)})
     return _safe_json(history)
 
@@ -52,15 +52,15 @@ def get_reference_materials(context: RunContextWrapper[AvaAgentContext]) -> str:
     """Return a compact summary of current and inherited multimodal materials."""
     runtime = context.context
     payload = {
-        "current_artifacts": [artifact.to_prompt_dict() for artifact in runtime.snapshot.artifacts],
-        "reference_artifacts": [artifact.to_prompt_dict() for artifact in runtime.snapshot.reference_artifacts],
-        "input_summary": runtime.turn_input.multimodal_summary() or runtime.snapshot.user_text,
+        "current_artifacts": [artifact.to_prompt_dict() for artifact in runtime.context.artifacts.current],
+        "reference_artifacts": [artifact.to_prompt_dict() for artifact in runtime.context.artifacts.reference],
+        "input_summary": runtime.turn_input.multimodal_summary() or runtime.context.current.user_text,
     }
     runtime.add_event(
         "tool.get_reference_materials",
         {
-            "current_artifacts": len(runtime.snapshot.artifacts),
-            "reference_artifacts": len(runtime.snapshot.reference_artifacts),
+            "current_artifacts": len(runtime.context.artifacts.current),
+            "reference_artifacts": len(runtime.context.artifacts.reference),
         },
     )
     return _safe_json(payload)

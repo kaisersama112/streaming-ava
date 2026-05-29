@@ -2,14 +2,15 @@
 
 from pathlib import Path
 
-from ava.context_engine.input import build_turn_input
+from ava.multi_turn_context_builder.input import TurnInputAssembler
 from ava.pipeline.output import append_evaluation_log, build_evaluation_tags
-from ava.core.tracing import append_trace_log, sanitize_turn_input, sanitize_value
 from ava.domain.multimodal import TurnInput
-from ava.domain.routing.schema import RouteDecision
+from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
 from configs import BASE_DIR, settings
+
+_TURN_INPUT_ASSEMBLER = TurnInputAssembler()
 
 
 def load_state(state_file: str, history_window: int, session_id: str | None = None) -> ConversationState:
@@ -27,19 +28,8 @@ def load_state(state_file: str, history_window: int, session_id: str | None = No
 
 def prepare_state_for_turn(state: ConversationState, turn_input: TurnInput | str) -> None:
     if isinstance(turn_input, str):
-        turn_input = build_turn_input(turn_input)
+        turn_input = _TURN_INPUT_ASSEMBLER.build(turn_input)
     state.repair_route_state_from_turn_records()
-    append_trace_log(
-        "state.prepare_for_turn",
-        {
-            "session_id": state.session_id,
-            "turn_input": sanitize_turn_input(turn_input),
-            "session_scene": state.session_scene,
-            "turn_scene": state.turn_scene,
-            "memory": sanitize_value(state.memory.to_debug_payload()),
-        },
-        scope="state",
-    )
 
 
 def persist_turn(
@@ -51,7 +41,7 @@ def persist_turn(
     llm_response_state: dict | None = None,
 ) -> None:
     if isinstance(turn_input, str):
-        turn_input = build_turn_input(turn_input)
+        turn_input = _TURN_INPUT_ASSEMBLER.build(turn_input)
 
     state.apply_route(
         session_scene=decision.session_scene,
@@ -73,20 +63,6 @@ def persist_turn(
         llm_response_state=llm_response_state,
     )
     state.save()
-    append_trace_log(
-        "state.persist_turn",
-        {
-            "session_id": state.session_id,
-            "turn_input": sanitize_turn_input(turn_input),
-            "assistant_text": assistant_text,
-            "decision": sanitize_value(decision),
-            "strategy": sanitize_value(strategy.to_metadata() if strategy is not None else {}),
-            "evaluation": sanitize_value(evaluation),
-            "turn_records_size": len(state.turn_records),
-            "conversation_state": sanitize_value(state.responder_conversation_state()),
-        },
-        scope="state",
-    )
     append_evaluation_log(
         settings.runtime.evaluation_log_file,
         {

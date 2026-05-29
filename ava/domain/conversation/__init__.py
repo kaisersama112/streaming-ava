@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from ava.context_engine.types import ContextSnapshot
+from ava.multi_turn_context_builder.types import ConversationContext
 from ava.domain.multimodal.media import MediaArtifact, TurnInput
 
 __all__ = [
     "BranchStrategy",
-    "ContextSnapshot",
+    "ConversationContext",
     "ConversationState",
     "EducationTurnFrame",
     "MediaArtifact",
