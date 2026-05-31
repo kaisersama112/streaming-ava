@@ -4,103 +4,73 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="61f03ad6-fb28-44d5-84b9-9ae3752b0d4e" name="更改" comment="">
+    <list default="true" id="61f03ad6-fb28-44d5-84b9-9ae3752b0d4e" name="更改" comment="暂存">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/chat_client.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/context/history.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/providers/base.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/providers/mapping.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/providers/openai_chat.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/requests/builder.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/requests/policy.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/provider.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/provider.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/request.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/request.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/streaming/events.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/llm/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/llm/types.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_builder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_runtime.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_runtime.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/ARCHITECTURE.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/ARCHITECTURE.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/context_engine/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/context_engine/compiler.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/compiler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/continuity.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/context_engine/input.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/input.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/context_engine/instructions.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/instructions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/memory.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/skills.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/context_engine/messages.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/messages.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/context_engine/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/context_engine/types.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/core/session/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/core/session/service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/core/tracing/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/core/tracing/trace.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/core/session/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/core/session/service.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/domain/conversation/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/conversation/models.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/domain/conversation/state.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/state.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/conversation/strategy.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/strategy.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/routing/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/routing/policy.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/routing/runner.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/routing/schema.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/conversation/summary.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/summary.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/memory/artifacts.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/artifacts.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/memory/education.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/education.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/memory/projector.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/projector.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/memory/retriever.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/retriever.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/domain/memory/session_memory.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/session_memory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/inference_runtime/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/inference_runtime/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/inference_runtime/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/inference_runtime/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/inference_runtime/reply_service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/inference_runtime/turn_planner.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/llm_model_executor/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/llm_model_executor/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/provider.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/request.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/llm_model_executor/service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/llm_model_executor/types.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/multi_turn_context_builder/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/compiler.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/multi_turn_context_builder/compiler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/input.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/instructions.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/messages.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/multi_turn_context_builder/types.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/agents.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/agents.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/context.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/context.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/executor.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/executor.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/model_factory.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/model_factory.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/sessions.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/sessions.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/agent/tools.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/dispatcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/dispatcher.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/education_resolver.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/education_resolver.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/model_plan_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/model_plan_builder.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/reply_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/reply_service.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/generation/types.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/output/evaluation_tags.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/output/evaluation_tags.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/configs/config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/renderer/education_renderer.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/core/renderer/education_renderer.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/router/router_prompt.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/core/router/router_prompt.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/module.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/styles/direct.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/styles/explain_careful.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/styles/hint_only.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/styles/step_by_step.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/subjects/chinese.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/subjects/cs.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/subjects/english.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/subjects/general.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/subjects/history.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/subjects/math.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/answer/subjects/physics.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/check/module.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/drill/module.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/explain/module.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/module.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/styles/direct.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/styles/explain_careful.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/styles/hint_only.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/styles/step_by_step.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/subjects/chinese.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/subjects/cs.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/subjects/english.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/subjects/general.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/subjects/history.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/subjects/math.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/qa/subjects/physics.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/module.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/styles/direct.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/styles/explain_careful.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/styles/hint_only.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/styles/step_by_step.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/subjects/chinese.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/subjects/cs.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/subjects/english.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/subjects/general.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/subjects/history.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/subjects/math.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/modules/solve/subjects/physics.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/education/plugin.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/REDEME.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/REDEME.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/policy.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/request.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/schema.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/routing/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/routing/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/routing/context.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/routing/context.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/routing/policy.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/routing/policy.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/app.js" beforeDir="false" afterPath="$PROJECT_DIR$/static/app.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/static/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_context_request_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_context_request_builder.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -143,23 +113,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.demo_parse_latex.executor": "Debug",
-    "Python.openai-agent-demo.executor": "Run",
-    "Python.realtime_server.executor": "Debug",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "codex/rewrite-four-core-modules",
-    "last_opened_file_path": "//wsl$/Ubuntu/app/streaming-ava",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "ml.llm.LLMConfigurable",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.demo_parse_latex.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.openai-agent-demo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.realtime_server.executor&quot;: &quot;Debug&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;codex/rebuild-four-modules-clean&quot;,
+    &quot;last_opened_file_path&quot;: &quot;//wsl$/Ubuntu/app/streaming-ava&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.LLMConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="\\wsl$\Ubuntu\app\streaming-ava\ava\infrastructure" />
@@ -277,7 +247,8 @@
       <workItem from="1779759090734" duration="31018000" />
       <workItem from="1780015341353" duration="125000" />
       <workItem from="1780015484076" duration="634000" />
-      <workItem from="1780016759864" duration="855000" />
+      <workItem from="1780016759864" duration="17534000" />
+      <workItem from="1780187670686" duration="1834000" />
     </task>
     <task id="LOCAL-00001" summary="重构llm-tts 模块">
       <option name="closed" value="true" />
@@ -311,7 +282,23 @@
       <option name="project" value="LOCAL" />
       <updated>1779269353563</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="暂存">
+      <option name="closed" value="true" />
+      <created>1780018050311</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1780018050311</updated>
+    </task>
+    <task id="LOCAL-00006" summary="暂存">
+      <option name="closed" value="true" />
+      <created>1780018056224</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1780018056224</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -328,7 +315,7 @@
                   <entry key="branch">
                     <value>
                       <list>
-                        <option value="multimodal-latency-spike" />
+                        <option value="codex/rebuild-four-modules-clean" />
                       </list>
                     </value>
                   </entry>
@@ -378,6 +365,6 @@
     <SUITE FILE_PATH="coverage/streaming_ava$demo_parse_latex.coverage" NAME="demo_parse_latex 覆盖结果" MODIFIED="1777015159962" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
     <SUITE FILE_PATH="coverage/streaming_ava$openai_agent_demo.coverage" NAME="openai-agent-demo 覆盖结果" MODIFIED="1777426119269" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
     <SUITE FILE_PATH="coverage/streaming_ava$cl.coverage" NAME="cl 覆盖结果" MODIFIED="1778636658363" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$USER_HOME$/eval_batch/outputs - 副本" />
-    <SUITE FILE_PATH="coverage/streaming_ava$realtime_server.coverage" NAME="realtime_server 覆盖结果" MODIFIED="1779955904397" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/streaming_ava$realtime_server.coverage" NAME="realtime_server 覆盖结果" MODIFIED="1780047792757" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

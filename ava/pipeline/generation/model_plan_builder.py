@@ -171,9 +171,19 @@ def _build_education_strategy_from_plan(
             answer_boundary=education_plan.answer_boundary,
         ),
         domain_hint=subject,
-        primary_modality=("multimodal" if context.current.artifacts else "text"),
+        primary_modality=(
+            "multimodal"
+            if any(
+                isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
+                for block in list(context.current.user_message.get("content") or [])
+            )
+            else "text"
+        ),
         requires_context=bool(context.conversation),
-        requires_artifact=bool(context.current.artifacts),
+        requires_artifact=any(
+            isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
+            for block in list(context.current.user_message.get("content") or [])
+        ),
         pedagogy_change_only=False,
         question_kind=education_plan.question_kind,
         confidence=float(education_plan.confidence or decision.confidence or 0.85),

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from ava.domain.memory.types import ArtifactMemoryEntry, MemoryProjection
-from ava.domain.multimodal import MediaArtifact, TurnInput
 
 
 def _json_safe(value: Any) -> Any:
@@ -30,11 +29,11 @@ class MemoryProjector:
     def build(
             self,
             memory,
-            turn_input: TurnInput,
+            user_message: dict[str, Any],
             *,
             profile: str,
-            current_artifacts: tuple[MediaArtifact, ...] = (),
-            reference_artifacts: tuple[MediaArtifact, ...] = (),
+            current_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+            reference_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
     ) -> MemoryProjection:
         target = current_artifacts or reference_artifacts
         artifact_memory: list[dict[str, Any]] = []
@@ -51,7 +50,7 @@ class MemoryProjector:
         retrieved_memories = [
             item.to_payload()
             for item in memory.retrieve_relevant_memories(
-                turn_input,
+                user_message,
                 current_artifacts=current_artifacts,
                 reference_artifacts=reference_artifacts,
             )

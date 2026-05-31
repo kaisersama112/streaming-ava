@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ava.domain.memory.message import user_message_text
 from ava.multi_turn_context_builder.types import ConversationContext
 from ava.domain.conversation.strategy import BranchStrategy
 
@@ -20,25 +21,13 @@ def build_router_system_prompt(prompt_center: PromptCenter) -> str:
 def _router_context_text(
     context: ConversationContext,
 ) -> str:
-    return context.current.user_text or "无"
+    return user_message_text(context.current.user_message) or "无"
 
 
 def build_router_user_message(
     context: ConversationContext,
-    *,
-    text_only: bool = False,
 ) -> dict[str, object]:
-    user_content: list[dict[str, object]] = [
-        {"type": "text", "text": _router_context_text(context)}
-    ]
-
-    if not text_only:
-        for artifact in context.artifacts.current:
-            block = artifact.to_message_block()
-            if block:
-                user_content.append(block)
-
-    return {"role": "user", "content": user_content}
+    return dict(context.current.user_message)
 
 
 def _cache_safe_value(value: Any) -> Any:
@@ -146,8 +135,9 @@ def _build_system_prompt_from_spec(
         profile_lines.append(f"- response_shape = {strategy.response_shape}")
     if strategy.teaching_objective:
         profile_lines.append(f"- objective = {strategy.teaching_objective}")
-    if context.current.user_text:
-        profile_lines.append(f"- current_user_text = {context.current.user_text}")
+    current_user_text = user_message_text(context.current.user_message)
+    if current_user_text:
+        profile_lines.append(f"- current_user_text = {current_user_text}")
     profile = "\n".join(profile_lines).strip()
     return "\n\n".join(block for block in (shell, profile) if block).strip()
 

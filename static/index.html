@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>AVA Realtime Console</title>
+    <title>AVA 实时控制台</title>
     <style>
         :root {
             --bg: #f3efe7;
@@ -1166,7 +1166,7 @@
                 <h2 class="section-title">会话信息</h2>
                 <div class="meta-stack">
                     <div class="meta-item">
-                        <small>Session ID</small>
+                        <small>会话 ID</small>
                         <div class="session-switch-row">
                             <input id="sessionId" type="text" placeholder="default" value="default"/>
                             <button class="btn-soft" id="btnApplySession" type="button">切换</button>
@@ -1175,41 +1175,41 @@
                     </div>
 
                     <div class="meta-item">
-                        <small>WebSocket</small>
+                        <small>连接地址</small>
                         <code id="wsUrl">-</code>
                     </div>
 
                     <div class="meta-item">
-                        <small>Route / Handler</small>
+                        <small>路由 / 处理器</small>
                         <code id="currentRoute">-</code>
                         <code id="currentHandler">-</code>
                     </div>
 
                     <div class="meta-item">
-                        <small>Branch / Strategy</small>
+                        <small>分支 / 策略</small>
                         <code id="currentBranch">-</code>
                         <code id="currentStrategy">-</code>
                         <code id="currentStrategyName">-</code>
                     </div>
 
                     <div class="meta-item">
-                        <small>Delivery / UI / Follow-up</small>
+                        <small>输出 / 界面 / 追问</small>
                         <code id="currentDelivery">-</code>
                         <code id="currentUiMode">-</code>
                         <code id="currentFollowupType">-</code>
                     </div>
 
                     <div class="meta-item">
-                        <small>Render Template / Source</small>
+                        <small>渲染模板 / 来源</small>
                         <code id="currentRenderTemplate">-</code>
                         <code id="currentStrategySource">-</code>
                     </div>
 
                     <div class="meta-item">
-                        <small>Realtime Player</small>
+                        <small>实时播放器</small>
                         <code><a id="playerUrl" href="#" target="_blank" rel="noreferrer">-</a></code>
                         <div class="inline-actions">
-                            <button class="btn-soft" id="btnCopyStrategyContext" type="button">复制当前策略上下文
+                            <button class="btn-soft" id="btnCopyStrategyContext" type="button">复制调试上下文
                             </button>
                         </div>
                     </div>
@@ -1219,52 +1219,52 @@
                     <summary>高级调试</summary>
                     <div class="debug-body">
                         <div class="meta-item">
-                            <small>Audio Spec</small>
+                            <small>音频规格</small>
                             <code id="audioSpec">-</code>
                         </div>
 
                         <div class="meta-item">
-                            <small>Current Multimodal Input</small>
+                            <small>当前多模态输入</small>
                             <code id="multimodalSummary">无</code>
                         </div>
 
                         <div class="meta-item">
-                            <small>Artifact Subject / Task Hint</small>
+                            <small>附件学科 / 任务提示</small>
                             <code id="currentArtifactSubjectHint">-</code>
                             <code id="currentArtifactTaskHint">-</code>
                         </div>
 
                         <div class="meta-item">
-                            <small>Artifact Text</small>
+                            <small>附件文本</small>
                             <pre class="log" id="artifactTextView">无</pre>
                         </div>
 
                         <div class="metrics-grid">
                             <div class="metric-item">
-                                <small>ASR Final</small>
+                                <small>ASR 最终结果</small>
                                 <div class="metric-value" id="metricAsrFinalLatency">-</div>
                             </div>
                             <div class="metric-item">
-                                <small>First Token</small>
+                                <small>首个文本片段</small>
                                 <div class="metric-value" id="metricFirstTokenLatency">-</div>
                             </div>
                             <div class="metric-item">
-                                <small>First Audio</small>
+                                <small>首段音频</small>
                                 <div class="metric-value" id="metricFirstAudioLatency">-</div>
                             </div>
                             <div class="metric-item">
-                                <small>Interrupt Count</small>
+                                <small>打断次数</small>
                                 <div class="metric-value" id="metricInterruptCount">0</div>
                             </div>
                         </div>
 
                         <div class="meta-item">
-                            <small>Turn Timeline</small>
+                            <small>轮次时序</small>
                             <pre class="log" id="timelineView">无</pre>
                         </div>
 
                         <div class="meta-item">
-                            <small>System Prompt</small>
+                            <small>系统提示词</small>
                             <pre class="log" id="promptView">无</pre>
                         </div>
 
@@ -1285,26 +1285,26 @@
                             <div class="pill-value muted" id="speakerState">等待回复</div>
                             <div class="call-state-grid">
                                 <div class="call-state-chip">
-                                    <span class="pill-label">WebSocket</span>
+                                    <span class="pill-label">连接</span>
                                     <span class="pill-value muted" id="connState">未连接</span>
                                 </div>
                                 <div class="call-state-chip">
-                                    <span class="pill-label">Mic</span>
+                                    <span class="pill-label">麦克风</span>
                                     <span class="pill-value muted" id="micState">未开启</span>
                                 </div>
                                 <div class="call-state-chip">
-                                    <span class="pill-label">Session</span>
+                                    <span class="pill-label">会话</span>
                                     <span class="pill-value muted" id="sessionState">-</span>
                                 </div>
                                 <div class="call-state-chip">
-                                    <span class="pill-label">Mute</span>
+                                    <span class="pill-label">静音</span>
                                     <span class="pill-value muted" id="muteState">未静音</span>
                                 </div>
                             </div>
 
                             <div class="meter-box">
                                 <div class="meter-copy">
-                                    <span>Input Level</span>
+                                    <span>输入音量</span>
                                     <span id="levelValue">0%</span>
                                 </div>
                                 <div class="meter-track">
@@ -1321,14 +1321,14 @@
                         </div>
                     </div>
                     <div class="call-live-card">
-                        <div class="focus-label">Live Transcript</div>
+                        <div class="focus-label">实时转写</div>
                         <div class="live-stack">
                             <div class="live-stream-block">
-                                <small>ASR Partial</small>
+                                <small>ASR 实时结果</small>
                                 <p class="live-text" id="partial">等待实时识别...</p>
                             </div>
                             <div class="live-stream-block">
-                                <small>ASR Final</small>
+                                <small>ASR 最终结果</small>
                                 <p class="live-text" id="final">等待最终转写...</p>
                             </div>
                         </div>
@@ -1348,8 +1348,8 @@
                 <div class="composer-grid">
                     <div class="pane-card">
                         <div class="pane-head">
-                            <small>Message Draft</small>
-                            <span>Enter 发送，Shift + Enter 换行</span>
+                            <small>消息草稿</small>
+                            <span>按 Enter 发送，按 Shift + Enter 换行</span>
                         </div>
                         <input id="textInput"/>
                         <div class="send-row">
@@ -1359,8 +1359,8 @@
 
                     <div class="attachment-card">
                         <div class="pane-head">
-                            <small>Session Attachments</small>
-                            <span>持续挂载到当前会话</span>
+                            <small>会话附件</small>
+                            <span>持续挂载到当前会话中</span>
                         </div>
                         <div class="attachment-row">
                             <input id="attachmentInput" class="attachment-input" type="file" multiple
@@ -1388,15 +1388,15 @@
                 <div class="history-shell">
                     <div class="history-summary">
                         <div class="history-summary-card">
-                            <small>Messages</small>
+                            <small>消息数</small>
                             <strong id="historyMessageCount">0</strong>
                         </div>
                         <div class="history-summary-card">
-                            <small>Turns</small>
+                            <small>轮次数</small>
                             <strong id="historyTurnCount">0</strong>
                         </div>
                         <div class="history-summary-card">
-                            <small>Current Focus</small>
+                            <small>当前焦点</small>
                             <code id="historyFocus">-</code>
                         </div>
                     </div>

@@ -177,13 +177,13 @@ function setMetricValue(target, value, formatter = formatLatency) {
 function formatTimelineMap(timeline = {}) {
   const labels = [
     ["t0_submit", "t0 用户提交"],
-    ["t1_prepare_state_done", "t1 prepare_state_for_turn 完成"],
-    ["t2_router_done", "t2 router.route 完成"],
-    ["t3_turn_plan_done", "t3 build_turn_plan 完成"],
+    ["t1_prepare_state_done", "t1 状态准备完成"],
+    ["t2_router_done", "t2 路由完成"],
+    ["t3_turn_plan_done", "t3 轮次计划完成"],
     ["t4_first_token", "t4 第一个 token"],
-    ["t5_first_tts_submit", "t5 第一次 submit 到 TTS"],
-    ["t6_first_tts_chunk", "t6 第一个 chunk 可用"],
-    ["t7_first_push_pcm", "t7 第一次 push_pcm_bytes"],
+    ["t5_first_tts_submit", "t5 首次提交到 TTS"],
+    ["t6_first_tts_chunk", "t6 第一个 TTS 音频块可用"],
+    ["t7_first_push_pcm", "t7 第一次推送 PCM"],
     ["t8_frontend_playback", "t8 前端开始播放"],
   ];
   return labels
@@ -964,7 +964,7 @@ async function handleAttachmentSelection(files) {
 function addAttachmentFromUrl() {
   const normalized = normalizeAttachmentUrl(attachmentUrlInputEl?.value || "");
   if (!normalized) {
-    log("invalid attachment url");
+    log("附件链接无效");
     return;
   }
   const mimeType = guessMimeTypeFromUrl(normalized);
@@ -981,7 +981,7 @@ function addAttachmentFromUrl() {
   }
   renderAttachmentList();
   syncStagedAttachments();
-  log(`attachment url queued: ${normalized}`);
+  log(`附件链接已加入暂存：${normalized}`);
 }
 
 function syncStagedAttachments() {
@@ -1049,7 +1049,7 @@ function renderHello(msg) {
   } else {
     updateAttachmentState();
   }
-  log(`hello(${compactValue(msg.session_id, getDesiredSessionId())}): ${msg.note || ""}`);
+  log(`会话已建立（${compactValue(msg.session_id, getDesiredSessionId())}）：${msg.note || ""}`);
 }
 
 function handleEvent(msg) {
@@ -1058,7 +1058,7 @@ function handleEvent(msg) {
     return;
   }
   if (msg.type === "pong") {
-    log("pong");
+    log("收到 pong");
     return;
   }
   if (msg.type === "asr_partial") {
@@ -1097,7 +1097,7 @@ function handleEvent(msg) {
       return;
     }
     playPcmChunk(msg.pcm_base64, msg.sample_rate || 24000).catch((error) => {
-      log(`audio play failed: ${String(error?.message || error)}`);
+      log(`音频播放失败：${String(error?.message || error)}`);
     });
     return;
   }
@@ -1108,7 +1108,7 @@ function handleEvent(msg) {
     }
     finishAssistant(msg.turn_id, !!msg.interrupted, msg.text || "");
     if (msg.interrupted) {
-      log("assistant interrupted");
+      log("助手回复已被打断");
     }
     return;
   }
@@ -1128,7 +1128,7 @@ function handleEvent(msg) {
   }
   if (msg.type === "route") {
     const strategy = msg.strategy_id ? ` / ${msg.strategy_id}` : "";
-    log(`route: ${msg.turn_scene} (${Number(msg.confidence || 0).toFixed(2)})${strategy}`);
+    log(`路由结果：${msg.turn_scene}（${Number(msg.confidence || 0).toFixed(2)}）${strategy}`);
     setCodeText(currentRouteEl, `${msg.turn_scene || "-"} / ${msg.session_scene || "-"}`);
     setCodeText(currentBranchEl, msg.turn_scene || "-");
     setCodeText(currentStrategyEl, msg.strategy_id || "-");
@@ -1175,7 +1175,7 @@ function handleEvent(msg) {
       strategy_source: msg.strategy_source || "",
     });
     if (msg.strategy_name) {
-      log(`strategy: ${msg.strategy_id} (${msg.strategy_name})`);
+      log(`策略：${msg.strategy_id}（${msg.strategy_name}）`);
     }
     updateHistoryPanelSummary();
     return;
@@ -1215,11 +1215,11 @@ function handleEvent(msg) {
       renderAttachmentList();
     }
     updateAttachmentState();
-    log(`staged attachments: ${count}`);
+    log(`暂存附件数量：${count}`);
     return;
   }
   if (msg.type === "control") {
-    log(`control: ${msg.action}${msg.detail ? ` (${msg.detail})` : ""}`);
+    log(`控制事件：${msg.action}${msg.detail ? `（${msg.detail}）` : ""}`);
     if (msg.action === "start_turn") {
       flushPartialDraft();
       setSpeakerState("准备回复", "warn");
@@ -1239,10 +1239,10 @@ function handleEvent(msg) {
     return;
   }
   if (msg.type === "error") {
-    log(`server error: ${msg.scope || "server"} ${msg.message}`);
+    log(`服务端错误：${msg.scope || "server"} ${msg.message}`);
     return;
   }
-  log(`msg: ${JSON.stringify(msg)}`);
+  log(`未识别消息：${JSON.stringify(msg)}`);
 }
 
 function attachSocket(socket) {
@@ -1254,7 +1254,7 @@ function attachSocket(socket) {
   ws.onopen = () => {
     setPillValue(connStateEl, "已连接", "ok");
     updateConnectButton();
-    log("WS open");
+    log("实时连接已建立");
     ws.send(JSON.stringify({ type: "ping" }));
   };
 
@@ -1262,21 +1262,21 @@ function attachSocket(socket) {
     setPillValue(connStateEl, "已断开", "muted");
     setPillValue(sessionStateEl, "-", "muted");
     updateConnectButton();
-    log("WS close");
+    log("实时连接已断开");
     stopPlaybackQueue();
     await stopMicrophone();
     updateAttachmentState();
   };
 
   ws.onerror = (event) => {
-    log(`WS error: ${String(event?.message || event)}`);
+    log(`实时连接错误：${String(event?.message || event)}`);
   };
 
   ws.onmessage = (evt) => {
     try {
       handleEvent(JSON.parse(evt.data));
     } catch {
-      log(`text: ${evt.data}`);
+      log(`收到文本：${evt.data}`);
     }
   };
 }
@@ -1373,7 +1373,7 @@ async function startMicrophone() {
   isMicActive = true;
   isMicTransitioning = false;
   updateMicButton();
-  log(`Mic start: AudioContext sampleRate=${audioCtx.sampleRate}`);
+  log(`麦克风已启动：音频上下文采样率=${audioCtx.sampleRate}`);
 }
 
 async function stopMicrophone() {
@@ -1412,10 +1412,10 @@ async function stopMicrophone() {
       try {
         ws.send(JSON.stringify({ type: "mic_stopped" }));
       } catch (error) {
-        log(`mic stop commit failed: ${String(error?.message || error)}`);
+        log(`麦克风停止提交失败：${String(error?.message || error)}`);
       }
     }
-    log("Mic stopped");
+    log("麦克风已停止");
   }
 }
 
@@ -1428,7 +1428,7 @@ async function toggleSocket() {
     await ensurePlaybackContext();
     await connectSocket();
   } catch (error) {
-    log(`connect failed: ${String(error?.message || error)}`);
+    log(`连接失败：${String(error?.message || error)}`);
   }
 }
 
@@ -1439,16 +1439,16 @@ async function applySessionSwitch() {
       await stopMicrophone();
     }
     ws.close();
-    log(`session switch requested: ${nextSessionId}`);
+    log(`请求切换会话：${nextSessionId}`);
     window.setTimeout(() => {
       connectSocket().catch((error) => {
-        log(`session reconnect failed: ${String(error?.message || error)}`);
+        log(`会话重连失败：${String(error?.message || error)}`);
       });
     }, 120);
     return;
   }
   setCodeText(currentSessionIdEl, nextSessionId);
-  log(`session prepared: ${nextSessionId}`);
+  log(`会话已准备就绪：${nextSessionId}`);
 }
 
 async function toggleMicrophone() {
@@ -1462,7 +1462,7 @@ async function toggleMicrophone() {
       await startMicrophone();
     }
   } catch (error) {
-    log(`mic error: ${String(error?.message || error)}`);
+    log(`麦克风异常：${String(error?.message || error)}`);
     await stopMicrophone();
   }
 }
@@ -1470,12 +1470,12 @@ async function toggleMicrophone() {
 function toggleMute() {
   isMuted = !isMuted;
   updateMuteButton();
-  log(isMuted ? "Mic muted" : "Mic unmuted");
+  log(isMuted ? "麦克风已静音" : "麦克风已取消静音");
 }
 
 function interruptPlayback() {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    log("WS 未连接，无法 interrupt");
+    log("实时连接未建立，无法发送打断指令");
     return;
   }
   stopPlaybackQueue();
@@ -1507,54 +1507,54 @@ async function sendTextMessage() {
       key: `user-local-${Date.now()}-${localMessageSeq++}`,
     });
     textInputEl.value = "";
-    log(`text send: ${text ? text.slice(0, 48) : "[attachments]"}`);
+    log(`文本已发送：${text ? text.slice(0, 48) : "[仅附件]"}`);
   } catch (error) {
-    log(`send failed: ${String(error?.message || error)}`);
+    log(`发送失败：${String(error?.message || error)}`);
   }
 }
 
-function buildStrategyContextText() {
+function buildDebugContextText() {
   const attachmentLines = pendingAttachments.length
     ? pendingAttachments.map((item) => `- ${describeAttachment(item)}: ${item.name}`).join("\n")
     : "无";
   const activeSessionId = compactValue(currentSessionIdEl?.textContent, getDesiredSessionId());
   return [
-    `session_id: ${activeSessionId}`,
-    `route: ${compactValue(currentRouteEl?.textContent)}`,
-    `handler: ${compactValue(currentHandlerEl?.textContent)}`,
-    `branch: ${compactValue(currentBranchEl?.textContent)}`,
-    `strategy_id: ${compactValue(currentStrategyEl?.textContent)}`,
-    `strategy_name: ${compactValue(currentStrategyNameEl?.textContent)}`,
-    `delivery_mode: ${compactValue(currentDeliveryEl?.textContent)}`,
-    `ui_mode: ${compactValue(currentUiModeEl?.textContent)}`,
-    `user_followup_type: ${compactValue(currentFollowupTypeEl?.textContent)}`,
-    `render_template: ${compactValue(currentRenderTemplateEl?.textContent)}`,
-    `strategy_source: ${compactValue(currentStrategySourceEl?.textContent)}`,
-    `artifact_subject_hint: ${compactValue(currentArtifactSubjectHintEl?.textContent)}`,
-    `artifact_task_hint: ${compactValue(currentArtifactTaskHintEl?.textContent)}`,
+    `会话 ID: ${activeSessionId}`,
+    `路由: ${compactValue(currentRouteEl?.textContent)}`,
+    `处理器: ${compactValue(currentHandlerEl?.textContent)}`,
+    `分支: ${compactValue(currentBranchEl?.textContent)}`,
+    `策略 ID: ${compactValue(currentStrategyEl?.textContent)}`,
+    `策略名称: ${compactValue(currentStrategyNameEl?.textContent)}`,
+    `输出模式: ${compactValue(currentDeliveryEl?.textContent)}`,
+    `界面模式: ${compactValue(currentUiModeEl?.textContent)}`,
+    `追问类型: ${compactValue(currentFollowupTypeEl?.textContent)}`,
+    `渲染模板: ${compactValue(currentRenderTemplateEl?.textContent)}`,
+    `策略来源: ${compactValue(currentStrategySourceEl?.textContent)}`,
+    `附件学科提示: ${compactValue(currentArtifactSubjectHintEl?.textContent)}`,
+    `附件任务提示: ${compactValue(currentArtifactTaskHintEl?.textContent)}`,
     "",
-    "attachments:",
+    "附件：",
     attachmentLines,
     "",
-    "multimodal_summary:",
+    "多模态摘要：",
     compactValue(multimodalSummaryEl?.textContent, "无"),
     "",
-    "artifact_text:",
+    "附件文本：",
     compactValue(artifactTextViewEl?.textContent, "无"),
     "",
-    "system_prompt:",
+    "系统提示词：",
     compactValue(promptViewEl?.textContent, "无"),
     "",
-    "turn_timeline:",
+    "轮次时序：",
     compactValue(timelineViewEl?.textContent, "无"),
   ].join("\n");
 }
 
-async function copyStrategyContext() {
-  const text = buildStrategyContextText();
+async function copyDebugContext() {
+  const text = buildDebugContextText();
   try {
     await navigator.clipboard.writeText(text);
-    log("strategy context copied");
+    log("调试上下文已复制");
   } catch (error) {
     const fallback = document.createElement("textarea");
     fallback.value = text;
@@ -1565,9 +1565,9 @@ async function copyStrategyContext() {
     fallback.select();
     try {
       document.execCommand("copy");
-      log("strategy context copied");
+      log("调试上下文已复制");
     } catch (copyError) {
-      log(`copy failed: ${String(copyError?.message || error?.message || copyError || error)}`);
+      log(`复制失败：${String(copyError?.message || error?.message || copyError || error)}`);
     } finally {
       document.body.removeChild(fallback);
     }
@@ -1588,7 +1588,7 @@ btnClear.addEventListener("click", () => {
   setLiveText(partialEl, "", "等待实时识别...");
   setLiveText(finalEl, "", "等待最终转写...");
   clearAttachments();
-  log("local transcript cleared");
+  log("本地转写记录已清空");
 });
 btnSend.addEventListener("click", sendTextMessage);
 btnPickAttachment.addEventListener("click", () => attachmentInputEl.click());
@@ -1598,7 +1598,7 @@ if (btnAddAttachmentUrl) {
 btnClearAttachment.addEventListener("click", clearAttachments);
 if (btnCopyStrategyContext) {
   btnCopyStrategyContext.addEventListener("click", () => {
-    copyStrategyContext();
+    copyDebugContext();
   });
 }
 
@@ -1608,9 +1608,9 @@ attachmentInputEl.addEventListener("change", async (event) => {
   try {
     await handleAttachmentSelection(files);
     syncStagedAttachments();
-    log(`attachments queued: ${files.length}`);
+    log(`已暂存附件：${files.length}`);
   } catch (error) {
-    log(`attachment read failed: ${String(error?.message || error)}`);
+    log(`附件读取失败：${String(error?.message || error)}`);
   }
 });
 

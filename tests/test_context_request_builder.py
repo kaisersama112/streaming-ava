@@ -4,13 +4,13 @@ from pathlib import Path
 from unittest.mock import patch
 from dataclasses import replace
 
-from ava.llm_model_executor.service import LLMService
-from ava.llm_model_executor.request import InferenceRequestBuilder
+# from ava.llm_model_executor.service import LLMService
+# from ava.llm_model_executor.request import InferenceRequestBuilder
 from ava.capabilities.prompt import EducationPromptCatalog
 from ava.llm_model_executor.types import InferenceTask
 from ava.capabilities.prompt import PromptCenter, PromptCenterConfig
 from ava.multi_turn_context_builder.compiler import ContextCompiler
-from ava.multi_turn_context_builder.input import AttachmentPayload
+# from ava.multi_turn_context_builder.input import AttachmentPayload
 from ava.multi_turn_context_builder.types import ConversationBuildOptions
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy, ResolvedPromptSpec

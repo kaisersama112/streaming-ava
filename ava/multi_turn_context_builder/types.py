@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ava.domain.multimodal.media import MediaArtifact, TurnInput
-
 
 @dataclass(frozen=True)
 class ContextSession:
@@ -20,16 +18,20 @@ class ContextSession:
 
 @dataclass(frozen=True)
 class ContextTurn:
-    """当前轮输入信息。"""
+    """当前轮最小输入信息。"""
 
-    turn_input: TurnInput
-    user_text: str
-    artifacts: tuple[MediaArtifact, ...] = ()
+    user_message: dict[str, Any]
 
 
 @dataclass(frozen=True)
 class ConversationContext:
-    """只承载当前轮构造所需的最小上下文本体。"""
+    """最小对话上下文本体。
+
+    这里只保留：
+    - 会话元信息
+    - 当前轮 user message
+    - 可见多轮消息数组
+    """
 
     session: ContextSession
     current: ContextTurn
@@ -38,7 +40,7 @@ class ConversationContext:
 
 @dataclass(frozen=True)
 class ConversationBuildOptions:
-    """构建会话上下文时使用的选项。"""
+    """构建上下文时的选项。"""
 
     history_window: int
     current_turn_id: int | None = None
@@ -48,7 +50,7 @@ class ConversationBuildOptions:
 
 @dataclass(frozen=True)
 class CompiledInstructions:
-    """单个模型阶段使用的 instructions 编译结果。"""
+    """单阶段指令编译结果。"""
 
     phase: str
     text: str
@@ -57,19 +59,8 @@ class CompiledInstructions:
 
 
 @dataclass(frozen=True)
-class SkillSelection:
-    """编译阶段选中的单个技能片段。"""
-
-    skill_id: str
-    title: str
-    instruction_fragment: str
-    source_kind: str = "builtin"
-    source_path: str | None = None
-
-
-@dataclass(frozen=True)
 class CompiledConversationPayload:
-    """面向模型输入的最终上下文载荷。"""
+    """最终传给模型的一轮载荷。"""
 
     instructions: str
     input: list[dict[str, Any]]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ava.domain.multimodal import TurnInput
 from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
@@ -16,17 +15,27 @@ def _contains_any(text: str, keywords: tuple[str, ...] | list[str]) -> bool:
 
 def classify_user_followup_type(
     state: ConversationState,
-    turn_input: TurnInput,
+    user_message: dict[str, Any],
     decision: RouteDecision,
     strategy: BranchStrategy | None,
 ) -> str:
-    text = turn_input.normalized_text()
-    has_artifacts = bool(turn_input.artifacts)
+    text = ConversationState._message_text_from_user_message(user_message)
+    has_artifacts = any(
+        isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
+        for block in list(user_message.get("content") or [])
+    )
     last_turn = {}
     for record in reversed(state.turn_records):
         if record.get("turn_status") == "pending":
             continue
-        if record.get("decision") or record.get("strategy") or record.get("assistant_text"):
+        assistant_message = dict(record.get("assistant_message") or {})
+        has_assistant_text = any(
+            isinstance(block, dict)
+            and str(block.get("type", "") or "").strip() == "output_text"
+            and str(block.get("text", "") or "").strip()
+            for block in list(assistant_message.get("content") or [])
+        )
+        if record.get("decision") or record.get("strategy") or has_assistant_text:
             last_turn = record
             break
     last_decision = dict(last_turn.get("decision") or {})
@@ -56,11 +65,15 @@ def classify_user_followup_type(
 
 def build_evaluation_tags(
     state: ConversationState,
-    turn_input: TurnInput,
+    user_message: dict[str, Any],
     decision: RouteDecision,
     strategy: BranchStrategy | None,
 ) -> dict[str, Any]:
-    modalities = [artifact.kind for artifact in turn_input.artifacts] or (["text"] if turn_input.normalized_text() else [])
+    modalities = [
+        str(block.get("type", "") or "").strip().replace("input_", "")
+        for block in list(user_message.get("content") or [])
+        if isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
+    ] or (["text"] if ConversationState._message_text_from_user_message(user_message) else [])
     analysis = dict(getattr(strategy, "analysis", {}) or {}) if strategy is not None else {}
     frame = dict(analysis.get("education_turn_frame") or analysis.get("task_frame") or {})
     continuity = dict(analysis.get("continuity") or {})
@@ -75,9 +88,9 @@ def build_evaluation_tags(
         "render_template": strategy.render_template if strategy else "",
         "delivery_mode": strategy.delivery_mode if strategy else "",
         "ui_mode": strategy.ui_mode if strategy else "",
-        "user_followup_type": classify_user_followup_type(state, turn_input, decision, strategy),
+        "user_followup_type": classify_user_followup_type(state, user_message, decision, strategy),
         "input_modalities": modalities,
-        "has_artifacts": bool(turn_input.artifacts),
+        "has_artifacts": bool(modalities and modalities != ["text"]),
         "intent": decision.intent,
         "route_confidence": decision.confidence,
         "education_turn_frame": frame,

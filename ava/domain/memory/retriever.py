@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from ava.domain.memory.types import ArtifactMemoryEntry, RetrievedMemory
-from ava.domain.multimodal import MediaArtifact, TurnInput
+
+from .message import user_message_summary, user_message_text
 
 
 def _trim_dict(source: dict[str, Any], *, allowed_keys: tuple[str, ...]) -> dict[str, Any]:
@@ -20,13 +21,13 @@ class MemoryRetriever:
     def retrieve(
         self,
         memory,
-        turn_input: TurnInput,
+        user_message: dict[str, Any],
         *,
-        current_artifacts: tuple[MediaArtifact, ...] = (),
-        reference_artifacts: tuple[MediaArtifact, ...] = (),
+        current_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        reference_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
         limit: int = 6,
     ) -> list[RetrievedMemory]:
-        text = (turn_input.normalized_text() or turn_input.multimodal_summary() or "").strip().lower()
+        text = (user_message_text(user_message) or user_message_summary(user_message) or "").strip().lower()
         results: list[RetrievedMemory] = []
 
         compact_education = _trim_dict(

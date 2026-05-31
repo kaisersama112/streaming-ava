@@ -5,8 +5,6 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from ava.domain.multimodal import MediaArtifact
-
 
 class ArtifactMemoryStore:
     def __init__(self) -> None:
@@ -32,23 +30,17 @@ class ArtifactMemoryStore:
         return self.cache
 
     @staticmethod
-    def _artifact_source_token(artifact: MediaArtifact | dict[str, Any]) -> str:
-        if isinstance(artifact, MediaArtifact):
-            ref = artifact.data_url or artifact.uri or artifact.name
-            kind = artifact.kind
-            name = artifact.name
-            summary = artifact.summary
-        else:
-            ref = artifact.get("data_url") or artifact.get("uri") or artifact.get("name") or ""
-            kind = str(artifact.get("kind", "") or "")
-            name = str(artifact.get("name", "") or "")
-            summary = str(artifact.get("summary", "") or "")
+    def _artifact_source_token(artifact: dict[str, Any]) -> str:
+        ref = artifact.get("data_url") or artifact.get("uri") or artifact.get("name") or ""
+        kind = str(artifact.get("kind", "") or "")
+        name = str(artifact.get("name", "") or "")
+        summary = str(artifact.get("summary", "") or "")
         digest = hashlib.sha256(str(ref).encode("utf-8", errors="ignore")).hexdigest()[:16]
         return f"{kind}:{name}:{digest}:{summary[:32]}"
 
     def artifact_bundle_key(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact] | list[dict[str, Any]],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> str:
         parts = [self._artifact_source_token(artifact) for artifact in list(artifacts or [])]
         return "|".join(parts[:4])
@@ -62,16 +54,16 @@ class ArtifactMemoryStore:
 
     def metadata_artifact_analysis(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
         items = list(artifacts or [])
         if not items:
             return {}
         first = items[0]
-        metadata = dict(first.metadata or {})
+        metadata = dict(first.get("metadata") or {})
         return {
-            "summary": self._truncate_text(first.summary or first.name or "????", 120),
-            "question_summary": self._truncate_text(first.summary or first.name or "????", 120),
+            "summary": self._truncate_text(str(first.get("summary") or first.get("name") or "附件"), 120),
+            "question_summary": self._truncate_text(str(first.get("summary") or first.get("name") or "附件"), 120),
             "subject_hint": str(metadata.get("subject_hint") or "unknown").strip() or "unknown",
             "task_hint": str(metadata.get("task_hint") or "unknown").strip() or "unknown",
             "contains_student_work": bool(metadata.get("contains_student_work")),
@@ -90,7 +82,7 @@ class ArtifactMemoryStore:
 
     def cached_artifact_analysis(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
         cache_key = self.artifact_bundle_key(artifacts)
         if not cache_key:
@@ -102,7 +94,7 @@ class ArtifactMemoryStore:
 
     def cached_or_metadata_artifact_analysis(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
         cached = self.cached_artifact_analysis(artifacts)
         if cached:
@@ -111,7 +103,7 @@ class ArtifactMemoryStore:
 
     def remember_artifact_analysis(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
         analysis: dict[str, Any],
     ) -> None:
         cache_key = self.artifact_bundle_key(artifacts)

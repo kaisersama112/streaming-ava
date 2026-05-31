@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ava.multi_turn_context_builder.types import ConversationContext
-from ava.domain.multimodal.media import MediaArtifact, TurnInput
+from ava.domain.multimodal.media import MediaArtifact
 
 __all__ = [
     "BranchStrategy",
@@ -16,7 +16,6 @@ __all__ = [
     "ResolvedPromptSpec",
     "ScenarioPolicy",
     "SelectionTraceStep",
-    "TurnInput",
 ]
 
 

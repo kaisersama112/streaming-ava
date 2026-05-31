@@ -1,4 +1,4 @@
-"""Function tools exposed to Agents SDK managers and specialists."""
+"""暴露给 Agents SDK 的函数工具。"""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from agents import RunContextWrapper, function_tool
+from ava.domain.memory.message import user_message_summary
 
 from .context import AvaAgentContext
 
@@ -49,18 +50,23 @@ def get_recent_history(context: RunContextWrapper[AvaAgentContext], limit: int =
 
 @function_tool
 def get_reference_materials(context: RunContextWrapper[AvaAgentContext]) -> str:
-    """Return a compact summary of current and inherited multimodal materials."""
+    """返回当前用户消息中的参考材料摘要。"""
     runtime = context.context
+    current_blocks = [
+        dict(block)
+        for block in list(runtime.context.current.user_message.get("content") or [])
+        if isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
+    ]
     payload = {
-        "current_artifacts": [artifact.to_prompt_dict() for artifact in runtime.context.artifacts.current],
-        "reference_artifacts": [artifact.to_prompt_dict() for artifact in runtime.context.artifacts.reference],
-        "input_summary": runtime.turn_input.multimodal_summary() or runtime.context.current.user_text,
+        "current_artifacts": current_blocks,
+        "reference_artifacts": [],
+        "input_summary": user_message_summary(runtime.context.current.user_message),
     }
     runtime.add_event(
         "tool.get_reference_materials",
         {
-            "current_artifacts": len(runtime.context.artifacts.current),
-            "reference_artifacts": len(runtime.context.artifacts.reference),
+            "current_artifacts": len(current_blocks),
+            "reference_artifacts": 0,
         },
     )
     return _safe_json(payload)

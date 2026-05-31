@@ -7,6 +7,7 @@ from typing import Any
 
 from ava.capabilities.prompt.education_catalog import EducationPromptAssets, EducationPromptCatalog
 from ava.capabilities.prompt.prompt_loader import PromptCenter
+from ava.domain.memory.message import user_message_text
 from ava.multi_turn_context_builder.types import ConversationContext
 from ava.pipeline.generation.education_plan import EducationTurnPlan
 from ava.router_selector.schema import RouteDecision
@@ -160,7 +161,7 @@ class EducationPlanResolver:
         if raw_value and candidate in self._VALID_LEARNER_STATES:
             return candidate
 
-        user_text = str(context.current.user_text or "").strip().lower()
+        user_text = user_message_text(context.current.user_message).strip().lower()
         if any(token in user_text for token in ("不会", "不懂", "卡住", "下一步", "怎么做")):
             return "blocked"
         if any(token in user_text for token in ("stuck", "next step", "how do i", "how to do", "can't do")):

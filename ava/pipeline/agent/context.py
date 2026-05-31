@@ -1,4 +1,4 @@
-"""Shared runtime context passed through OpenAI Agents SDK runs."""
+"""Agents SDK 运行时共享上下文。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import threading
 from typing import Any
 
 from ava.multi_turn_context_builder.types import ConversationContext
-from ava.domain.multimodal import TurnInput
 from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
@@ -15,11 +14,18 @@ from ava.domain.conversation.strategy import BranchStrategy
 
 @dataclass
 class AvaAgentContext:
-    """Local-only execution context for Agents SDK runs.
+    """Agents SDK 本地运行时上下文。
 
-    This object is available to dynamic instructions, tools, and callbacks.
-    It is not automatically exposed to the model; anything the model must know
-    needs to be surfaced via instructions or tool outputs.
+    该对象只供：
+    - 动态 instructions
+    - tools
+    - 回调
+
+    使用。
+
+    注意：
+    - 它不会自动暴露给模型
+    - 模型真正可见的信息必须通过 instructions 或 tool 输出显式提供
     """
 
     session_id: str
@@ -28,7 +34,7 @@ class AvaAgentContext:
     context: ConversationContext
     decision: RouteDecision
     strategy: BranchStrategy
-    turn_input: TurnInput
+    user_message: dict[str, Any]
     stop_event: threading.Event | None = None
     pending_state_patches: list[dict[str, Any]] = field(default_factory=list)
     debug_events: list[dict[str, Any]] = field(default_factory=list)

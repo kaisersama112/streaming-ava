@@ -15,14 +15,12 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from ava.multi_turn_context_builder.compiler import ContextCompiler
-from ava.context_engine.input import AttachmentPayload
-from ava.core.session import load_state
 from ava.interfaces.websocket import PlayerConfig, get_bridge
 from ava.capabilities.asr.asr_streaming_client import StreamingASRClient
 from ava.capabilities.asr.asr_streaming_sdk import ASRError
 from ava.capabilities.asr.factory import build_asr_config
 from ava.pipeline.streaming import RealtimeConversationSession
+from ava.domain.conversation.state import ConversationState
 from configs import settings
 
 # WebSocket 实时服务模块日志记录器
@@ -40,7 +38,7 @@ class WSRuntime:
     - asr: 流式 ASR 客户端，负责接收 PCM 音频并返回识别结果
     - player_url: 前端播放器地址
     - asr_task/event_task: 后台异步任务
-    - staged_attachments: 暂存的附件，供后续文本/语音轮次消费
+    - staged_attachments: 暂存的标准附件内容块，供后续文本/语音轮次消费
     """
 
     session: RealtimeConversationSession
@@ -48,7 +46,7 @@ class WSRuntime:
     player_url: str
     asr_task: asyncio.Task | None = None
     event_task: asyncio.Task | None = None
-    staged_attachments: list[AttachmentPayload] = field(default_factory=list)
+    staged_attachments: list[dict[str, object]] = field(default_factory=list)
 
 
 def _normalize_attachment_url(raw: str) -> str:
@@ -103,7 +101,79 @@ def _guess_attachment_name(uri: str, mime_type: str) -> str:
     return f"attachment{ext}"
 
 
-def _fetch_attachment_from_url(item: dict[str, object]) -> AttachmentPayload | None:
+def _guess_audio_format(mime_type: str) -> str:
+    value = str(mime_type or "").strip().lower()
+    if "/" in value:
+        return value.split("/", 1)[1] or "wav"
+    return "wav"
+
+
+def _to_data_url(mime_type: str, data: bytes) -> str:
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _attachment_item_to_content_block(
+        *,
+        name: str,
+        mime_type: str,
+        data: bytes | None = None,
+        uri: str | None = None,
+        summary: str = "",
+) -> dict[str, object] | None:
+    """把附件元数据转换为标准 user message 内容块。"""
+    normalized_name = str(name or "attachment").strip() or "attachment"
+    normalized_mime_type = str(mime_type or "application/octet-stream").strip() or "application/octet-stream"
+    normalized_uri = str(uri or "").strip()
+    normalized_summary = str(summary or "").strip()
+    data_url = _to_data_url(normalized_mime_type, data) if data else ""
+
+    if normalized_mime_type.startswith("image/"):
+        image_url = data_url or normalized_uri
+        if not image_url:
+            return None
+        return {
+            "type": "input_image",
+            "image_url": image_url,
+            "filename": normalized_name,
+            "mime_type": normalized_mime_type,
+            "summary": normalized_summary,
+            "uri": normalized_uri or None,
+        }
+
+    if normalized_mime_type.startswith("audio/"):
+        audio_data = data_url or normalized_uri
+        if not audio_data:
+            return None
+        return {
+            "type": "input_audio",
+            "input_audio": {
+                "data": audio_data,
+                "format": _guess_audio_format(normalized_mime_type),
+            },
+            "filename": normalized_name,
+            "mime_type": normalized_mime_type,
+            "summary": normalized_summary,
+            "uri": normalized_uri or None,
+        }
+
+    block: dict[str, object] = {
+        "type": "input_file",
+        "filename": normalized_name,
+        "mime_type": normalized_mime_type,
+        "summary": normalized_summary,
+    }
+    if data_url:
+        block["file_data"] = data_url
+    if normalized_uri:
+        block["file_url"] = normalized_uri
+        block["uri"] = normalized_uri
+    if "file_data" not in block and "file_url" not in block:
+        return None
+    return block
+
+
+def _fetch_attachment_from_url(item: dict[str, object]) -> dict[str, object] | None:
     candidates = _candidate_attachment_urls(str(item.get("uri", "") or ""))
     if not candidates:
         return None
@@ -134,7 +204,7 @@ def _fetch_attachment_from_url(item: dict[str, object]) -> AttachmentPayload | N
                     chunks.append(chunk)
                 data = b"".join(chunks)
 
-            return AttachmentPayload(
+            return _attachment_item_to_content_block(
                 name=str(item.get("name") or _guess_attachment_name(uri, mime_type)),
                 mime_type=str(item.get("mime_type") or mime_type),
                 data=data,
@@ -149,8 +219,8 @@ def _fetch_attachment_from_url(item: dict[str, object]) -> AttachmentPayload | N
     return None
 
 
-async def _decode_attachments(items: list[dict[str, object]] | None) -> list[AttachmentPayload]:
-    """将前端传来的附件字典列表解码为 AttachmentPayload 列表。
+async def _decode_attachments(items: list[dict[str, object]] | None) -> list[dict[str, object]]:
+    """将前端附件字典列表解码为标准用户消息内容块列表。
 
     输入格式约定：
     - data_base64: base64 编码后的二进制内容
@@ -163,24 +233,24 @@ async def _decode_attachments(items: list[dict[str, object]] | None) -> list[Att
     - 空数据会被跳过
     - base64 解码失败的项会被忽略
     """
-    attachments: list[AttachmentPayload] = []
+    attachments: list[dict[str, object]] = []
     for item in items or []:
         raw = str(item.get("data_base64", "") or "").strip()
         if raw:
             try:
                 binary = base64.b64decode(raw)
             except Exception:
-                # 闈炴硶 base64 鏁版嵁鐩存帴璺宠繃锛岄伩鍏嶅奖鍝嶆暣涓姹?
+                # 非法 base64 数据直接跳过，避免影响整条请求。
                 continue
-            attachments.append(
-                AttachmentPayload(
-                    name=str(item.get("name", "attachment")),
-                    mime_type=str(item.get("mime_type", "application/octet-stream")),
-                    data=binary,
-                    summary=str(item.get("summary", "") or ""),
-                    uri=str(item.get("uri", "") or "") or None,
-                )
+            block = _attachment_item_to_content_block(
+                name=str(item.get("name", "attachment")),
+                mime_type=str(item.get("mime_type", "application/octet-stream")),
+                data=binary,
+                summary=str(item.get("summary", "") or ""),
+                uri=str(item.get("uri", "") or "") or None,
             )
+            if block is not None:
+                attachments.append(block)
             continue
         try:
             attachment = await asyncio.to_thread(_fetch_attachment_from_url, item)
@@ -191,29 +261,66 @@ async def _decode_attachments(items: list[dict[str, object]] | None) -> list[Att
     return attachments
 
 
-def _attachment_payloads(attachments: list[AttachmentPayload]) -> list[dict[str, object]]:
-    """将内部附件对象转换为可发送给前端的 JSON 载荷。
-
-    对图片/音频/视频类型，额外生成 data_url，便于前端直接预览。
-    其他类型仅返回元信息，不内联原始二进制数据。
-    """
+def _attachment_payloads(attachments: list[dict[str, object]]) -> list[dict[str, object]]:
+    """将标准附件内容块转换为前端可消费的预览载荷。"""
     payload: list[dict[str, object]] = []
-    for attachment in attachments:
-        data_url = ""
-        if attachment.mime_type.startswith(("image/", "audio/", "video/")):
-            encoded = base64.b64encode(attachment.data).decode("ascii")
-            data_url = f"data:{attachment.mime_type};base64,{encoded}"
-        payload.append(
-            {
-                "name": attachment.name,
-                "mime_type": attachment.mime_type,
-                "summary": attachment.summary,
-                "size_bytes": len(attachment.data),
-                "data_url": data_url,
-                "uri": attachment.uri,
-                "preview_url": data_url or attachment.uri or "",
-            }
-        )
+    for index, attachment in enumerate(attachments, start=1):
+        block_type = str(attachment.get("type", "") or "").strip()
+        if block_type == "input_image":
+            image_url = str(attachment.get("image_url", "") or "").strip()
+            image_uri = str(attachment.get("uri", "") or "").strip()
+            if not image_uri and image_url and not image_url.startswith("data:"):
+                image_uri = image_url
+            payload.append(
+                {
+                    "name": str(attachment.get("filename", "") or f"image-{index}"),
+                    "mime_type": str(attachment.get("mime_type", "image/*") or "image/*"),
+                    "summary": str(attachment.get("summary", "") or ""),
+                    "size_bytes": 0,
+                    "data_url": image_url if image_url.startswith("data:") else "",
+                    "uri": image_uri,
+                    "preview_url": image_url,
+                }
+            )
+            continue
+
+        if block_type == "input_audio":
+            audio_payload = dict(attachment.get("input_audio") or {})
+            audio_data = str(audio_payload.get("data", "") or "").strip()
+            audio_format = str(audio_payload.get("format", "") or "wav").strip()
+            mime_type = str(attachment.get("mime_type", "") or f"audio/{audio_format}")
+            audio_uri = str(attachment.get("uri", "") or "").strip()
+            if not audio_uri and audio_data and not audio_data.startswith("data:"):
+                audio_uri = audio_data
+            payload.append(
+                {
+                    "name": str(attachment.get("filename", "") or f"audio-{index}"),
+                    "mime_type": mime_type,
+                    "summary": str(attachment.get("summary", "") or ""),
+                    "size_bytes": 0,
+                    "data_url": audio_data if audio_data.startswith("data:") else "",
+                    "uri": audio_uri,
+                    "preview_url": audio_data,
+                }
+            )
+            continue
+
+        if block_type == "input_file":
+            file_data = str(attachment.get("file_data", "") or "").strip()
+            file_url = str(attachment.get("file_url", "") or attachment.get("uri", "") or "").strip()
+            payload.append(
+                {
+                    "name": str(attachment.get("filename", "") or f"file-{index}"),
+                    "mime_type": str(
+                        attachment.get("mime_type", "application/octet-stream") or "application/octet-stream"),
+                    "summary": str(attachment.get("summary", "") or ""),
+                    "size_bytes": 0,
+                    "data_url": file_data if file_data.startswith("data:") else "",
+                    "uri": file_url,
+                    "preview_url": file_data or file_url,
+                }
+            )
+            continue
     return payload
 
 
@@ -275,8 +382,6 @@ def _resolve_session_id(raw: str | None) -> str:
     若前端未提供 session_id，则回退到默认配置值。
     最终通过 ConversationState.normalize_session_id 进行标准化处理。
     """
-    from ava.domain.conversation.state import ConversationState
-
     return ConversationState.normalize_session_id(raw or settings.runtime.default_session_id)
 
 
@@ -315,17 +420,18 @@ def _build_bridge_session(ws: WebSocket, session_id: str) -> tuple[RealtimeConve
     try:
         player_url = bridge.launch()
     except Exception:
-        # 鑻?bridge 宸插惎鍔ㄦ垨鍚姩澶辫触锛屽垯淇濈暀鍏滃簳鍦板潃
+        # 若 bridge 已启动或启动失败，则保留兜底地址。
         pass
 
     player_url = _resolve_player_url(player_url, ws)
 
     # 若 bridge 已启动或启动失败，则保留兜底地址
-    state = load_state(
+    state = ConversationState(
         settings.runtime.state_file,
         settings.runtime.history_window,
         session_id=session_id,
     )
+    state.load()
     return (
         RealtimeConversationSession(
             bridge,
@@ -339,7 +445,7 @@ def _build_bridge_session(ws: WebSocket, session_id: str) -> tuple[RealtimeConve
 
 
 def create_app() -> FastAPI:
-    """Create the FastAPI app and register HTTP/WebSocket routes."""
+    """创建 FastAPI 应用并注册 HTTP / WebSocket 路由。"""
     app = FastAPI(title="streaming-ava-realtime")
 
     # 提供一个最小可用的静态前端页面（非 Streamlit）。
@@ -352,17 +458,17 @@ def create_app() -> FastAPI:
 
         @app.get("/")
         async def index():  # type: ignore[override]
-            """Return the static frontend index page."""
+            """返回静态前端首页。"""
             return FileResponse(str(static_dir / "index.html"))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        """Health check endpoint."""
+        """健康检查接口。"""
         return {"status": "ok"}
 
     @app.websocket("/ws/audio")
     async def ws_audio(ws: WebSocket):
-        """Realtime audio WebSocket endpoint."""
+        """实时音频 WebSocket 接口。"""
         await ws.accept()
         ws_closed = asyncio.Event()
         session_id = _resolve_session_id(ws.query_params.get("session_id"))
@@ -578,8 +684,14 @@ def create_app() -> FastAPI:
                     text = str(obj.get("text", "")).strip()
                     attachments = await _decode_attachments(obj.get("attachments", []) or [])
                     if text or attachments:
-                        turn_input = ContextCompiler().build_turn_input(text, attachments, source="realtime_web_text")
-                        runtime.session.submit_turn(turn_input, user_text=text or turn_input.multimodal_summary())
+                        user_message_content: list[dict[str, object]] = []
+                        if text:
+                            user_message_content.append({"type": "input_text", "text": text})
+                        user_message_content.extend(attachments)
+                        runtime.session.submit_turn(
+                            {"role": "user", "content": user_message_content},
+                            source="realtime_web_text",
+                        )
                     continue
 
                 if mtype == "stage_attachments":

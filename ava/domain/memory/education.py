@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ava.domain.multimodal import TurnInput
+from .message import user_message_summary
 
 
 class EducationMemory:
@@ -82,7 +82,7 @@ class EducationMemory:
         self,
         strategy: dict[str, Any] | None,
         *,
-        turn_input: TurnInput | None = None,
+        user_message: dict[str, Any] | None = None,
     ) -> None:
         if not strategy:
             return
@@ -138,8 +138,8 @@ class EducationMemory:
         if knowledge_point:
             self._state["knowledge_point"] = knowledge_point
 
-        if turn_input is not None and "problem" in set(learning_objects):
-            current_problem = turn_input.normalized_text() or turn_input.multimodal_summary()
+        if user_message is not None and "problem" in set(learning_objects):
+            current_problem = user_message_summary(user_message)
             if current_problem:
                 self._state["last_problem"] = current_problem[:80]
 

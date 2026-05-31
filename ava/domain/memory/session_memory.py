@@ -10,7 +10,6 @@ from ava.domain.memory.projector import MemoryProjector
 from ava.domain.memory.retriever import MemoryRetriever
 from ava.domain.memory.summaries import SummaryMemory
 from ava.domain.memory.types import MemoryProjection, RetrievedMemory
-from ava.domain.multimodal import MediaArtifact, TurnInput
 
 
 class SessionMemory:
@@ -98,49 +97,49 @@ class SessionMemory:
         self,
         strategy: dict[str, Any] | None,
         *,
-        turn_input: TurnInput | None = None,
+        user_message: dict[str, Any] | None = None,
     ) -> None:
-        self.education_memory.update_from_strategy(strategy, turn_input=turn_input)
+        self.education_memory.update_from_strategy(strategy, user_message=user_message)
 
     def set_education_state_value(self, key: str, value: Any) -> None:
         self.education_memory.set_value(key, value)
 
     def artifact_bundle_key(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact] | list[dict[str, Any]],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> str:
         return self.artifact_store.artifact_bundle_key(artifacts)
 
     def cached_artifact_analysis(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
         return self.artifact_store.cached_artifact_analysis(artifacts)
 
     def cached_or_metadata_artifact_analysis(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
         return self.artifact_store.cached_or_metadata_artifact_analysis(artifacts)
 
     def remember_artifact_analysis(
         self,
-        artifacts: tuple[MediaArtifact, ...] | list[MediaArtifact],
+        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
         analysis: dict[str, Any],
     ) -> None:
         self.artifact_store.remember_artifact_analysis(artifacts, analysis)
 
     def retrieve_relevant_memories(
         self,
-        turn_input: TurnInput,
+        user_message: dict[str, Any],
         *,
-        current_artifacts: tuple[MediaArtifact, ...] = (),
-        reference_artifacts: tuple[MediaArtifact, ...] = (),
+        current_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        reference_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
         limit: int = 6,
     ) -> list[RetrievedMemory]:
         return self.retriever.retrieve(
             self,
-            turn_input,
+            user_message,
             current_artifacts=current_artifacts,
             reference_artifacts=reference_artifacts,
             limit=limit,
@@ -148,15 +147,15 @@ class SessionMemory:
 
     def build_projection(
         self,
-        turn_input: TurnInput,
+        user_message: dict[str, Any],
         *,
         profile: str,
-        current_artifacts: tuple[MediaArtifact, ...] = (),
-        reference_artifacts: tuple[MediaArtifact, ...] = (),
+        current_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        reference_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
     ) -> MemoryProjection:
         return self.projector.build(
             self,
-            turn_input,
+            user_message,
             profile=profile,
             current_artifacts=current_artifacts,
             reference_artifacts=reference_artifacts,

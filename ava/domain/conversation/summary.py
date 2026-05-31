@@ -58,11 +58,12 @@ def summarize_turn_records(turn_records: list[dict[str, Any]], max_turns: int = 
 
     lines: list[str] = []
     for record in recent:
-        user_text = str(record.get("user_text", "") or "").strip()
-        multimodal_summary = str(record.get("multimodal_summary", "") or "").strip()
-        assistant_text = str(record.get("assistant_text", "") or "").strip()
+        user_message = dict(record.get("user_message") or {})
+        assistant_message = dict(record.get("assistant_message") or {})
+        user_text = _content_to_text(user_message.get("content", ""))
+        assistant_text = _content_to_text(assistant_message.get("content", ""))
         turn_status = str(record.get("turn_status", "completed") or "completed").strip()
-        label = user_text or multimodal_summary
+        label = str(user_text or "").strip()
         if not label:
             continue
         if assistant_text and turn_status == "completed":

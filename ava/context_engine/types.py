@@ -4,12 +4,10 @@ from ava.multi_turn_context_builder.types import (
     CompiledInstructions,
     ConversationBuildOptions,
     ConversationContext,
-    SkillSelection,
 )
 
 __all__ = [
     "CompiledInstructions",
     "ConversationBuildOptions",
     "ConversationContext",
-    "SkillSelection",
 ]

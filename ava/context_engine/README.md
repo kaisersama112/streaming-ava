@@ -10,10 +10,7 @@
 ## 推荐新入口
 
 - `ava.multi_turn_context_builder.compiler`
-- `ava.multi_turn_context_builder.input`
 - `ava.multi_turn_context_builder.types`
-- `ava.multi_turn_context_builder.messages`
-- `ava.multi_turn_context_builder.instructions`
 
 ## 兼容目的
 

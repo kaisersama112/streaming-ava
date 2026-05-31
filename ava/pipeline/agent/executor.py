@@ -1,10 +1,4 @@
-"""Execution helpers that run selected turns through OpenAI Agents SDK.
-
-Agents are an optional execution backend behind the same `TurnPlan` contract as
-direct LLM generation. They may call tools and propose small continuity-state
-patches, but they should not mutate `ConversationState` directly while a run is
-in progress.
-"""
+"""Agents SDK 执行辅助。"""
 
 from __future__ import annotations
 
@@ -15,9 +9,8 @@ from typing import Any, Callable
 from agents import RawResponsesStreamEvent, RunItemStreamEvent, Runner
 from openai.types.responses import ResponseTextDeltaEvent
 
-from ava.pipeline.generation.types import TurnPlan
+from ava.inference_runtime.types import TurnPlan
 from ava.multi_turn_context_builder.types import ConversationContext
-from ava.domain.multimodal import TurnInput
 from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from configs import settings
@@ -68,11 +61,11 @@ def _build_runtime_context(
     context: ConversationContext,
     decision: RouteDecision,
     plan: TurnPlan,
-    turn_input: TurnInput,
+    user_message: dict[str, Any],
     current_turn_id: int | None,
     stop_event=None,
 ) -> AvaAgentContext:
-    """Build local context shared by agent instructions, tools, and callbacks."""
+    """构造 Agents SDK 本地运行时上下文。"""
     return AvaAgentContext(
         session_id=state.session_id,
         turn_id=current_turn_id,
@@ -80,7 +73,7 @@ def _build_runtime_context(
         context=context,
         decision=decision,
         strategy=plan.strategy,
-        turn_input=turn_input,
+        user_message=dict(user_message),
         stop_event=stop_event,
     )
 
@@ -112,7 +105,6 @@ def _build_model_config(
         api_base=api_base,
         api_key=api_key,
         model=model,
-        multimodal_model=model,
         timeout=timeout,
     )
 
@@ -120,7 +112,7 @@ def _build_model_config(
 def run_agents_sdk_sync(
     *,
     state: ConversationState,
-    turn_input: TurnInput,
+    user_message: dict[str, Any],
     decision: RouteDecision,
     plan: TurnPlan,
     context: ConversationContext,
@@ -136,7 +128,7 @@ def run_agents_sdk_sync(
         context=context,
         decision=decision,
         plan=plan,
-        turn_input=turn_input,
+        user_message=user_message,
         current_turn_id=current_turn_id,
     )
     model_config = _build_model_config(
@@ -150,7 +142,7 @@ def run_agents_sdk_sync(
     run_config = build_agents_sdk_run_config(
         workflow_name=_workflow_name(plan),
     )
-    payload = current_user_input(plan, turn_input)
+    payload = current_user_input(user_message)
 
     async def _run() -> Any:
         # Seed the SDK session from the same visible context used by the normal
@@ -189,7 +181,7 @@ def run_agents_sdk_sync(
 def run_agents_sdk_stream(
     *,
     state: ConversationState,
-    turn_input: TurnInput,
+    user_message: dict[str, Any],
     decision: RouteDecision,
     plan: TurnPlan,
     context: ConversationContext,
@@ -207,7 +199,7 @@ def run_agents_sdk_stream(
         context=context,
         decision=decision,
         plan=plan,
-        turn_input=turn_input,
+        user_message=user_message,
         current_turn_id=current_turn_id,
         stop_event=stop_event,
     )
@@ -222,7 +214,7 @@ def run_agents_sdk_stream(
     run_config = build_agents_sdk_run_config(
         workflow_name=_workflow_name(plan),
     )
-    payload = current_user_input(plan, turn_input)
+    payload = current_user_input(user_message)
 
     async def _run() -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
         text_parts: list[str] = []

@@ -10,9 +10,6 @@
 ```text
 ava/capabilities/llm/
   __init__.py
-  service.py
-  request.py
-  provider.py
   types.py
 ```
 
@@ -20,31 +17,11 @@ ava/capabilities/llm/
 
 ## 模块职责
 
-### `service.py`
-
-- `RequestContextBuilder`
-- `LLMService`
+### 薄转发层
 
 职责：
-- 为 router / responder 构建 `ModelRequestContext`
-- 协调上下文构建、请求构建、provider 调用
-
-### `request.py`
-
-- `RequestPolicy`
-- `InferenceRequestBuilder`
-
-职责：
-- 解析 `model / timeout / temperature`
-- 把 `ModelRequestContext` 转成 `InferenceRequest`
-- 组装 Responses API 所需的 `instructions` 和 `input`
-
-### `provider.py`
-
-职责：
-- 纯执行层
-- 调用 OpenAI SDK Responses API
-- 处理同步 / 流式输出
+- 这里只保留旧导入路径
+- 真实实现统一转发到 `ava.llm_model_executor`
 
 ### `types.py`
 
@@ -68,8 +45,7 @@ ConversationContext
   -> instructions
   -> messages
   -> ModelRequestContext
-  -> InferenceRequest
-  -> OpenAIResponsesProvider
+  -> LLMService
 ```
 
 ---

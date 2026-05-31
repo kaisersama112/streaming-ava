@@ -1,256 +1,286 @@
-"""LLM 服务入口。"""
+"""模型执行器主实现。"""
 
 from __future__ import annotations
 
 import threading
+from typing import Any
 
-from ava.llm_model_executor.provider import OpenAIResponsesProvider
-from ava.llm_model_executor.request import InferenceRequestBuilder
-from ava.llm_model_executor.types import InferenceResult, InferenceTask, ModelRequestContext
-from ava.capabilities.prompt.prompt_loader import PromptCenter
-from ava.multi_turn_context_builder.compiler import ContextCompiler
-from ava.multi_turn_context_builder.types import ConversationBuildOptions, ConversationContext
-from ava.domain.conversation.strategy import BranchStrategy
-from ava.router_selector.request import RouterRequestBuilder
+from openai import OpenAI
+
 from configs import settings
 
+from .types import (
+    InferenceCompleted,
+    InferenceError,
+    InferenceRequest,
+    InferenceResult,
+    InferenceTask,
+    ModelRequestContext,
+    OutputTextDelta,
+)
 
-class RequestContextBuilder:
-    """构建消息优先的模型请求上下文。"""
+_ALLOWED_ROLES = {"system", "developer", "user", "assistant"}
 
-    def __init__(
-        self,
-        prompt_center: PromptCenter,
-        compiler: ContextCompiler | None = None,
-    ) -> None:
-        self.prompt_center = prompt_center
-        self.compiler = compiler or ContextCompiler()
-        self.router_builder = RouterRequestBuilder(self.compiler)
 
-    def build(
-        self,
-        *,
-        task: InferenceTask,
-        state,
-        turn_input,
-        decision=None,
-        plan=None,
-        history_window: int | None = None,
-        max_context_messages: int | None = None,
-        current_turn_id: int | None = None,
-        context: ConversationContext | None = None,
-        metadata: dict | None = None,
-    ) -> ModelRequestContext:
-        if task == InferenceTask.ROUTE:
-            return self._build_route_context(
-                state=state,
-                turn_input=turn_input,
-                history_window=int(history_window or settings.runtime.history_window or 8),
-                max_context_messages=max_context_messages,
-                current_turn_id=current_turn_id,
-                context=context,
-                metadata=metadata,
+def _normalize_role(role: str) -> str:
+    value = str(role or "").strip()
+    if value in _ALLOWED_ROLES:
+        return value
+    if value in {"tool", "function"}:
+        return "assistant"
+    return "user"
+
+
+def _normalize_content_part(part: dict[str, Any]) -> dict[str, Any] | None:
+    part_type = str(part.get("type", "") or "").strip()
+    if part_type in {"text", "input_text", "output_text"}:
+        text = str(part.get("text", "") or "").strip()
+        if not text:
+            return None
+        return {
+            "type": "output_text" if part_type == "output_text" else "input_text",
+            "text": text,
+        }
+
+    if part_type in {"image_url", "input_image"}:
+        if part_type == "image_url":
+            payload = part.get("image_url")
+            if isinstance(payload, dict):
+                image_url = str(payload.get("url", "") or "").strip()
+                detail = str(payload.get("detail", "auto") or "auto").strip()
+            else:
+                image_url = str(payload or "").strip()
+                detail = "auto"
+        else:
+            image_url = str(part.get("image_url", "") or "").strip()
+            detail = str(part.get("detail", "auto") or "auto").strip()
+        if not image_url:
+            return None
+        return {"type": "input_image", "image_url": image_url, "detail": detail}
+
+    if part_type == "input_audio":
+        payload = dict(part.get("input_audio") or {})
+        audio_data = str(payload.get("data", "") or "").strip()
+        audio_format = str(payload.get("format", "") or "").strip()
+        if not audio_data or not audio_format:
+            return None
+        return {
+            "type": "input_audio",
+            "input_audio": {"data": audio_data, "format": audio_format},
+        }
+
+    if part_type == "video":
+        videos = part.get("video") or []
+        if not isinstance(videos, list):
+            return None
+        first = next((str(item).strip() for item in videos if str(item).strip()), "")
+        if not first:
+            return None
+        return {"type": "input_file", "file_url": first, "filename": "video"}
+
+    if part_type == "input_file":
+        normalized = {"type": "input_file"}
+        for key in ("file_id", "file_data", "file_url", "filename"):
+            value = part.get(key)
+            if value not in (None, ""):
+                normalized[key] = value
+        return normalized if len(normalized) > 1 else None
+
+    return None
+
+
+def _normalize_content(content: Any) -> str | list[dict[str, Any]]:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, dict):
+        normalized = _normalize_content_part(content)
+        return [normalized] if normalized is not None else []
+    if isinstance(content, list):
+        normalized_parts: list[dict[str, Any]] = []
+        for part in content:
+            if isinstance(part, dict):
+                normalized = _normalize_content_part(part)
+                if normalized is not None:
+                    normalized_parts.append(normalized)
+        return normalized_parts
+    return str(content or "").strip()
+
+
+class RequestPolicy:
+    """请求参数策略。"""
+
+    @staticmethod
+    def resolve_model(context: ModelRequestContext) -> str:
+        override = str((context.metadata or {}).get("model_override", "") or "").strip()
+        return override or str(context.model or "").strip()
+
+    @staticmethod
+    def resolve_timeout(context: ModelRequestContext) -> int:
+        override = (context.metadata or {}).get("timeout")
+        if override is not None:
+            return int(override)
+        if context.task == InferenceTask.ROUTE:
+            return int(getattr(settings.runtime, "router_timeout", 30) or 30)
+        return int(getattr(settings.openai_config, "timeout", 60) or 60)
+
+    @staticmethod
+    def resolve_temperature(context: ModelRequestContext) -> float:
+        if context.task == InferenceTask.ROUTE:
+            return 0.1
+        return 0.7
+
+
+class OpenAIResponsesProvider:
+    """对 OpenAI Responses API 的最小封装。"""
+
+    def __init__(self, *, api_base: str, api_key: str) -> None:
+        self.api_base = str(api_base or "").strip()
+        self.api_key = str(api_key or "").strip()
+
+    @classmethod
+    def from_settings(cls) -> "OpenAIResponsesProvider":
+        return cls(
+            api_base=str(getattr(settings.openai_config, "api_base", "") or "").strip(),
+            api_key=str(getattr(settings.openai_config, "api_key", "") or "").strip(),
+        )
+
+    def _client(self, *, timeout: float | None = None) -> OpenAI:
+        kwargs: dict[str, Any] = {"api_key": self.api_key}
+        if self.api_base:
+            kwargs["base_url"] = self.api_base
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return OpenAI(**kwargs)
+
+    @staticmethod
+    def _extract_text(response: Any) -> str:
+        output_text = getattr(response, "output_text", None)
+        if isinstance(output_text, str) and output_text.strip():
+            return output_text.strip()
+
+        parts: list[str] = []
+        for output_item in list(getattr(response, "output", []) or []):
+            for content in list(getattr(output_item, "content", []) or []):
+                text = getattr(content, "text", None)
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+        return "\n".join(parts).strip()
+
+    def chat(self, request: InferenceRequest) -> InferenceResult:
+        client = self._client(timeout=request.timeout)
+        response = client.responses.create(model=request.model, **dict(request.payload or {}))
+        return InferenceResult(
+            text=self._extract_text(response),
+            raw=response,
+            usage=getattr(response, "usage", None),
+            finish_reason=getattr(response, "status", None),
+            metadata={"response_id": getattr(response, "id", "")},
+        )
+
+    def stream(self, request: InferenceRequest, *, stop_event=None):
+        client = self._client(timeout=request.timeout)
+        final_parts: list[str] = []
+        try:
+            stream = client.responses.create(
+                model=request.model,
+                stream=True,
+                **dict(request.payload or {}),
             )
-        return self._build_generate_context(
-            state=state,
-            turn_input=turn_input,
-            decision=decision,
-            plan=plan,
-            history_window=int(history_window or settings.runtime.history_window or 8),
-            max_context_messages=max_context_messages,
-            current_turn_id=current_turn_id,
-            context=context,
-            metadata=metadata,
-        )
-
-    def _build_route_context(
-        self,
-        *,
-        state,
-        turn_input,
-        history_window: int,
-        max_context_messages: int | None,
-        current_turn_id: int | None,
-        context: ConversationContext | None,
-        metadata: dict | None,
-    ) -> ModelRequestContext:
-        context = context or self.compiler.build_conversation_context(
-            state=state,
-            turn_input=turn_input,
-            options=ConversationBuildOptions(
-                history_window=history_window,
-                current_turn_id=current_turn_id,
-                max_context_messages=int(
-                    max_context_messages
-                    or settings.runtime.router_max_context_messages
-                    or settings.runtime.max_context_messages
-                    or 8
-                ),
-                profile="router",
-            ),
-        )
-
-        text_only_router = bool((metadata or {}).get("text_only_router", False))
-        selected_model = self.compiler.continuity_policy.select_router_model(
-            current_artifacts=context.current.artifacts,
-            text_only=text_only_router,
-            model=str(
-                (metadata or {}).get("model_override")
-                or settings.runtime.router_model
-                or settings.openai_config.model
-                or settings.openai_config.intent_model
-            ).strip(),
-            multimodal_model=str(
-                settings.openai_config.multimodal_model
-                or settings.openai_config.model
-            ).strip(),
-        )
-        router_request = self.router_builder.build(
-            prompt_center=self.prompt_center,
-            state=state,
-            turn_input=context.current.turn_input,
-            options=ConversationBuildOptions(
-                history_window=history_window,
-                current_turn_id=current_turn_id,
-                max_context_messages=max_context_messages,
-                profile=context.session.profile,
-            ),
-            context=context,
-            text_only=text_only_router,
-        )
-        return ModelRequestContext(
-            task=InferenceTask.ROUTE,
-            session_id=state.session_id,
-            model=selected_model,
-            instructions=router_request.instructions,
-            messages=router_request.input,
-            metadata={
-                "state": state,
-                "context": context,
-                "active_skills": router_request.active_skills,
-                "current_turn_id": current_turn_id,
-                **dict(metadata or {}),
-            },
-        )
-
-    def _build_generate_context(
-        self,
-        *,
-        state,
-        turn_input,
-        decision,
-        plan,
-        history_window: int,
-        max_context_messages: int | None,
-        current_turn_id: int | None,
-        context: ConversationContext | None,
-        metadata: dict | None,
-    ) -> ModelRequestContext:
-        context = context if isinstance(context, ConversationContext) else None
-        context = context or self.compiler.build_conversation_context(
-            state=state,
-            turn_input=turn_input,
-            options=ConversationBuildOptions(
-                history_window=history_window,
-                current_turn_id=current_turn_id,
-                max_context_messages=int(
-                    max_context_messages
-                    or settings.runtime.responder_max_context_messages
-                    or settings.runtime.max_context_messages
-                    or 16
-                ),
-                profile="responder_minimal",
-            ),
-        )
-
-        strategy = getattr(plan, "strategy", None)
-        if not isinstance(strategy, BranchStrategy):
-            raise ValueError("Generate context is missing plan.strategy for prompt resolution.")
-
-        compiled_payload = self.compiler.compile_responder_payload(
-            prompt_center=self.prompt_center,
-            context=context,
-            strategy=strategy,
-            decision=decision,
-        )
-        selected_model = str(
-            (metadata or {}).get("model_override")
-            or settings.openai_config.multimodal_model
-            or settings.openai_config.model
-        ).strip()
-        return ModelRequestContext(
-            task=InferenceTask.GENERATE,
-            session_id=state.session_id,
-            model=selected_model,
-            instructions=compiled_payload.instructions,
-            messages=list(compiled_payload.input),
-            metadata={
-                "state": state,
-                "context": context,
-                "decision": decision,
-                "plan": plan,
-                "strategy": strategy.to_metadata(),
-                "active_skills": compiled_payload.active_skills,
-                "current_turn_id": current_turn_id,
-                **dict(metadata or {}),
-            },
-        )
+            for event in stream:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                event_type = str(getattr(event, "type", "") or "").strip()
+                if event_type == "response.output_text.delta":
+                    delta = str(getattr(event, "delta", "") or "")
+                    if delta:
+                        final_parts.append(delta)
+                        yield OutputTextDelta(delta)
+                    continue
+                if event_type == "response.completed":
+                    yield InferenceCompleted(
+                        text="".join(final_parts),
+                        finish_reason="completed",
+                        metadata={},
+                    )
+                    return
+            yield InferenceCompleted(
+                text="".join(final_parts),
+                finish_reason="completed",
+                metadata={},
+            )
+        except Exception as exc:
+            yield InferenceError(error=str(exc))
 
 
 class LLMService:
-    """统一的 LLM 执行服务。"""
+    """只做模型执行，不做上下文构造。"""
 
     def __init__(
-        self,
-        *,
-        prompt_center: PromptCenter,
-        provider: OpenAIResponsesProvider | None = None,
-        request_builder: InferenceRequestBuilder | None = None,
-        context_compiler: ContextCompiler | None = None,
-        context_builder: RequestContextBuilder | None = None,
+            self,
+            *,
+            provider: OpenAIResponsesProvider | None = None,
+            policy: RequestPolicy | None = None,
     ) -> None:
-        self.prompt_center = prompt_center
-        self.context_compiler = context_compiler or ContextCompiler()
-        self.context_builder = context_builder or RequestContextBuilder(
-            prompt_center,
-            compiler=self.context_compiler,
-        )
         self.provider = provider or OpenAIResponsesProvider.from_settings()
-        self.request_builder = request_builder or InferenceRequestBuilder()
+        self.policy = policy or RequestPolicy()
 
-    def build_context(self, **kwargs) -> ModelRequestContext:
-        return self.context_builder.build(**kwargs)
+    def _build_request_input(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized_items: list[dict[str, Any]] = []
+        for item in items:
+            role = _normalize_role(str(item.get("role", "user") or "user"))
+            content = _normalize_content(item.get("content"))
+            if content in ("", []):
+                continue
+            normalized_items.append(
+                {
+                    "type": "message",
+                    "role": role,
+                    "content": content,
+                }
+            )
+        return normalized_items
+
+    def build_request(self, context: ModelRequestContext, *, stream: bool = False) -> InferenceRequest:
+        """把纯请求上下文转成 provider 请求。"""
+
+        payload: dict[str, Any] = {}
+        instructions = str(context.instructions or "").strip()
+        if instructions:
+            payload["instructions"] = instructions
+
+        input_items = self._build_request_input(list(context.input or []))
+        if input_items:
+            payload["input"] = input_items
+
+        payload["temperature"] = self.policy.resolve_temperature(context)
+        extra_body = dict((context.metadata or {}).get("extra_body") or {})
+        if extra_body:
+            payload.update(extra_body)
+
+        return InferenceRequest(
+            task=context.task,
+            model=self.policy.resolve_model(context),
+            payload=payload,
+            stream=stream,
+            timeout=self.policy.resolve_timeout(context),
+            metadata=dict(context.metadata or {}),
+        )
 
     def route(self, context: ModelRequestContext) -> InferenceResult:
-        return self._execute(context)
+        return self.execute(context)
 
     def generate(self, context: ModelRequestContext) -> InferenceResult:
-        return self._execute(context)
+        return self.execute(context)
+
+    def execute(self, context: ModelRequestContext) -> InferenceResult:
+        request = self.build_request(context)
+        return self.provider.chat(request)
 
     def stream_generate(
-        self,
-        context: ModelRequestContext,
-        *,
-        stop_event: threading.Event | None = None,
+            self,
+            context: ModelRequestContext,
+            *,
+            stop_event: threading.Event | None = None,
     ):
-        provider = self._provider_for_context(context)
-        stream_request = self._build_request(context, stream=True)
-        yield from provider.stream(stream_request, stop_event=stop_event)
-
-    def _build_request(self, context: ModelRequestContext, *, stream: bool = False):
-        request = self.request_builder.build(context)
-        if not stream:
-            return request
-        return type(request)(**{**request.__dict__, "stream": True})
-
-    def _execute(self, context: ModelRequestContext) -> InferenceResult:
-        request = self._build_request(context)
-        provider = self._provider_for_context(context)
-        return provider.chat(request)
-
-    def _provider_for_context(self, context: ModelRequestContext) -> OpenAIResponsesProvider:
-        api_base = str((context.metadata or {}).get("api_base", "") or "").strip()
-        api_key = str((context.metadata or {}).get("api_key", "") or "").strip()
-        if api_base and api_key:
-            return OpenAIResponsesProvider(api_base=api_base, api_key=api_key)
-        return self.provider
+        request = self.build_request(context, stream=True)
+        yield from self.provider.stream(request, stop_event=stop_event)

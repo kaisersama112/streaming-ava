@@ -1,5 +1,5 @@
-"""旧路由请求入口，转发到 `ava.router_selector.request`。"""
+"""旧路由请求入口，转发到 `ava.router_selector.service`。"""
 
-from ava.router_selector.request import RouterRequestArtifacts, RouterRequestBuilder
+from ava.router_selector.service import RouterRequestArtifacts
 
-__all__ = ["RouterRequestArtifacts", "RouterRequestBuilder"]
+__all__ = ["RouterRequestArtifacts"]

@@ -1,30 +1,16 @@
-"""Router 与各编排层共享的路由决策结构。"""
+"""路由结果结构。"""
 
 from __future__ import annotations
 
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-SessionScene = Literal["education", "general"]
-TurnScene = Literal["education", "general_qa", "casual_chat", "clarify"]
+from pydantic import BaseModel, Field
 
 
 class RouteDecision(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    """当前轮路由决策。"""
 
-    session_scene: SessionScene = Field(...)
-    turn_scene: TurnScene = Field(...)
-    intent: str = Field(...)
-    confidence: float = Field(...)
-    should_preserve_teaching_state: bool = Field(...)
-    need_clarification: bool = Field(...)
-
-    @field_validator("confidence")
-    @classmethod
-    def clamp_confidence(cls, value: float) -> float:
-        if value < 0:
-            return 0.0
-        if value > 1:
-            return 1.0
-        return value
+    session_scene: str = Field(default="general")
+    turn_scene: str = Field(default="general_qa")
+    intent: str = Field(default="")
+    confidence: float = Field(default=0.0)
+    should_preserve_teaching_state: bool = Field(default=False)
+    need_clarification: bool = Field(default=False)

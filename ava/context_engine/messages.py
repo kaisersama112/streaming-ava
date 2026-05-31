@@ -1,5 +1,3 @@
-"""旧消息构造入口，转发到 `ava.multi_turn_context_builder.messages`。"""
+"""旧消息构造入口已废弃。"""
 
-from ava.multi_turn_context_builder.messages import ConversationMessagesBuilder
-
-__all__ = ["ConversationMessagesBuilder"]
+__all__: list[str] = []

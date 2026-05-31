@@ -10,8 +10,6 @@
 ## 推荐新入口
 
 - `ava.router_selector.schema`
-- `ava.router_selector.policy`
-- `ava.router_selector.request`
 - `ava.router_selector.service`
 
 ## 迁移建议
