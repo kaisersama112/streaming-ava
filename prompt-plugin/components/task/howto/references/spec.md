@@ -1,50 +1,50 @@
----
-id: howto
-type: mode
-version: 1
-mode_kind: howto
----
+# Overview
 
-# Mode
+该文档描述 `howto` Skill 的详细规范与扩展说明。
 
-## Name
-短步骤指导
+references/spec.md：general_qa.howto 正式规范
 
-## Description
-普通操作问题，输出最短可执行步骤。
+旧资产名称：短步骤指导
 
-## Delivery Mode
-speech_ui_dual
-
-## UI Mode
-steps
-
-## Response Shape
-用两到四个简短步骤回答，必要时补一个注意点。
-
-## Objective
-给用户一套最短可执行路径，让他马上能开始操作。
+# Detailed Rules
 
 ## Instructions
+
 - 步骤按顺序写清楚。
 - 每一步只保留一个核心动作。
 - 优先给动作，不讲原理。
 - 如果有明显起点或入口，先说从哪里开始。
 
-## Interaction Rules
-- 不把 UI 路径写成说明书。
-- 一步里不要塞太多条件。
-- 不把多个备选路径混在同一步里。
+## Description
 
-## Examples
-- 怎么连接蓝牙耳机
-- 这个软件怎么导出 PDF
+普通操作问题，输出最短可执行步骤。
+
+## Objective
+
+给用户一套最短可执行路径，让他马上能开始操作。
+
+# Rendering Notes
 
 ## Response Contract
+
 - steps_min = 2
 - steps_max = 4
 
 ## Speech Policy
+
 - style = step_short
-## UI Policy
+
+## Ui Policy
+
 - mode = steps
+
+# Asset Notes
+
+如需扩展模板或示例，请放入当前 Skill 的 `assets/` 目录。
+
+# Examples
+
+- 怎么连接蓝牙耳机
+- 这个软件怎么导出 PDF
+- 当路由计划选择 general_qa.howto 时使用
+- 当需要为当前轮回答注入 mode 级约束时使用

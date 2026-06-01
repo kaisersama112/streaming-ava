@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from ava.capabilities.prompt.specs import PromptPackage
     from ava.domain.conversation.strategy import BranchStrategy
     from ava.llm_model_executor.types import ModelRequestContext
     from ava.multi_turn_context_builder.types import ConversationContext
@@ -50,17 +51,16 @@ class TurnPlanDebug:
     - `router_plan`：
       路由模型输出中的原始 `plan` 字段。
       这是“路由层的中间规划结果”，供策略构造与问题排查使用。
-    - `prompt_sections`：
-      prompt 编译阶段拆出来的命名片段。
-      例如 router / responder 阶段的主要文本块，可用于调试查看。
     - `active_skills`：
-      prompt 编译过程中判定为激活的技能列表。
-      当前实现里通常为空列表，但保留为正式结构，方便后续扩展。
+      当前轮正式激活的 Skill 名称列表。
+      当前直接来自 `PromptPackage.skills`。
+    - `prompt_package`：
+      当前轮正式 PromptPackage 元数据。
     """
 
     router_plan: dict[str, Any] = field(default_factory=dict)
-    prompt_sections: dict[str, Any] = field(default_factory=dict)
     active_skills: list[str] = field(default_factory=list)
+    prompt_package: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,8 @@ class TurnPlan:
 
     可以把它理解为：
     - `decision`：这一轮被路由成什么
-    - `strategy`：这一轮应该按什么策略回答
+    - `strategy`：上游选择阶段产生的内部策略对象
+    - `prompt_package`：这一轮正式 Prompt 组合结果
     - `payload`：这一轮真正送给模型的请求载荷
     - `execution`：这一轮执行时使用的编排与模型控制信息
     - `runtime_context`：这一轮运行时附带的上下文对象
@@ -114,11 +115,18 @@ class TurnPlan:
     设计边界：
     - `TurnPlan` 不负责“怎么推导出来”
     - `TurnPlan` 只表达“当前轮最终该怎么执行”
-    - `inference_runtime` 只消费 `TurnPlan`
+    - `inference_runtime` 正式依赖：
+      - `decision`
+      - `prompt_package`
+      - `payload`
+      - `execution`
+      - `runtime_context`
+    - `strategy` 字段保留给上游装配与调试，正式运行时不应依赖它
     """
 
     decision: "RouteDecision"
     strategy: "BranchStrategy | None"
+    prompt_package: "PromptPackage | None"
     payload: TurnPlanPayload
     execution: TurnPlanExecution
     runtime_context: TurnPlanRuntimeContext
@@ -150,6 +158,20 @@ class TurnPlan:
         return self.debug.router_plan
 
     @property
+    def active_skill_names(self) -> list[str]:
+        """返回当前轮激活的 Skill 名称列表。"""
+        if self.prompt_package is not None:
+            return list(self.prompt_package.skill_names())
+        return list(self.debug.active_skills)
+
+    @property
+    def prompt_profile(self) -> dict[str, Any]:
+        """返回当前轮 PromptPackage 的运行时组合视图。"""
+        if self.prompt_package is None:
+            return {}
+        return dict(self.prompt_package.runtime_profile())
+
+    @property
     def metadata(self) -> dict[str, Any]:
         """兼容访问：返回历史代码仍会读取的元信息字典。
 
@@ -162,6 +184,6 @@ class TurnPlan:
         """
         return {
             "context": self.runtime_context.conversation_context,
-            "sections": dict(self.debug.prompt_sections),
             "active_skills": list(self.debug.active_skills),
+            "prompt_package": dict(self.debug.prompt_package),
         }

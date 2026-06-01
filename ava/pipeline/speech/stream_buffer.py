@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
-from ava.domain.conversation.strategy import BranchStrategy
 from ava.pipeline.speech.latex_span_detector import has_unclosed_latex
 from ava.pipeline.speech.text_builder import build_speech_text
 
@@ -15,7 +14,6 @@ _BOUNDARY_CHARS = ".!?;,:。\n！？；，、："
 
 @dataclass
 class LatexAwareSpeechBuffer:
-    strategy: BranchStrategy
     flush_chars: int = 72
 
     def __post_init__(self) -> None:
@@ -76,7 +74,7 @@ class LatexAwareSpeechBuffer:
             return []
         raw = self._buffer
         self._buffer = ""
-        built = build_speech_text(raw, self.strategy)
+        built = build_speech_text(raw)
         self._record_trace(built.trace)
         spoken = built.speech_text.strip()
         return [spoken] if spoken else []
@@ -91,7 +89,7 @@ class LatexAwareSpeechBuffer:
         else:
             raw = self._buffer[:split_index]
             self._buffer = self._buffer[split_index:]
-        built = build_speech_text(raw, self.strategy)
+        built = build_speech_text(raw)
         self._record_trace(built.trace)
         return built.speech_text.strip()
 

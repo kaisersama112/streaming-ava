@@ -26,16 +26,14 @@ const attachmentListEl = el("attachmentList");
 const stagedAttachmentStateEl = el("stagedAttachmentState");
 const currentRouteEl = el("currentRoute");
 const currentHandlerEl = el("currentHandler");
-const currentBranchEl = el("currentBranch");
-const currentStrategyEl = el("currentStrategy");
-const currentStrategyNameEl = el("currentStrategyName");
-const currentDeliveryEl = el("currentDelivery");
-const currentUiModeEl = el("currentUiMode");
+const currentCapabilityEl = el("currentCapability");
+const currentTaskEl = el("currentTask");
+const currentKnowledgeEl = el("currentKnowledge");
+const currentMethodEl = el("currentMethod");
+const currentAudienceEl = el("currentAudience");
 const currentFollowupTypeEl = el("currentFollowupType");
-const currentRenderTemplateEl = el("currentRenderTemplate");
-const currentStrategySourceEl = el("currentStrategySource");
-const currentArtifactSubjectHintEl = el("currentArtifactSubjectHint");
-const currentArtifactTaskHintEl = el("currentArtifactTaskHint");
+const currentSkillsEl = el("currentSkills");
+const currentPromptSourceEl = el("currentPromptSource");
 const multimodalSummaryEl = el("multimodalSummary");
 const artifactTextViewEl = el("artifactTextView");
 const historyMessageCountEl = el("historyMessageCount");
@@ -58,7 +56,7 @@ const btnApplySession = el("btnApplySession");
 const btnPickAttachment = el("btnPickAttachment");
 const btnAddAttachmentUrl = el("btnAddAttachmentUrl");
 const btnClearAttachment = el("btnClearAttachment");
-const btnCopyStrategyContext = el("btnCopyStrategyContext");
+const btnCopyPromptContext = el("btnCopyPromptContext");
 
 const TARGET_SAMPLE_RATE = 16000;
 const MAX_LOG_CHARS = 12000;
@@ -143,6 +141,7 @@ function log(line) {
 }
 
 function setPillValue(target, text, className = "muted") {
+  if (!target) return;
   target.textContent = text;
   target.className = `pill-value ${className}`;
 }
@@ -155,10 +154,12 @@ function setSpeakerState(text, className = "muted") {
 }
 
 function setLiveText(target, text, fallback) {
+  if (!target) return;
   target.textContent = text && String(text).trim() ? String(text).trim() : fallback;
 }
 
 function setCodeText(target, text, fallback = "-") {
+  if (!target) return;
   target.textContent = text && String(text).trim() ? String(text).trim() : fallback;
 }
 
@@ -346,11 +347,32 @@ function updateHistoryPanelSummary() {
   }
   if (historyFocusEl) {
     historyFocusEl.textContent = firstMeaningfulText(
-      currentStrategyNameEl?.textContent,
-      currentStrategyEl?.textContent,
-      currentBranchEl?.textContent
+      currentTaskEl?.textContent,
+      currentKnowledgeEl?.textContent,
+      currentCapabilityEl?.textContent
     );
   }
+}
+
+function normalizeSkillNames(skills = []) {
+  if (!Array.isArray(skills)) return [];
+  return skills
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function formatSkillList(skills = []) {
+  const items = normalizeSkillNames(skills);
+  return items.length ? items.join(" / ") : "-";
+}
+
+function applyPromptProfile(profile = {}) {
+  setCodeText(currentCapabilityEl, profile.capability || "-");
+  setCodeText(currentTaskEl, profile.task || "-");
+  setCodeText(currentKnowledgeEl, profile.knowledge || "-");
+  setCodeText(currentMethodEl, profile.method || "-");
+  setCodeText(currentAudienceEl, profile.audience || "-");
+  setCodeText(currentSkillsEl, formatSkillList(profile.skills || []), "-");
 }
 
 function getAttachmentPreviewSource(item) {
@@ -408,8 +430,9 @@ function renderMessageMeta(container, meta = {}) {
   if (!container) return;
   container.innerHTML = "";
   const items = [
-    ["branch", meta.branch],
-    ["strategy", meta.strategy_name || meta.strategy_id],
+    ["scene", meta.turn_scene],
+    ["task", meta.task],
+    ["knowledge", meta.knowledge],
     ["follow-up", meta.user_followup_type],
   ];
   let count = 0;
@@ -1106,7 +1129,7 @@ function renderHello(msg) {
         attachments: item.artifacts || [],
         contentBlocks: item.content || [],
         meta: item.meta || null,
-        timestamp: item.ts || item.timestamp || Date.now(),
+        timestamp: item.created_at || item.ts || item.timestamp || Date.now(),
       });
     }
 
@@ -1114,14 +1137,13 @@ function renderHello(msg) {
       .reverse()
       .find((item) => item && item.meta && Object.keys(item.meta).length)?.meta;
     if (latestMeta) {
-      setCodeText(currentBranchEl, latestMeta.branch || "-");
-      setCodeText(currentStrategyEl, latestMeta.strategy_id || "-");
-      setCodeText(currentStrategyNameEl, latestMeta.strategy_name || "-");
-      setCodeText(currentDeliveryEl, latestMeta.delivery_mode || "-");
-      setCodeText(currentUiModeEl, latestMeta.ui_mode || "-");
+      setCodeText(
+        currentRouteEl,
+        `${latestMeta.turn_scene || "-"} / ${latestMeta.session_scene || "-"}`
+      );
+      applyPromptProfile(latestMeta);
       setCodeText(currentFollowupTypeEl, latestMeta.user_followup_type || "-");
-      setCodeText(currentRenderTemplateEl, latestMeta.render_template || "-");
-      setCodeText(currentStrategySourceEl, latestMeta.strategy_source || "-");
+      setCodeText(currentPromptSourceEl, latestMeta.prompt_source || "-");
     }
     updateHistoryPanelSummary();
   }
@@ -1225,55 +1247,47 @@ function handleEvent(msg) {
     return;
   }
   if (msg.type === "route") {
-    const strategy = msg.strategy_id ? ` / ${msg.strategy_id}` : "";
-    log(`路由结果：${msg.turn_scene}（${Number(msg.confidence || 0).toFixed(2)}）${strategy}`);
+    const task = String(((msg.prompt_profile || {}).task || "")).trim();
+    log(`路由结果：${msg.turn_scene}（${Number(msg.confidence || 0).toFixed(2)}）${task ? ` / ${task}` : ""}`);
     setCodeText(currentRouteEl, `${msg.turn_scene || "-"} / ${msg.session_scene || "-"}`);
-    setCodeText(currentBranchEl, msg.turn_scene || "-");
-    setCodeText(currentStrategyEl, msg.strategy_id || "-");
-    setCodeText(currentDeliveryEl, msg.delivery_mode || "-");
-    setCodeText(currentUiModeEl, msg.ui_mode || "-");
-    setCodeText(
-      currentHandlerEl,
-      `${msg.handler || "-"}${msg.strategy_id ? ` / ${msg.strategy_id}` : ""}`
-    );
+    applyPromptProfile(msg.prompt_profile || {});
+    setCodeText(currentHandlerEl, msg.handler || "-");
     if (msg.turn_id !== undefined && msg.turn_id !== null) {
       activeAssistantTurnId = String(msg.turn_id);
       interruptedAssistantTurns.delete(activeAssistantTurnId);
     }
     ensureAssistantMessage(msg.turn_id);
     setMessageMeta(msg.turn_id, {
-      branch: msg.turn_scene || "",
-      strategy_id: msg.strategy_id || "",
-      delivery_mode: msg.delivery_mode || "",
-      ui_mode: msg.ui_mode || "",
+      session_scene: msg.session_scene || "",
+      turn_scene: msg.turn_scene || "",
+      capability: (msg.prompt_profile || {}).capability || "",
+      task: (msg.prompt_profile || {}).task || "",
+      knowledge: (msg.prompt_profile || {}).knowledge || "",
+      method: (msg.prompt_profile || {}).method || "",
+      audience: (msg.prompt_profile || {}).audience || "",
+      skills: normalizeSkillNames(msg.active_skills || (msg.prompt_profile || {}).skills || []),
     });
     return;
   }
-  if (msg.type === "debug_strategy") {
-    setCodeText(currentBranchEl, msg.branch || "-");
-    setCodeText(currentStrategyEl, msg.strategy_id || "-");
-    setCodeText(currentStrategyNameEl, msg.strategy_name || "-");
-    setCodeText(currentDeliveryEl, msg.delivery_mode || "-");
-    setCodeText(currentUiModeEl, msg.ui_mode || "-");
+  if (msg.type === "debug_prompt_package") {
+    applyPromptProfile(msg.prompt_profile || {});
     setCodeText(currentFollowupTypeEl, msg.user_followup_type || "-");
-    setCodeText(currentRenderTemplateEl, msg.render_template || "-");
-    setCodeText(currentStrategySourceEl, msg.strategy_source || "-");
-    setCodeText(currentArtifactSubjectHintEl, msg.artifact_subject_hint || "-");
-    setCodeText(currentArtifactTaskHintEl, msg.artifact_task_hint || "-");
+    setCodeText(currentPromptSourceEl, msg.prompt_source || "-");
     setCodeText(artifactTextViewEl, JSON.stringify(msg.analysis || {}, null, 2) || "{}", "{}");
     ensureAssistantMessage(msg.turn_id);
     setMessageMeta(msg.turn_id, {
-      branch: msg.branch || "",
-      strategy_id: msg.strategy_id || "",
-      strategy_name: msg.strategy_name || "",
-      delivery_mode: msg.delivery_mode || "",
-      ui_mode: msg.ui_mode || "",
+      capability: (msg.prompt_profile || {}).capability || "",
+      task: (msg.prompt_profile || {}).task || "",
+      knowledge: (msg.prompt_profile || {}).knowledge || "",
+      method: (msg.prompt_profile || {}).method || "",
+      audience: (msg.prompt_profile || {}).audience || "",
+      skills: normalizeSkillNames(msg.active_skills || (msg.prompt_profile || {}).skills || []),
       user_followup_type: msg.user_followup_type || "",
-      render_template: msg.render_template || "",
-      strategy_source: msg.strategy_source || "",
+      prompt_source: msg.prompt_source || "",
     });
-    if (msg.strategy_name) {
-      log(`策略：${msg.strategy_id}（${msg.strategy_name}）`);
+    const skillsText = formatSkillList(msg.active_skills || (msg.prompt_profile || {}).skills || []);
+    if (skillsText !== "-") {
+      log(`PromptPackage：${skillsText}`);
     }
     updateHistoryPanelSummary();
     return;
@@ -1286,13 +1300,9 @@ function handleEvent(msg) {
     return;
   }
   if (msg.type === "debug_prompt") {
-    setCodeText(
-      currentHandlerEl,
-      `${msg.handler || "-"}${msg.strategy_id ? ` / ${msg.strategy_id}` : ""}`
-    );
-    setCodeText(currentRenderTemplateEl, msg.render_template || "-");
-    setCodeText(currentDeliveryEl, msg.delivery_mode || "-");
-    setCodeText(currentUiModeEl, msg.ui_mode || "-");
+    setCodeText(currentHandlerEl, msg.handler || "-");
+    applyPromptProfile(msg.prompt_profile || {});
+    setCodeText(currentSkillsEl, formatSkillList(msg.active_skills || (msg.prompt_profile || {}).skills || []), "-");
     setCodeText(promptViewEl, msg.system_prompt || "无");
     return;
   }
@@ -1622,16 +1632,14 @@ function buildDebugContextText() {
     `会话 ID: ${activeSessionId}`,
     `路由: ${compactValue(currentRouteEl?.textContent)}`,
     `处理器: ${compactValue(currentHandlerEl?.textContent)}`,
-    `分支: ${compactValue(currentBranchEl?.textContent)}`,
-    `策略 ID: ${compactValue(currentStrategyEl?.textContent)}`,
-    `策略名称: ${compactValue(currentStrategyNameEl?.textContent)}`,
-    `输出模式: ${compactValue(currentDeliveryEl?.textContent)}`,
-    `界面模式: ${compactValue(currentUiModeEl?.textContent)}`,
+    `能力: ${compactValue(currentCapabilityEl?.textContent)}`,
+    `任务: ${compactValue(currentTaskEl?.textContent)}`,
+    `知识: ${compactValue(currentKnowledgeEl?.textContent)}`,
+    `方法: ${compactValue(currentMethodEl?.textContent)}`,
+    `受众: ${compactValue(currentAudienceEl?.textContent)}`,
+    `技能: ${compactValue(currentSkillsEl?.textContent)}`,
     `追问类型: ${compactValue(currentFollowupTypeEl?.textContent)}`,
-    `渲染模板: ${compactValue(currentRenderTemplateEl?.textContent)}`,
-    `策略来源: ${compactValue(currentStrategySourceEl?.textContent)}`,
-    `附件学科提示: ${compactValue(currentArtifactSubjectHintEl?.textContent)}`,
-    `附件任务提示: ${compactValue(currentArtifactTaskHintEl?.textContent)}`,
+    `Prompt 来源: ${compactValue(currentPromptSourceEl?.textContent)}`,
     "",
     "附件：",
     attachmentLines,
@@ -1696,8 +1704,8 @@ if (btnAddAttachmentUrl) {
   btnAddAttachmentUrl.addEventListener("click", addAttachmentFromUrl);
 }
 btnClearAttachment.addEventListener("click", clearAttachments);
-if (btnCopyStrategyContext) {
-  btnCopyStrategyContext.addEventListener("click", () => {
+if (btnCopyPromptContext) {
+  btnCopyPromptContext.addEventListener("click", () => {
     copyDebugContext();
   });
 }
@@ -1758,16 +1766,14 @@ setLiveText(partialEl, "", "等待实时识别...");
 setLiveText(finalEl, "", "等待最终转写...");
 setCodeText(currentRouteEl, "-", "-");
 setCodeText(currentHandlerEl, "-", "-");
-setCodeText(currentBranchEl, "-", "-");
-setCodeText(currentStrategyEl, "-", "-");
-setCodeText(currentStrategyNameEl, "-", "-");
-setCodeText(currentDeliveryEl, "-", "-");
-setCodeText(currentUiModeEl, "-", "-");
+setCodeText(currentCapabilityEl, "-", "-");
+setCodeText(currentTaskEl, "-", "-");
+setCodeText(currentKnowledgeEl, "-", "-");
+setCodeText(currentMethodEl, "-", "-");
+setCodeText(currentAudienceEl, "-", "-");
 setCodeText(currentFollowupTypeEl, "-", "-");
-setCodeText(currentRenderTemplateEl, "-", "-");
-setCodeText(currentStrategySourceEl, "-", "-");
-setCodeText(currentArtifactSubjectHintEl, "-", "-");
-setCodeText(currentArtifactTaskHintEl, "-", "-");
+setCodeText(currentSkillsEl, "-", "-");
+setCodeText(currentPromptSourceEl, "-", "-");
 setCodeText(multimodalSummaryEl, "无");
 setCodeText(artifactTextViewEl, "无");
 setCodeText(promptViewEl, "无");

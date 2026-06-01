@@ -122,9 +122,7 @@ class ConversationState:
                 "primary_modality": frame.get("primary_modality", ""),
                 "requires_context": bool(frame.get("requires_context", False)),
                 "requires_artifact": bool(frame.get("requires_artifact", False)),
-                "pedagogy_change_only": bool(
-                    frame.get("pedagogy_change_only", frame.get("style_change_only", False))
-                ),
+                "pedagogy_change_only": bool(frame.get("pedagogy_change_only", False)),
                 "question_kind": frame.get("question_kind", ""),
                 "confidence": frame.get("confidence", 0.0),
                 "source": frame.get("source", ""),
@@ -153,26 +151,24 @@ class ConversationState:
                 ),
                 "allow_fast_path": bool(continuity.get("allow_fast_path", False)),
                 "user_requests_pedagogy_change_only": bool(
-                    continuity.get(
-                        "user_requests_pedagogy_change_only",
-                        continuity.get("user_requests_style_change_only", False),
-                    )
+                    continuity.get("user_requests_pedagogy_change_only", False)
                 ),
                 "explicit_topic_switch": bool(continuity.get("explicit_topic_switch", False)),
             }
+        prompt_profile = dict(strategy.get("prompt_profile") or {})
+        prompt_package = dict(strategy.get("prompt_package") or {})
         compact = {
             "branch": str(strategy.get("branch") or "").strip(),
             "strategy_id": str(strategy.get("strategy_id") or "").strip(),
             "name": str(strategy.get("name") or "").strip(),
-            "render_template": str(strategy.get("render_template") or "").strip(),
-            "delivery_mode": str(strategy.get("delivery_mode") or "").strip(),
-            "ui_mode": str(strategy.get("ui_mode") or "").strip(),
             "policy_id": str(strategy.get("policy_id") or "").strip(),
             "module": str(strategy.get("module") or "").strip(),
             "scene": str(strategy.get("scene") or "").strip(),
             "subject": str(strategy.get("subject") or "").strip(),
-            "pedagogy": str(strategy.get("pedagogy") or strategy.get("style") or "").strip(),
+            "pedagogy": str(strategy.get("pedagogy") or "").strip(),
             "source": str(strategy.get("source") or "").strip(),
+            "prompt_profile": prompt_profile,
+            "prompt_package": prompt_package,
             "analysis": compact_analysis,
         }
         return {key: value for key, value in compact.items() if value not in (None, "", [], {}, ())}
@@ -183,16 +179,15 @@ class ConversationState:
             return {}
         compact: dict[str, Any] = {}
         for key in (
-                "branch",
+                "turn_scene",
                 "session_scene",
-                "strategy_id",
-                "policy_id",
-                "module",
-                "subject",
-                "pedagogy",
-                "render_template",
-                "delivery_mode",
-                "ui_mode",
+                "capability",
+                "task",
+                "knowledge",
+                "method",
+                "audience",
+                "skills",
+                "prompt_source",
                 "user_followup_type",
                 "input_modalities",
                 "has_artifacts",

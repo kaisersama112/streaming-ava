@@ -45,7 +45,7 @@ class EducationTurnPlan:
     ) -> "EducationTurnPlan":
         """从 router 原始 plan 字典构建计划对象。"""
         data = dict(payload or {})
-        pedagogy = str(data.get("pedagogy") or data.get("style") or "step_by_step").strip() or "step_by_step"
+        pedagogy = str(data.get("pedagogy") or "step_by_step").strip() or "step_by_step"
         return cls(
             module=str(data.get("module") or "solve").strip() or "solve",
             subject=str(data.get("subject") or "general").strip() or "general",

@@ -100,9 +100,8 @@ class RouteDecisionEvent(BaseRealtimeEvent):
     turn_scene: str = ""
     confidence: float = 0.0
     handler: str = ""
-    strategy_id: str = ""
-    delivery_mode: str = ""
-    ui_mode: str = ""
+    prompt_profile: dict[str, Any] = field(default_factory=dict)
+    active_skills: list[str] = field(default_factory=list)
 
     def __init__(
             self,
@@ -110,9 +109,8 @@ class RouteDecisionEvent(BaseRealtimeEvent):
             turn_scene: str,
             confidence: float,
             handler: str,
-            strategy_id: str = "",
-            delivery_mode: str = "",
-            ui_mode: str = "",
+            prompt_profile: dict[str, Any] | None = None,
+            active_skills: list[str] | None = None,
             turn_id: int | None = None,
             ts: float | None = None,
     ):
@@ -123,9 +121,8 @@ class RouteDecisionEvent(BaseRealtimeEvent):
         object.__setattr__(self, "turn_scene", turn_scene)
         object.__setattr__(self, "confidence", float(confidence))
         object.__setattr__(self, "handler", handler)
-        object.__setattr__(self, "strategy_id", strategy_id)
-        object.__setattr__(self, "delivery_mode", delivery_mode)
-        object.__setattr__(self, "ui_mode", ui_mode)
+        object.__setattr__(self, "prompt_profile", dict(prompt_profile or {}))
+        object.__setattr__(self, "active_skills", list(active_skills or []))
 
 
 @dataclass(frozen=True)
@@ -148,19 +145,15 @@ class ContextDebugEvent(BaseRealtimeEvent):
 class PromptDebugEvent(BaseRealtimeEvent):
     handler: str = ""
     system_prompt: str = ""
-    strategy_id: str = ""
-    render_template: str = ""
-    delivery_mode: str = ""
-    ui_mode: str = ""
+    prompt_profile: dict[str, Any] = field(default_factory=dict)
+    active_skills: list[str] = field(default_factory=list)
 
     def __init__(
             self,
             handler: str,
             system_prompt: str,
-            strategy_id: str = "",
-            render_template: str = "",
-            delivery_mode: str = "",
-            ui_mode: str = "",
+            prompt_profile: dict[str, Any] | None = None,
+            active_skills: list[str] | None = None,
             turn_id: int | None = None,
             ts: float | None = None,
     ):
@@ -169,55 +162,38 @@ class PromptDebugEvent(BaseRealtimeEvent):
         object.__setattr__(self, "turn_id", turn_id)
         object.__setattr__(self, "handler", handler)
         object.__setattr__(self, "system_prompt", system_prompt)
-        object.__setattr__(self, "strategy_id", strategy_id)
-        object.__setattr__(self, "render_template", render_template)
-        object.__setattr__(self, "delivery_mode", delivery_mode)
-        object.__setattr__(self, "ui_mode", ui_mode)
+        object.__setattr__(self, "prompt_profile", dict(prompt_profile or {}))
+        object.__setattr__(self, "active_skills", list(active_skills or []))
 
 
 @dataclass(frozen=True)
-class StrategyDebugEvent(BaseRealtimeEvent):
-    branch: str = ""
-    strategy_id: str = ""
-    strategy_name: str = ""
-    strategy_source: str = ""
-    render_template: str = ""
-    delivery_mode: str = ""
-    ui_mode: str = ""
+class PromptPackageDebugEvent(BaseRealtimeEvent):
+    prompt_profile: dict[str, Any] = field(default_factory=dict)
+    active_skills: list[str] = field(default_factory=list)
+    prompt_source: str = ""
     user_followup_type: str = ""
-    message_block_subject_hint: str = ""
-    message_block_task_hint: str = ""
+    prompt_package: dict[str, Any] = field(default_factory=dict)
     analysis: dict[str, Any] = field(default_factory=dict)
 
     def __init__(
             self,
-            branch: str,
-            strategy_id: str,
-            strategy_name: str,
-            strategy_source: str,
-            render_template: str,
-            delivery_mode: str,
-            ui_mode: str,
+            prompt_profile: dict[str, Any] | None,
+            active_skills: list[str] | None,
+            prompt_source: str,
             user_followup_type: str,
-            message_block_subject_hint: str = "",
-            message_block_task_hint: str = "",
+            prompt_package: dict[str, Any] | None = None,
             analysis: dict[str, Any] | None = None,
             turn_id: int | None = None,
             ts: float | None = None,
     ):
-        object.__setattr__(self, "event_type", "debug_strategy")
+        object.__setattr__(self, "event_type", "debug_prompt_package")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
         object.__setattr__(self, "turn_id", turn_id)
-        object.__setattr__(self, "branch", branch)
-        object.__setattr__(self, "strategy_id", strategy_id)
-        object.__setattr__(self, "strategy_name", strategy_name)
-        object.__setattr__(self, "strategy_source", strategy_source)
-        object.__setattr__(self, "render_template", render_template)
-        object.__setattr__(self, "delivery_mode", delivery_mode)
-        object.__setattr__(self, "ui_mode", ui_mode)
+        object.__setattr__(self, "prompt_profile", dict(prompt_profile or {}))
+        object.__setattr__(self, "active_skills", list(active_skills or []))
+        object.__setattr__(self, "prompt_source", prompt_source)
         object.__setattr__(self, "user_followup_type", user_followup_type)
-        object.__setattr__(self, "message_block_subject_hint", message_block_subject_hint)
-        object.__setattr__(self, "message_block_task_hint", message_block_task_hint)
+        object.__setattr__(self, "prompt_package", dict(prompt_package or {}))
         object.__setattr__(self, "analysis", dict(analysis or {}))
 
 

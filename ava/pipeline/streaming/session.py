@@ -34,11 +34,11 @@ from ava.core.events.realtime import (
     ContextDebugEvent,
     ErrorEvent,
     MetricsDebugEvent,
+    PromptPackageDebugEvent,
     PromptDebugEvent,
     RealtimeEventBus,
     RouteDecisionEvent,
     StateChangedEvent,
-    StrategyDebugEvent,
     TtsChunkEvent,
 )
 
@@ -307,6 +307,16 @@ class RealtimeConversationSession:
 
             # 助手消息
             if list(assistant_message.get("content") or []) or strategy or evaluation or decision:
+                prompt_package = dict(strategy.get("prompt_package") or {})
+                prompt_profile = dict(evaluation or {})
+                prompt_profile["capability"] = prompt_profile.get("capability") or prompt_package.get("capability", "")
+                prompt_profile["task"] = prompt_profile.get("task") or prompt_package.get("task", "")
+                prompt_profile["knowledge"] = prompt_profile.get("knowledge") or prompt_package.get("knowledge", "")
+                prompt_profile["method"] = prompt_profile.get("method") or prompt_package.get("method", "")
+                prompt_profile["audience"] = prompt_profile.get("audience") or prompt_package.get("audience", "")
+                skills = prompt_profile.get("skills")
+                if not isinstance(skills, list):
+                    skills = list(prompt_package.get("skills") or [])
                 payload.append(
                     {
                         "role": "assistant",
@@ -315,14 +325,16 @@ class RealtimeConversationSession:
                         "created_at": record.get("created_at") or "",
                         "intent": record.get("intent") or "",
                         "meta": {
-                            "branch": evaluation.get("branch") or decision.get("turn_scene", ""),
-                            "strategy_id": strategy.get("strategy_id", ""),
-                            "strategy_name": strategy.get("name", ""),
-                            "delivery_mode": evaluation.get("delivery_mode") or strategy.get("delivery_mode", ""),
-                            "ui_mode": evaluation.get("ui_mode") or strategy.get("ui_mode", ""),
+                            "session_scene": prompt_profile.get("session_scene") or decision.get("session_scene", ""),
+                            "turn_scene": prompt_profile.get("turn_scene") or decision.get("turn_scene", ""),
+                            "capability": prompt_profile.get("capability", ""),
+                            "task": prompt_profile.get("task", ""),
+                            "knowledge": prompt_profile.get("knowledge", ""),
+                            "method": prompt_profile.get("method", ""),
+                            "audience": prompt_profile.get("audience", ""),
+                            "skills": skills,
                             "user_followup_type": evaluation.get("user_followup_type", ""),
-                            "render_template": strategy.get("render_template", ""),
-                            "strategy_source": strategy.get("source", ""),
+                            "prompt_source": evaluation.get("prompt_source") or strategy.get("source", ""),
                             "turn_status": turn_status,
                         },
                     }
@@ -1087,32 +1099,34 @@ class RealtimeConversationSession:
                 return
 
             ctrl.t3_turn_plan_done_at = time.monotonic()
+            prompt_profile = plan.prompt_profile
+            active_skills = plan.active_skill_names
             self.events.publish(
                 RouteDecisionEvent(
                     session_scene=decision.session_scene,
                     turn_scene=decision.turn_scene,
                     confidence=decision.confidence,
                     handler=plan.orchestrator_name,
-                    strategy_id=plan.strategy.strategy_id,
-                    delivery_mode=plan.strategy.delivery_mode,
-                    ui_mode=plan.strategy.ui_mode,
+                    prompt_profile=prompt_profile,
+                    active_skills=active_skills,
                     turn_id=ctrl.turn_id,
                 )
             )
             evaluation_tags = build_evaluation_tags(self.state, user_message, decision, plan.strategy)
             self.events.publish(
-                StrategyDebugEvent(
-                    branch=evaluation_tags.get("branch", decision.turn_scene),
-                    strategy_id=plan.strategy.strategy_id,
-                    strategy_name=plan.strategy.name,
-                    strategy_source=plan.strategy.source,
-                    render_template=plan.strategy.render_template,
-                    delivery_mode=plan.strategy.delivery_mode,
-                    ui_mode=plan.strategy.ui_mode,
+                PromptPackageDebugEvent(
+                    prompt_profile=prompt_profile,
+                    active_skills=active_skills,
+                    prompt_source=(plan.strategy.source if plan.strategy is not None else ""),
                     user_followup_type=evaluation_tags.get("user_followup_type", ""),
-                    message_block_subject_hint=str(plan.strategy.analysis.get("message_block_subject_hint", "") or ""),
-                    message_block_task_hint=str(plan.strategy.analysis.get("message_block_task_hint", "") or ""),
-                    analysis=dict(plan.strategy.analysis or {}),
+                    prompt_package=(
+                        plan.prompt_package.to_metadata()
+                        if plan.prompt_package is not None
+                        else {}
+                    ),
+                    analysis={
+                        **dict((plan.strategy.analysis if plan.strategy is not None else {}) or {}),
+                    },
                     turn_id=ctrl.turn_id,
                 )
             )
@@ -1123,10 +1137,8 @@ class RealtimeConversationSession:
                 PromptDebugEvent(
                     handler=plan.orchestrator_name,
                     system_prompt=system_prompt,
-                    strategy_id=plan.strategy.strategy_id,
-                    render_template=plan.strategy.render_template,
-                    delivery_mode=plan.strategy.delivery_mode,
-                    ui_mode=plan.strategy.ui_mode,
+                    prompt_profile=prompt_profile,
+                    active_skills=active_skills,
                     turn_id=ctrl.turn_id,
                 )
             )
@@ -1136,13 +1148,12 @@ class RealtimeConversationSession:
             if tts_pipeline is not None:
                 self.attach_tts(ctrl, tts_pipeline)
                 pump_thread = self._start_audio_pump(ctrl, tts_pipeline)
-                oralizer_enabled = bool(plan.strategy is not None and should_apply_math_oralizer(plan.strategy))
+                oralizer_enabled = should_apply_math_oralizer()
                 if (
                         oralizer_enabled
                         and settings.speech_postprocess.math_stream_buffer_enabled
                 ):
                     speech_buffer = LatexAwareSpeechBuffer(
-                        strategy=plan.strategy,
                         flush_chars=max(16, int(settings.speech_postprocess.stream_flush_chars or 72)),
                     )
 

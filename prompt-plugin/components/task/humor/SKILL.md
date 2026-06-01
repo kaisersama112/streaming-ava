@@ -1,34 +1,41 @@
 ---
-name: prompt-casual_chat-mode-humor
+name: humor
 description: 轻幽默：用于闲聊分支下的互动模式提示技能。
 asset:
-  id: humor
-  type: mode
-  version: 1
-  entry: references/spec.md
+  kind: task
+version: 1.0.0
+load_policy: on_demand
 references:
-  - path: references/spec.md
-    purpose: 当前 mode 的正式结构、交互规则与输出合同
-    when: 当 casual_chat 分支已选择 mode = humor 并需要构建 responder 系统提示时读取
-metadata:
-  pattern: Domain Knowledge Pack
-  load_policy: 先读取 mode Skill 卡片，再按需读取 references/spec.md
+- references/spec.md
+assets: []
 ---
 
-# 轻幽默
+# Purpose
 
-## Trigger
+轻幽默：用于闲聊分支下的互动模式提示技能。
+
+增加自然感，但不抢走对话主线。
+
+# Instructions
+
+- 先确认当前分支已经是 casual_chat。
+- 读取 references/spec.md，获得 mode 目标、交互规则、输出合同。
+- 把 mode 规则交给外层提示构建器与渲染模板使用。
+- 幽默强度保持很低。
+- 接梗后及时收住。
+- 更像轻轻会意一笑，不像表演段子。
+- 不冒犯。
+- 不浮夸，不自我表演。
+
+# References
+
+- `references/spec.md`：当前 Skill 的详细规范说明。
+
+# Examples
+
 - 当路由计划选择 casual_chat.humor 时使用
 - 当需要为当前轮回答注入 mode 级约束时使用
-
-## Procedure
-1. 先确认当前分支已经是 casual_chat。
-2. 读取 references/spec.md，获得 mode 目标、交互规则、输出合同。
-3. 把 mode 规则交给外层提示构建器与渲染模板使用。
-
-## Decision Notes
+- 这题也太离谱了吧
+- 你也太会了
 - 当前 mode 目标：增加自然感，但不抢走对话主线。
 - 该 Skill 只描述稳定模式规则，不携带运行时上下文。
-
-## References
-- references/spec.md：casual_chat.humor 正式规范

@@ -47,23 +47,22 @@ class ReplyService:
             return False
         if realtime and not bool(getattr(settings.runtime, "agents_sdk_realtime_enabled", False)):
             return False
-        strategy = plan.strategy
-        if strategy is None:
-            return False
         allowed_branches = [
             str(item or "").strip()
             for item in list(getattr(settings.runtime, "agents_sdk_branches", []) or [])
             if str(item or "").strip()
         ]
-        if allowed_branches and str(strategy.branch or "").strip() not in set(allowed_branches):
+        current_turn_scene = str(plan.decision.turn_scene or "").strip()
+        if allowed_branches and current_turn_scene not in set(allowed_branches):
             return False
         allowed_modules = [
             str(item or "").strip()
             for item in list(getattr(settings.runtime, "agents_sdk_education_modules", []) or [])
             if str(item or "").strip()
         ]
-        if str(strategy.branch or "").strip() == "education" and allowed_modules:
-            return str(strategy.module or "").strip() in set(allowed_modules)
+        if current_turn_scene == "education" and allowed_modules:
+            task_name = str(plan.prompt_profile.get("task") or "").strip()
+            return task_name in set(allowed_modules)
         return True
 
     @staticmethod

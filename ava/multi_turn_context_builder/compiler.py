@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ava.capabilities.prompt.prompt_builder import (
+    build_responder_prompt_package,
     build_responder_system_prompt,
     build_router_system_prompt,
 )
@@ -281,12 +282,17 @@ class ContextCompiler:
         if strategy is None:
             raise ValueError("responder 阶段缺少 strategy，无法构造正式系统指令")
 
+        prompt_package = build_responder_prompt_package(
+            prompt_center=prompt_center,
+            strategy=strategy,
+        )
         instructions = build_responder_system_prompt(
             prompt_center=prompt_center,
             context=context,
             strategy=strategy,
         )
         sections["responder"] = instructions
+        active_skills = [skill.name for skill in prompt_package.skills]
         return CompiledInstructions(
             phase="responder",
             text=instructions,

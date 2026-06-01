@@ -1,12 +1,13 @@
-﻿"""推理运行时使用的教育计划解析器。"""
+"""教育计划解析器。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 
-from ava.capabilities.prompt.loaders import EducationPromptAssets, EducationPromptLoader
+from ava.capabilities.prompt.loaders import PromptSkillLoader
 from ava.capabilities.prompt.prompt_loader import PromptCenter
+from ava.capabilities.prompt.specs import Skill
 from ava.multi_turn_context_builder.types import ConversationContext
 from ava.router_selector.schema import RouteDecision
 
@@ -18,7 +19,10 @@ class ResolvedEducationPlan:
     """解析后的教育计划。"""
 
     plan: EducationTurnPlan
-    assets: EducationPromptAssets
+    capability: Skill
+    task: Skill
+    knowledge: Skill
+    method: Skill
     delivery_mode: str
     ui_mode: str
     response_contract: dict[str, Any]
@@ -26,7 +30,7 @@ class ResolvedEducationPlan:
 
 
 class EducationPlanResolver:
-    """把 router 的原始教育计划归一化为可执行计划。"""
+    """把 router 的教育计划归一化为可执行计划。"""
 
     _VALID_BOUNDARIES = {
         "hint_first",
@@ -51,43 +55,38 @@ class EducationPlanResolver:
         context: ConversationContext,
         router_plan: dict[str, Any] | None = None,
     ) -> ResolvedEducationPlan:
-        """把当前轮 router 计划变成稳定教育计划。"""
+        """把当前轮 router plan 转成稳定教育计划。"""
         raw_plan = dict(router_plan or {})
         plan = self._normalize_plan(
             raw_plan,
             context=context,
             decision=decision,
         )
-        loader = EducationPromptLoader(prompt_center)
-        assets = loader.load_assets(
-            module=plan.module,
-            subject=plan.subject,
-            pedagogy=plan.pedagogy,
-        )
+        loader = PromptSkillLoader(prompt_center)
+        capability = loader.load_capability("education")
+        task = loader.load_task(plan.module)
+        knowledge_name = "general-knowledge" if plan.subject == "general" else plan.subject
+        knowledge = loader.load_knowledge(knowledge_name)
+        method = loader.load_method(plan.pedagogy.replace("_", "-"))
 
-        module_defaults = dict(assets.module.output_defaults or {})
-        pedagogy_adjustments = dict(assets.pedagogy.output_adjustments or {})
-        delivery_mode = str(module_defaults.get("delivery_mode") or "speech_ui_dual").strip() or "speech_ui_dual"
-        ui_mode = self._select_ui_mode(
-            plan=plan,
-            module_defaults=module_defaults,
-            subject_ui_hints=dict(assets.subject.ui_hints or {}),
-        )
+        delivery_mode = self._select_delivery_mode(loader, task)
+        ui_mode = self._select_ui_mode(loader, task)
         response_contract = {
             "module": plan.module,
             "pedagogy": plan.pedagogy,
             "answer_boundary": plan.answer_boundary,
-            **module_defaults,
-            **pedagogy_adjustments,
         }
         speech_policy = {
-            "tone": assets.pedagogy.tone,
+            "method": method.name,
             "policy_id": plan.policy_id,
             "learner_state": plan.learner_state,
         }
         return ResolvedEducationPlan(
             plan=plan,
-            assets=assets,
+            capability=capability,
+            task=task,
+            knowledge=knowledge,
+            method=method,
             delivery_mode=delivery_mode,
             ui_mode=ui_mode,
             response_contract=response_contract,
@@ -101,7 +100,6 @@ class EducationPlanResolver:
         context: ConversationContext,
         decision: RouteDecision,
     ) -> EducationTurnPlan:
-        """补齐教育计划默认值，并统一旧字段语义。"""
         plan = EducationTurnPlan.from_payload(
             raw_plan,
             confidence=decision.confidence,
@@ -137,7 +135,6 @@ class EducationPlanResolver:
         *,
         context: ConversationContext,
     ) -> str:
-        """归一化学生状态。"""
         raw_value = str((plan.raw_plan or {}).get("learner_state") or "").strip()
         candidate = raw_value or str(plan.learner_state or "").strip()
         if raw_value and candidate in self._VALID_LEARNER_STATES:
@@ -149,17 +146,11 @@ class EducationPlanResolver:
             if isinstance(block, dict) and str(block.get("type", "") or "").strip() == "input_text"
         ]
         text = "\n".join(item for item in text_blocks if item).strip()
-        if any(token in text for token in ("不会", "不懂", "卡住", "下一步", "怎么做")):
+        if any(token in text for token in ("不会", "不懂", "卡住", "下一步", "怎么做", "stuck", "how do i")):
             return "blocked"
-        if any(token in text for token in ("stuck", "next step", "how do i", "how to do", "can't do")):
-            return "blocked"
-        if any(token in text for token in ("对吗", "对不对", "是不是", "我这样写")):
+        if any(token in text for token in ("对吗", "对不对", "是不是", "correct", "right?")):
             return "verifying"
-        if any(token in text for token in ("is this right", "am i right", "correct", "right?")):
-            return "verifying"
-        if any(token in text for token in ("什么意思", "为什么", "没听懂", "没明白")):
-            return "confused"
-        if any(token in text for token in ("why", "what does it mean", "i don't understand")):
+        if any(token in text for token in ("什么意思", "为什么", "没听懂", "why", "i don't understand")):
             return "confused"
         return "followup"
 
@@ -169,7 +160,6 @@ class EducationPlanResolver:
         *,
         learner_state: str,
     ) -> str:
-        """根据学生状态与已有计划修正回答边界。"""
         raw_value = str((plan.raw_plan or {}).get("answer_boundary") or "").strip()
         candidate = raw_value or str(plan.answer_boundary or "").strip()
         if raw_value and candidate in self._VALID_BOUNDARIES:
@@ -178,22 +168,14 @@ class EducationPlanResolver:
             return "hint_first"
         if learner_state == "verifying":
             return "targeted_answer"
-        if learner_state == "confused":
-            return "direct_explain"
         return "direct_explain"
 
     @staticmethod
-    def _select_ui_mode(
-        *,
-        plan: EducationTurnPlan,
-        module_defaults: dict[str, Any],
-        subject_ui_hints: dict[str, Any],
-    ) -> str:
-        """根据计划、模块默认值和学科提示选择 UI 模式。"""
-        if str(plan.ui_mode_hint or "").strip():
-            return str(plan.ui_mode_hint).strip()
-        module_ui_mode = str(module_defaults.get("ui_mode", "") or "").strip()
-        if module_ui_mode == "none":
-            return "none"
-        return str(subject_ui_hints.get("ui_mode_default", "") or module_ui_mode or "learning_card").strip()
+    def _select_delivery_mode(loader: PromptSkillLoader, task: Skill) -> str:
+        delivery_mode = loader.get_reference_setting(task, "delivery_mode")
+        return delivery_mode or "speech_ui_dual"
 
+    @staticmethod
+    def _select_ui_mode(loader: PromptSkillLoader, task: Skill) -> str:
+        ui_mode = loader.get_reference_setting(task, "ui_mode")
+        return ui_mode or "learning_card"

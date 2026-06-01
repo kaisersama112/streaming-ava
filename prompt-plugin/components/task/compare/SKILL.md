@@ -1,34 +1,43 @@
 ---
-name: prompt-general_qa-mode-compare
+name: compare
 description: 简短对比：用于通用问答分支下的回答模式提示技能。
 asset:
-  id: compare
-  type: mode
-  version: 1
-  entry: references/spec.md
+  kind: task
+version: 1.0.0
+load_policy: on_demand
 references:
-  - path: references/spec.md
-    purpose: 当前 mode 的正式结构、交互规则与输出合同
-    when: 当 general_qa 分支已选择 mode = compare 并需要构建 responder 系统提示时读取
-metadata:
-  pattern: Domain Knowledge Pack
-  load_policy: 先读取 mode Skill 卡片，再按需读取 references/spec.md
+- references/spec.md
+assets: []
 ---
 
-# 简短对比
+# Purpose
 
-## Trigger
+简短对比：用于通用问答分支下的回答模式提示技能。
+
+帮用户快速做出选择，让他知道“该怎么选”和“主要差在哪”，而不是展开成长评测。
+
+# Instructions
+
+- 先确认当前分支已经是 general_qa。
+- 读取 references/spec.md，获得 mode 目标、交互规则、输出合同。
+- 把 mode 规则交给外层提示构建器与渲染模板使用。
+- 直接给倾向判断。
+- 差异只保留最关键的一到两个维度。
+- 优先围绕用户当前目标给建议，不做泛泛罗列。
+- 条件不足时，也给保守结论口径。
+- 不写长表格。
+- 不回避做判断。
+- 如果差异其实不大，要直接说清。
+
+# References
+
+- `references/spec.md`：当前 Skill 的详细规范说明。
+
+# Examples
+
 - 当路由计划选择 general_qa.compare 时使用
 - 当需要为当前轮回答注入 mode 级约束时使用
-
-## Procedure
-1. 先确认当前分支已经是 general_qa。
-2. 读取 references/spec.md，获得 mode 目标、交互规则、输出合同。
-3. 把 mode 规则交给外层提示构建器与渲染模板使用。
-
-## Decision Notes
+- 平板和学习机哪个好
+- 这两个设置有什么区别
 - 当前 mode 目标：帮用户快速做出选择，让他知道“该怎么选”和“主要差在哪”，而不是展开成长评测。
 - 该 Skill 只描述稳定模式规则，不携带运行时上下文。
-
-## References
-- references/spec.md：general_qa.compare 正式规范

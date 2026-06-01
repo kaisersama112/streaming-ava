@@ -79,7 +79,7 @@ class RuntimeAgentContext:
     - state: 对话状态对象
     - conversation_context: 当前轮可见的多轮上下文
     - decision: 路由结果
-    - strategy: 当前轮已锁定策略
+    - plan: 当前轮正式执行计划
     - user_message: 当前轮标准 user message
     - stop_event: 流式中断事件
 
@@ -93,7 +93,7 @@ class RuntimeAgentContext:
     state: ConversationState
     conversation_context: ConversationContext
     decision: RouteDecision
-    strategy: Any
+    plan: TurnPlan
     user_message: dict[str, Any]
     stop_event: threading.Event | None = None
     pending_state_patches: list[dict[str, Any]] = field(default_factory=list)
@@ -333,22 +333,18 @@ def clear_agent_session(session_id: str) -> None:
 def get_turn_plan(context: RunContextWrapper[RuntimeAgentContext]) -> str:
     """返回当前轮锁定后的路由与执行计划摘要。"""
     runtime = context.context
+    prompt_package = runtime.plan.prompt_package
     payload = {
         "session_scene": runtime.decision.session_scene,
         "turn_scene": runtime.decision.turn_scene,
         "intent": runtime.decision.intent,
         "need_clarification": runtime.decision.need_clarification,
         "should_preserve_teaching_state": runtime.decision.should_preserve_teaching_state,
-        "strategy_id": runtime.strategy.strategy_id,
-        "branch": runtime.strategy.branch,
-        "mode": runtime.strategy.mode,
-        "module": runtime.strategy.module,
-        "subject": runtime.strategy.subject,
-        "pedagogy": runtime.strategy.pedagogy,
-        "policy_id": runtime.strategy.policy_id,
-        "analysis": dict(runtime.strategy.analysis or {}),
+        "prompt_package": prompt_package.to_metadata() if prompt_package is not None else {},
+        "active_skills": list(runtime.plan.active_skill_names),
+        "router_plan": dict(runtime.plan.router_plan or {}),
     }
-    runtime.add_event("tool.get_turn_plan", {"strategy_id": runtime.strategy.strategy_id})
+    runtime.add_event("tool.get_turn_plan", {"active_skills": list(runtime.plan.active_skill_names)})
     return _safe_json(payload)
 
 
@@ -414,22 +410,23 @@ def _build_manager_instructions(plan: TurnPlan):
 
     def _instructions(context, agent) -> str:
         runtime = context.context
+        prompt_profile = dict(runtime.plan.prompt_profile)
+        skill_names = list(runtime.plan.active_skill_names)
         locked = [
             f"session_scene={runtime.decision.session_scene}",
             f"turn_scene={runtime.decision.turn_scene}",
             f"intent={runtime.decision.intent}",
-            f"strategy_id={runtime.strategy.strategy_id}",
-            f"branch={runtime.strategy.branch}",
-            f"mode={runtime.strategy.mode or '-'}",
-            f"module={runtime.strategy.module or '-'}",
-            f"subject={runtime.strategy.subject or '-'}",
-            f"pedagogy={runtime.strategy.pedagogy or '-'}",
-            f"policy_id={runtime.strategy.policy_id or '-'}",
+            f"capability={prompt_profile.get('capability') or '-'}",
+            f"task={prompt_profile.get('task') or '-'}",
+            f"knowledge={prompt_profile.get('knowledge') or '-'}",
+            f"method={prompt_profile.get('method') or '-'}",
+            f"audience={prompt_profile.get('audience') or '-'}",
+            f"skills={','.join(skill_names) or '-'}",
         ]
         return (
                 f"{base_prompt}\n\n"
                 "你位于执行层，只负责把当前轮计划执行好。\n"
-                "不要重新做路由，不要改写已锁定策略。\n\n"
+                "不要重新做路由，不要改写已锁定的 Skill 组合与当前轮计划。\n\n"
                 "当前锁定信息：\n- " + "\n- ".join(locked) + "\n\n"
                                                             "执行要求：\n"
                                                             "- 先根据需要读取最近对话与参考材料。\n"
@@ -462,13 +459,17 @@ def _message_block_specialist_instructions(context, agent) -> str:
     )
 
 
-def _strategy_specialist_instructions(context, agent) -> str:
-    """构建执行要点整理专家指令。"""
+def _prompt_package_specialist_instructions(context, agent) -> str:
+    """构建 Skill 组合执行要点整理专家指令。"""
     runtime = context.context
+    prompt_profile = dict(runtime.plan.prompt_profile)
     return (
         "你是执行计划整理专家，不直接回答用户。\n"
-        "你不能改变已锁定的 branch/module/subject/pedagogy/mode。\n"
-        f"当前 strategy_id={runtime.strategy.strategy_id}\n"
+        "你不能改变已锁定的 capability/task/knowledge/method/audience 组合。\n"
+        f"当前 capability={prompt_profile.get('capability') or '-'}\n"
+        f"当前 task={prompt_profile.get('task') or '-'}\n"
+        f"当前 knowledge={prompt_profile.get('knowledge') or '-'}\n"
+        f"当前 method={prompt_profile.get('method') or '-'}\n"
         "请输出 3 到 5 条本轮回答执行要点。"
     )
 
@@ -496,7 +497,7 @@ def _build_manager_agent(
     )
     model_settings = _build_agents_sdk_model_settings()
     nested_run_config = _build_agents_sdk_run_config(
-        workflow_name=f"specialist:{getattr(plan.strategy, 'strategy_id', 'unknown')}"
+        workflow_name=f"specialist:{_workflow_name(plan)}"
     )
     allow_specialists = not _has_non_text_blocks(context)
 
@@ -514,9 +515,9 @@ def _build_manager_agent(
         model=model,
         model_settings=model_settings,
     )
-    strategy_specialist = Agent[RuntimeAgentContext](
-        name="Strategy Execution Specialist",
-        instructions=_strategy_specialist_instructions,
+    prompt_package_specialist = Agent[RuntimeAgentContext](
+        name="Prompt Package Execution Specialist",
+        instructions=_prompt_package_specialist_instructions,
         tools=[get_turn_plan, get_recent_history],
         model=model,
         model_settings=model_settings,
@@ -536,9 +537,9 @@ def _build_manager_agent(
                 run_config=nested_run_config,
                 max_turns=3,
             ),
-            strategy_specialist.as_tool(
-                tool_name="plan_response_under_locked_strategy",
-                tool_description="在不改变既定策略的前提下，整理当前轮回答执行要点。",
+            prompt_package_specialist.as_tool(
+                tool_name="plan_response_under_locked_prompt_package",
+                tool_description="在不改变既定 Skill 组合的前提下，整理当前轮回答执行要点。",
                 run_config=nested_run_config,
                 max_turns=3,
             ),
@@ -602,7 +603,10 @@ def _max_turns() -> int:
 
 def _workflow_name(plan: TurnPlan) -> str:
     """生成当前轮 Agents SDK 工作流名称。"""
-    return f"AVA Agents SDK {plan.strategy.strategy_id}"
+    profile = dict(plan.prompt_profile)
+    capability = str(profile.get("capability") or plan.decision.turn_scene or "unknown").strip() or "unknown"
+    task = str(profile.get("task") or "default").strip() or "default"
+    return f"AVA Agents SDK {capability}.{task}"
 
 
 def _build_runtime_context(
@@ -622,7 +626,7 @@ def _build_runtime_context(
         state=state,
         conversation_context=conversation_context,
         decision=decision,
-        strategy=plan.strategy,
+        plan=plan,
         user_message=dict(user_message),
         stop_event=stop_event,
     )

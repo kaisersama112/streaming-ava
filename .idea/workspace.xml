@@ -6,118 +6,120 @@
   <component name="ChangeListManager">
     <list default="true" id="61f03ad6-fb28-44d5-84b9-9ae3752b0d4e" name="更改" comment="暂存">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/branch_runtime.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/education_catalog.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/education_runtime.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/loaders.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/loaders.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/parsers.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/parsers.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_config.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_loader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/prompt_runtime.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/ARCHITECTURE.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/compiler.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/input.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/instructions.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/messages.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/context_engine/types.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/registry.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/registry.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/specs.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/specs.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/capabilities/prompt/store.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/capabilities/prompt/store.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/core/events/realtime.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/core/events/realtime.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/conversation/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/domain/conversation/state.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/state.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/domain/conversation/strategy.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/strategy.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/conversation/summary.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/conversation/summary.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/ARCHITECTURE.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/ARCHITECTURE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/artifacts.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/education.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/education.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/message.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/projector.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/projector.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/retriever.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/retriever.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/session_memory.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/session_memory.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/memory/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/memory/types.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/multimodal/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/multimodal/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/domain/multimodal/media.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/domain/multimodal/media.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/inference_runtime/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/inference_runtime/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/inference_runtime/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/inference_runtime/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/inference_runtime/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/inference_runtime/service.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/inference_runtime/types.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/inference_runtime/types.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/llm_model_executor/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/llm_model_executor/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/llm_model_executor/agent_backend.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/llm_model_executor/agent_backend.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/multi_turn_context_builder/compiler.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/multi_turn_context_builder/compiler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/agents.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/context.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/executor.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/model_factory.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/sessions.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/agent/tools.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/dispatcher.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/education_plan.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/education_resolver.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/model_plan_builder.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/reply_service.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/generation/types.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/output/evaluation_tags.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/output/evaluation_tags.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/speech/stream_buffer.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/speech/stream_buffer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/pipeline/speech/text_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/speech/text_builder.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/session.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/turn.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/turn.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/pipeline/streaming/voice_stream.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/pipeline/streaming/voice_stream.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/router_selector/REDEME.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ava/router_selector/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/ARCHITECTURE.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/ARCHITECTURE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/education_plan.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/education_plan.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/education_resolver.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/education_resolver.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ava/router_selector/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/llm_config/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/configs/llm_config/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ava/router_selector/strategy_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/ava/router_selector/strategy_builder.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/prompt-plugin/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/renderer/education_renderer.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/core/renderer/education_renderer.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/renderer/mode_renderer.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/core/renderer/mode_renderer.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/branch.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/modules/answer.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/modules/check.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/modules/drill.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/modules/explain.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/modules/qa.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/modules/solve.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/pedagogies/direct.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/pedagogies/explain_careful.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/pedagogies/hint_only.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/pedagogies/step_by_step.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/subjects/chinese.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/subjects/cs.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/subjects/english.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/subjects/general.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/education/subjects/math.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/casual_chat/modes/backchannel.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/casual_chat/modes/companion.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/casual_chat/modes/humor.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/casual_chat/modes/praise.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/casual_chat/modes/reaction.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/casual_chat/modes/smalltalk.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/casual_chat/plugin.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/clarify/modes/answer_mode.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/clarify/modes/focus.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/clarify/modes/missing_material.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/clarify/modes/missing_reference.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/clarify/modes/scene.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/clarify/modes/subject.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/clarify/plugin.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/modes/compare.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/modes/confirm.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/modes/fact.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/modes/howto.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/modes/reasoned.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/modes/troubleshoot.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/modes/visual.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt-plugin/plugins/general_qa/plugin.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/answer/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/answer/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/check/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/check/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/drill/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/drill/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/explain/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/explain/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/qa/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/qa/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/solve/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/modules/solve/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/direct/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/direct/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/explain_careful/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/explain_careful/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/hint_only/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/hint_only/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/step_by_step/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/pedagogies/step_by_step/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/chinese/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/chinese/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/cs/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/cs/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/english/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/english/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/general/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/general/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/math/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/capabilities/education/education/subjects/math/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/casual_chat/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/casual_chat/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/clarify/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/clarify/references/spec.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/backchannel/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/backchannel/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/backchannel/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/backchannel/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-answer-mode/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-answer-mode/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-answer-mode/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-answer-mode/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-focus/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-focus/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-focus/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-focus/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-material/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-material/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-material/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-material/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-reference/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-reference/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-reference/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-missing-reference/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-scene/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-scene/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-scene/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-scene/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-subject/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-subject/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-subject/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/clarify-subject/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/companion/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/companion/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/companion/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/companion/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/compare/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/compare/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/compare/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/compare/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/confirm/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/confirm/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/confirm/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/confirm/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/fact/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/fact/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/fact/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/fact/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/howto/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/howto/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/howto/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/howto/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/humor/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/humor/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/humor/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/humor/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/praise/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/praise/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/praise/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/praise/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/reaction/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/reaction/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/reaction/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/reaction/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/reasoned/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/reasoned/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/reasoned/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/reasoned/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/smalltalk/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/smalltalk/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/smalltalk/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/smalltalk/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/troubleshoot/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/troubleshoot/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/troubleshoot/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/troubleshoot/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/visual/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/visual/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/components/task/visual/references/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/prompt-plugin/components/task/visual/references/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/base/multimodal_rules.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/base/persona.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/contracts/speech_brief.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/contracts/speech_only.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/contracts/speech_ui_dual.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/renderer/education_renderer.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/renderer/mode_renderer.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/core/router/router_prompt.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/general_qa/SKILL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/prompt-plugin/general_qa/references/spec.md" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/static/app.js" beforeDir="false" afterPath="$PROJECT_DIR$/static/app.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/static/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/static/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/.gitkeep" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_asr_factory.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_config_loading.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_context_request_builder.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_doubao_asr_streaming.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_doubao_streaming.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -303,7 +305,7 @@
       <workItem from="1780015341353" duration="125000" />
       <workItem from="1780015484076" duration="634000" />
       <workItem from="1780016759864" duration="17534000" />
-      <workItem from="1780187670686" duration="24950000" />
+      <workItem from="1780187670686" duration="31469000" />
     </task>
     <task id="LOCAL-00001" summary="重构llm-tts 模块">
       <option name="closed" value="true" />
@@ -369,7 +371,31 @@
       <option name="project" value="LOCAL" />
       <updated>1780189667001</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="暂存">
+      <option name="closed" value="true" />
+      <created>1780280130408</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1780280130408</updated>
+    </task>
+    <task id="LOCAL-00010" summary="暂存">
+      <option name="closed" value="true" />
+      <created>1780280146725</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1780280146725</updated>
+    </task>
+    <task id="LOCAL-00011" summary="暂存">
+      <option name="closed" value="true" />
+      <created>1780280150809</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1780280150809</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -436,17 +462,17 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/ava/router_selector/service.py</url>
-          <line>320</line>
+          <line>329</line>
           <option name="timeStamp" value="14" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/ava/pipeline/streaming/session.py</url>
-          <line>1067</line>
+          <line>1079</line>
           <option name="timeStamp" value="15" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/ava/router_selector/service.py</url>
-          <line>332</line>
+          <line>341</line>
           <option name="timeStamp" value="16" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
@@ -461,12 +487,12 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/ava/router_selector/service.py</url>
-          <line>345</line>
+          <line>354</line>
           <option name="timeStamp" value="20" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/ava/router_selector/service.py</url>
-          <line>268</line>
+          <line>269</line>
           <option name="timeStamp" value="21" />
         </line-breakpoint>
       </breakpoints>
@@ -476,6 +502,6 @@
     <SUITE FILE_PATH="coverage/streaming_ava$demo_parse_latex.coverage" NAME="demo_parse_latex 覆盖结果" MODIFIED="1777015159962" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
     <SUITE FILE_PATH="coverage/streaming_ava$openai_agent_demo.coverage" NAME="openai-agent-demo 覆盖结果" MODIFIED="1777426119269" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/temp" />
     <SUITE FILE_PATH="coverage/streaming_ava$cl.coverage" NAME="cl 覆盖结果" MODIFIED="1778636658363" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$USER_HOME$/eval_batch/outputs - 副本" />
-    <SUITE FILE_PATH="coverage/streaming_ava$realtime_server.coverage" NAME="realtime_server 覆盖结果" MODIFIED="1780215387293" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/streaming_ava$realtime_server.coverage" NAME="realtime_server 覆盖结果" MODIFIED="1780295669893" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

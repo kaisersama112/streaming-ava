@@ -1,43 +1,42 @@
----
-id: scene
-type: mode
-version: 1
-mode_kind: scene
----
+# Overview
 
-# Mode
+该文档描述 `clarify-scene` Skill 的详细规范与扩展说明。
 
-## Name
-回答场景
+references/spec.md：clarify.scene 正式规范
 
-## Description
-当前轮不确定是老师式讲解还是普通回答。
+旧资产名称：回答场景
 
-## Delivery Mode
-speech_brief
-
-## UI Mode
-none
-
-## Response Shape
-只问一句，确认想要老师式讲解还是直接回答。
-
-## Objective
-先把回答场景对齐，避免整条分支走偏。
+# Detailed Rules
 
 ## Instructions
+
 - 优先澄清回答方式，不问内容细节。
 - 问法自然简短，让用户能直接选“直接答”还是“像老师一样讲”。
 
-## Interaction Rules
-- 不给过多选项。
-- 不把场景澄清扩展成分类说明。
+## Description
 
-## Examples
-- 你是直接答，还是像老师一样讲
+当前轮不确定是老师式讲解还是普通回答。
+
+## Objective
+
+先把回答场景对齐，避免整条分支走偏。
+
+# Rendering Notes
 
 ## Response Contract
+
 - single_question_only = true
 
 ## Speech Policy
+
 - style = brief
+
+# Asset Notes
+
+如需扩展模板或示例，请放入当前 Skill 的 `assets/` 目录。
+
+# Examples
+
+- 你是直接答，还是像老师一样讲
+- 当路由计划选择 clarify.scene 时使用
+- 当需要为当前轮回答注入 mode 级约束时使用

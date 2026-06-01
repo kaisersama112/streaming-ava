@@ -1,11 +1,10 @@
-﻿"""Build speech text by replacing LaTeX spans only."""
+"""只负责把公式文本转换为更适合朗读的文本。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from ava.domain.conversation.strategy import BranchStrategy
 from configs import settings
 
 from ava.pipeline.speech.latex_span_detector import LatexSpan, detect_formula_spans
@@ -20,7 +19,7 @@ class SpeechBuildResult:
     trace: dict[str, Any] = field(default_factory=dict)
 
 
-def should_apply_math_oralizer(strategy: BranchStrategy | None) -> bool:
+def should_apply_math_oralizer() -> bool:
     cfg = settings.speech_postprocess
     if not (cfg.enabled and cfg.math_oralizer_enabled):
         return False
@@ -29,13 +28,12 @@ def should_apply_math_oralizer(strategy: BranchStrategy | None) -> bool:
 
 def build_speech_text(
     reply_text: str,
-    strategy: BranchStrategy | None,
     snapshot: Any | None = None,
 ) -> SpeechBuildResult:
     del snapshot
     if not reply_text:
         return SpeechBuildResult(display_text=reply_text, speech_text=reply_text)
-    if not should_apply_math_oralizer(strategy):
+    if not should_apply_math_oralizer():
         return SpeechBuildResult(display_text=reply_text, speech_text=reply_text)
 
     spans = detect_formula_spans(reply_text)
@@ -93,4 +91,3 @@ def _replace_spans(text: str, spans: list[LatexSpan]) -> tuple[str, list[dict[st
         cursor = span.end
     parts.append(text[cursor:])
     return "".join(parts), replacements
-

@@ -1,26 +1,17 @@
-"""Structured branch-strategy model used by the prompt runtime."""
+"""会话域中的结构化策略对象。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from ava.capabilities.prompt.specs import (
-        BranchSpec,
-        ModeSpec,
-        ModuleSpec,
-        PedagogySpec,
-        PromptSkillCard,
-        SubjectSpec,
-    )
+from typing import Any
 
 
 def _safe_meta_value(value: Any) -> Any:
+    """把复杂对象安全转换为可落盘的元数据。"""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, dict):
-        return {str(k): _safe_meta_value(v) for k, v in value.items()}
+        return {str(key): _safe_meta_value(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_safe_meta_value(item) for item in value]
     if hasattr(value, "to_metadata") and callable(value.to_metadata):
@@ -30,10 +21,10 @@ def _safe_meta_value(value: Any) -> Any:
 
 @dataclass(frozen=True)
 class PromptSelection:
+    """路由阶段选出的结构化技能组合。"""
+
     branch: str
     strategy_id: str
-    delivery_mode: str
-    ui_mode: str
     policy_id: str = ""
     mode: str = ""
     module: str = ""
@@ -45,8 +36,6 @@ class PromptSelection:
         return {
             "branch": self.branch,
             "strategy_id": self.strategy_id,
-            "delivery_mode": self.delivery_mode,
-            "ui_mode": self.ui_mode,
             "policy_id": self.policy_id,
             "mode": self.mode,
             "module": self.module,
@@ -58,6 +47,8 @@ class PromptSelection:
 
 @dataclass(frozen=True)
 class SelectionTraceStep:
+    """单步选择轨迹。"""
+
     stage: str
     selected: str
     rule_path: str
@@ -84,54 +75,22 @@ class SelectionTraceStep:
 
 @dataclass(frozen=True)
 class PromptSelectionTrace:
+    """多步选择轨迹。"""
+
     branch: str
     steps: tuple[SelectionTraceStep, ...] = ()
 
     def to_metadata(self) -> dict[str, Any]:
         return {
-            "plugin": self.branch,
-            "layer_results": [step.to_metadata() for step in self.steps],
-        }
-
-
-@dataclass(frozen=True)
-class ResolvedPromptSpec:
-    branch: str
-    strategy_id: str
-    composition: str
-    delivery_mode: str
-    branch_skill: "PromptSkillCard"
-    branch_spec: "BranchSpec"
-    mode_skill: "PromptSkillCard | None" = None
-    mode_spec: "ModeSpec | None" = None
-    module_skill: "PromptSkillCard | None" = None
-    module_spec: "ModuleSpec | None" = None
-    subject_skill: "PromptSkillCard | None" = None
-    subject_spec: "SubjectSpec | None" = None
-    pedagogy_skill: "PromptSkillCard | None" = None
-    pedagogy_spec: "PedagogySpec | None" = None
-
-    def to_metadata(self) -> dict[str, Any]:
-        return {
             "branch": self.branch,
-            "strategy_id": self.strategy_id,
-            "composition": self.composition,
-            "delivery_mode": self.delivery_mode,
-            "branch_skill_id": getattr(self.branch_skill, "asset_id", ""),
-            "branch_spec_id": getattr(self.branch_spec, "asset_id", ""),
-            "mode_skill_id": getattr(self.mode_skill, "asset_id", ""),
-            "mode_spec_id": getattr(self.mode_spec, "asset_id", ""),
-            "module_skill_id": getattr(self.module_skill, "asset_id", ""),
-            "module_spec_id": getattr(self.module_spec, "asset_id", ""),
-            "subject_skill_id": getattr(self.subject_skill, "asset_id", ""),
-            "subject_spec_id": getattr(self.subject_spec, "asset_id", ""),
-            "pedagogy_skill_id": getattr(self.pedagogy_skill, "asset_id", ""),
-            "pedagogy_spec_id": getattr(self.pedagogy_spec, "asset_id", ""),
+            "steps": [step.to_metadata() for step in self.steps],
         }
 
 
 @dataclass(frozen=True)
 class ScenarioPolicy:
+    """教育场景延续策略。"""
+
     preserve_current_scenario: bool
     allow_scene_switch: bool
     answer_boundary: str
@@ -146,6 +105,8 @@ class ScenarioPolicy:
 
 @dataclass(frozen=True)
 class EducationTurnFrame:
+    """教育场景下单轮分析框架。"""
+
     primary_scenario: str
     learning_objects: tuple[str, ...]
     object_scope: str
@@ -188,31 +149,23 @@ class EducationTurnFrame:
 
 @dataclass(frozen=True)
 class BranchStrategy:
+    """当前轮的结构化执行策略。"""
+
     branch: str
     strategy_id: str
     name: str
     description: str
-    render_template: str
-    delivery_mode: str
-    ui_mode: str
     policy_id: str = ""
     mode: str = ""
     module: str = ""
     scene: str = ""
     subject: str = ""
     pedagogy: str = ""
+    prompt_package: Any | None = None
     response_shape: str = ""
     teaching_objective: str = ""
-    student_snapshot: str = ""
     prompt_guidance: tuple[str, ...] = ()
-    teacher_moves: tuple[str, ...] = ()
     interaction_rules: tuple[str, ...] = ()
-    common_misconceptions: tuple[str, ...] = ()
-    behavior_do: tuple[str, ...] = ()
-    behavior_avoid: tuple[str, ...] = ()
-    success_criteria: tuple[str, ...] = ()
-    next_turn_goal: str = ""
-    example_cases: tuple[str, ...] = ()
     response_contract: dict[str, Any] = field(default_factory=dict)
     speech_policy: dict[str, Any] = field(default_factory=dict)
     ui_policy: dict[str, Any] = field(default_factory=dict)
@@ -220,17 +173,26 @@ class BranchStrategy:
     source: str = "rules"
     selection: PromptSelection | None = None
     selection_trace: PromptSelectionTrace | None = None
-    resolved_prompt_spec: ResolvedPromptSpec | None = None
+
+    def prompt_profile(self) -> dict[str, Any]:
+        """返回当前策略绑定的 PromptPackage 运行时视图。"""
+        package = self.prompt_package
+        if package is None or not hasattr(package, "runtime_profile"):
+            return {}
+        return dict(package.runtime_profile())
 
     def to_metadata(self) -> dict[str, Any]:
+        prompt_profile = self.prompt_profile()
+        prompt_package = (
+            self.prompt_package.to_metadata()
+            if self.prompt_package is not None and hasattr(self.prompt_package, "to_metadata")
+            else {}
+        )
         return {
             "branch": self.branch,
             "strategy_id": self.strategy_id,
             "name": self.name,
             "description": self.description,
-            "render_template": self.render_template,
-            "delivery_mode": self.delivery_mode,
-            "ui_mode": self.ui_mode,
             "policy_id": self.policy_id,
             "mode": self.mode,
             "module": self.module,
@@ -239,16 +201,8 @@ class BranchStrategy:
             "pedagogy": self.pedagogy,
             "response_shape": self.response_shape,
             "teaching_objective": self.teaching_objective,
-            "student_snapshot": self.student_snapshot,
             "prompt_guidance": list(self.prompt_guidance),
-            "teacher_moves": list(self.teacher_moves),
             "interaction_rules": list(self.interaction_rules),
-            "common_misconceptions": list(self.common_misconceptions),
-            "behavior_do": list(self.behavior_do),
-            "behavior_avoid": list(self.behavior_avoid),
-            "success_criteria": list(self.success_criteria),
-            "next_turn_goal": self.next_turn_goal,
-            "example_cases": list(self.example_cases),
             "response_contract": dict(self.response_contract),
             "speech_policy": dict(self.speech_policy),
             "ui_policy": dict(self.ui_policy),
@@ -256,7 +210,6 @@ class BranchStrategy:
             "source": self.source,
             "selection": self.selection.to_metadata() if self.selection is not None else {},
             "selection_trace": self.selection_trace.to_metadata() if self.selection_trace is not None else {},
-            "resolved_prompt_spec": (
-                self.resolved_prompt_spec.to_metadata() if self.resolved_prompt_spec is not None else {}
-            ),
+            "prompt_profile": prompt_profile,
+            "prompt_package": prompt_package,
         }

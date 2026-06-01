@@ -1,4 +1,4 @@
-"""Prompt-center configuration for prompt-plugin assets."""
+"""PromptCenter 基础配置。"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,10 +6,6 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class PromptCenterConfig:
-    prompt_dir: Path
-    router_prompt_file: str = "core/router/router_prompt.md"
+    """Prompt Skill 根目录配置。"""
 
-    def file_map(self) -> dict[str, str]:
-        return {
-            "router": self.router_prompt_file,
-        }
+    prompt_dir: Path

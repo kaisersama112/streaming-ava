@@ -23,6 +23,7 @@ ava/inference_runtime/
 ## 职责
 
 - 接收外部已构建好的 `TurnPlan`
+- 以 `PromptPackage + payload` 作为正式执行输入
 - 选择回复执行路径
 - 触发最终回复生成
 
@@ -31,7 +32,12 @@ ava/inference_runtime/
 - `decision`
   - 当前轮正式路由结果，类型为 `RouteDecision`
 - `strategy`
-  - 当前轮正式回答策略，类型为 `BranchStrategy | None`
+  - 上游保留下来的内部策略对象，类型为 `BranchStrategy | None`
+  - 仅供调试与上游衔接，不是运行时正式依赖
+- `prompt_package`
+  - 当前轮正式 Prompt 组合结果
+  - 类型为 `PromptPackage | None`
+  - 这是运行时读取 Prompt 语义的唯一正式入口
 - `payload`
   - 最终模型请求载荷
   - 包含：
@@ -50,8 +56,8 @@ ava/inference_runtime/
   - 调试与追踪信息
   - 当前包含：
     - `router_plan`
-    - `prompt_sections`
     - `active_skills`
+    - `prompt_package`
 
 ## 不负责
 

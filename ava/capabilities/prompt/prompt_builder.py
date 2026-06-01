@@ -1,13 +1,13 @@
-﻿"""Prompt 构造器。
+"""PromptPackage 构造器。
 
-当前模块只负责两件事：
-1. 构造 router 阶段系统指令与当前用户消息
-2. 基于 `PromptSkillCard + 正式 Spec` 组合 responder 阶段系统指令
+当前模块只负责两类事情：
+- 为 router 阶段构造正式系统指令
+- 为 responder 阶段按统一 Skill 合同装配 `PromptPackage`
 
-注意：
-- 不再消费旧的“路径 + 变量字典”式 prompt spec
-- 不再从业务层拼接散乱 prompt 片段
-- 当前输入与历史消息通过 `input` 数组传给模型，不在这里做单独文本化复制
+不再直接依赖旧式：
+- `core/base`
+- `core/contracts`
+- 多个分散 renderer
 """
 
 from __future__ import annotations
@@ -15,29 +15,18 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from .loaders import PromptSkillLoader
+from .prompt_loader import PromptCenter
+from .specs import PromptPackage, Skill
+
 if TYPE_CHECKING:
     from ava.domain.conversation.strategy import BranchStrategy
     from ava.multi_turn_context_builder.types import ConversationContext
 
-from .prompt_loader import PromptCenter
 
-_PROMPT_SHELL_CACHE: dict[tuple[str, str, str], str] = {}
-_CORE_BASE_FILES = (
-    "core/base/persona.md",
-    "core/base/multimodal_rules.md",
-)
-
-
-def build_router_system_prompt(prompt_center: PromptCenter) -> str:
-    """读取 router 阶段系统指令。"""
-    return prompt_center.get("router")
-
-
-def build_router_user_message(
-    context: "ConversationContext",
-) -> dict[str, object]:
-    """直接返回当前轮原始标准用户消息。"""
-    return dict(context.current.user_message)
+_PROMPT_PACKAGE_CACHE: dict[tuple[str, str, str], PromptPackage] = {}
+_ROUTER_SKILL_FILE = "core/router/SKILL.md"
+_UNIFIED_RENDERER_FILE = "core/renderer/prompt_renderer.md"
 
 
 def _cache_safe_value(value: Any) -> Any:
@@ -54,83 +43,106 @@ def _cache_safe_value(value: Any) -> Any:
     return str(value)
 
 
-def _build_contract_path(delivery_mode: str) -> str:
-    """根据交付模式得到合同模板路径。"""
-    return f"core/contracts/{delivery_mode}.md"
+def _render_skill_block(skill: Skill) -> str:
+    """把 Skill 渲染为统一技能块。"""
+    blocks = [
+        f"[Skill: {skill.name}]",
+        f"Kind: {skill.kind}",
+        "",
+        "Purpose:",
+        skill.purpose.strip(),
+        "",
+        "Instructions:",
+        skill.instructions.strip(),
+    ]
+    if skill.examples:
+        blocks.extend(
+            [
+                "",
+                "Examples:",
+                *[f"- {item}" for item in skill.examples],
+            ]
+        )
+    return "\n".join(block for block in blocks if block is not None).strip()
 
 
-def _build_renderer_path(composition: str) -> str:
-    """根据组合类型得到渲染模板路径。"""
-    if composition == "education":
-        return "core/renderer/education_renderer.md"
-    return "core/renderer/mode_renderer.md"
-
-
-def _renderer_variables(strategy: "BranchStrategy") -> dict[str, Any]:
-    """构造渲染模板变量。
-
-    这里只暴露新 Prompt Skill 体系里的正式对象：
-    - `PromptSkillCard`
-    - `BranchSpec / ModeSpec / ModuleSpec / SubjectSpec / PedagogySpec`
-    """
-    spec = strategy.resolved_prompt_spec
-    if spec is None:
-        raise ValueError("resolved_prompt_spec is required")
-    variables: dict[str, Any] = {
-        "branch": strategy.branch,
-        "delivery_mode": strategy.delivery_mode,
-        "ui_mode": strategy.ui_mode,
-        "selection": strategy.selection,
-        "selection_trace": strategy.selection_trace,
-        "branch_skill": spec.branch_skill,
-        "branch_spec": spec.branch_spec,
-        "branch": spec.branch_spec,
-    }
-    if spec.mode_skill is not None:
-        variables["mode_skill"] = spec.mode_skill
-    if spec.mode_spec is not None:
-        variables["mode"] = spec.mode_spec
-    if spec.module_skill is not None:
-        variables["module_skill"] = spec.module_skill
-    if spec.module_spec is not None:
-        variables["module"] = spec.module_spec
-    if spec.subject_skill is not None:
-        variables["subject_skill"] = spec.subject_skill
-    if spec.subject_spec is not None:
-        variables["subject"] = spec.subject_spec
-    if spec.pedagogy_skill is not None:
-        variables["pedagogy_skill"] = spec.pedagogy_skill
-    if spec.pedagogy_spec is not None:
-        variables["pedagogy"] = spec.pedagogy_spec
-    return variables
-
-
-def _build_prompt_shell_cache_key(prompt_center: PromptCenter, strategy: "BranchStrategy") -> tuple[str, str, str]:
-    """构造 responder 系统指令缓存键。"""
-    spec = strategy.resolved_prompt_spec
-    if spec is None:
-        raise ValueError("resolved_prompt_spec is required")
-
-    contract_path = _build_contract_path(spec.delivery_mode)
-    renderer_path = _build_renderer_path(spec.composition)
-    asset_versions: dict[str, dict[str, int]] = {}
-    for relative_path in (*_CORE_BASE_FILES, contract_path, renderer_path):
-        if not relative_path:
+def _render_references(
+    *,
+    prompt_loader: PromptSkillLoader,
+    skill: Skill,
+) -> str:
+    """把当前 Skill 的引用规范渲染为附加块。"""
+    sections: list[str] = []
+    for path, text in prompt_loader.load_reference_texts(skill):
+        if not text:
             continue
+        sections.append(
+            "\n".join(
+                [
+                    f"[Reference: {skill.name}]",
+                    f"Path: {path}",
+                    text.strip(),
+                ]
+            ).strip()
+        )
+    return "\n\n".join(section for section in sections if section).strip()
+
+
+def _resolve_skill_chain(strategy: "BranchStrategy", prompt_loader: PromptSkillLoader) -> tuple[Skill, list[Skill]]:
+    if strategy.branch == "education":
+        capability = prompt_loader.load_capability("education")
+        tasks = [prompt_loader.load_task(strategy.module or "solve")]
+        knowledges = [prompt_loader.load_knowledge(strategy.subject or "general-knowledge")]
+        methods = [prompt_loader.load_method((strategy.pedagogy or "step-by-step").replace("_", "-"))]
+        audience_name = str(getattr(strategy, "audience", "") or "").strip()
+        audiences = [prompt_loader.load_audience(audience_name)] if audience_name else []
+        return capability, [*tasks, *knowledges, *methods, *audiences]
+
+    capability = prompt_loader.load_capability("general")
+    task_name = (strategy.mode or "fact").replace("_", "-")
+    return capability, [prompt_loader.load_task(task_name)]
+
+
+def _tracked_asset_versions(
+    *,
+    prompt_center: PromptCenter,
+    prompt_loader: PromptSkillLoader,
+    skills: list[Skill],
+) -> dict[str, dict[str, int]]:
+    """收集需要参与 PromptPackage 缓存失效的资产版本。"""
+    tracked_files = [_UNIFIED_RENDERER_FILE]
+    for skill in skills:
+        if skill.source_file:
+            tracked_files.append(skill.source_file)
+        for relative_path in skill.references:
+            tracked_files.append(prompt_center.resolve_skill_relative_path(skill, relative_path))
+
+    asset_versions: dict[str, dict[str, int]] = {}
+    for relative_path in dict.fromkeys(tracked_files):
         path = prompt_center._resolve(relative_path)
         stat = path.stat()
         asset_versions[relative_path] = {
             "mtime_ns": stat.st_mtime_ns,
             "size": stat.st_size,
         }
+    return asset_versions
+
+
+def _build_prompt_cache_key(prompt_center: PromptCenter, strategy: "BranchStrategy") -> tuple[str, str, str]:
+    """构造 PromptPackage 缓存键。"""
+    prompt_loader = PromptSkillLoader(prompt_center)
+    capability, layered_skills = _resolve_skill_chain(strategy, prompt_loader)
+    asset_versions = _tracked_asset_versions(
+        prompt_center=prompt_center,
+        prompt_loader=prompt_loader,
+        skills=[capability, *layered_skills],
+    )
     return (
         str(prompt_center.config.prompt_dir),
         strategy.strategy_id,
         json.dumps(
             {
-                "spec": spec.to_metadata(),
                 "strategy": _cache_safe_value(strategy.to_metadata()),
-                "renderer_variables": _cache_safe_value(_renderer_variables(strategy)),
                 "asset_versions": asset_versions,
             },
             ensure_ascii=False,
@@ -139,60 +151,58 @@ def _build_prompt_shell_cache_key(prompt_center: PromptCenter, strategy: "Branch
     )
 
 
-def _build_prompt_shell_from_spec(
-    prompt_center: PromptCenter,
-    strategy: "BranchStrategy",
-) -> str:
-    """根据 Skill 卡片与正式 Spec 组合稳定系统指令外壳。"""
-    spec = strategy.resolved_prompt_spec
-    if spec is None:
-        raise ValueError("resolved_prompt_spec is required")
-
-    shell_variables = _renderer_variables(strategy)
-    blocks: list[str] = []
-    for path in _CORE_BASE_FILES:
-        rendered = prompt_center.render_path(path, shell_variables).strip()
-        if rendered:
-            blocks.append(rendered)
-
-    contract_path = _build_contract_path(spec.delivery_mode)
-    rendered_contract = prompt_center.render_path(contract_path, shell_variables).strip()
-    if rendered_contract:
-        blocks.append(rendered_contract)
-
-    renderer_path = _build_renderer_path(spec.composition)
-    rendered_renderer = prompt_center.render_path(renderer_path, shell_variables).strip()
-    if rendered_renderer:
-        blocks.append(rendered_renderer)
-
+def build_router_system_prompt(prompt_center: PromptCenter) -> str:
+    """读取 router 阶段正式 Skill 指令。"""
+    loader = PromptSkillLoader(prompt_center)
+    router_skill = prompt_center.load_skill(_ROUTER_SKILL_FILE)
+    blocks = [_render_skill_block(router_skill)]
+    router_references = _render_references(prompt_loader=loader, skill=router_skill)
+    if router_references:
+        blocks.append(router_references)
     return "\n\n".join(block for block in blocks if block).strip()
 
 
-def _build_prompt_shell(
-    prompt_center: PromptCenter,
-    strategy: "BranchStrategy",
-) -> str:
-    """带缓存地构造 responder 系统指令。"""
-    cache_key = _build_prompt_shell_cache_key(prompt_center, strategy)
-    shell = _PROMPT_SHELL_CACHE.get(cache_key)
-    if shell is not None:
-        return shell
-    shell = _build_prompt_shell_from_spec(prompt_center, strategy)
-    _PROMPT_SHELL_CACHE[cache_key] = shell
-    return shell
+def build_router_user_message(context: "ConversationContext") -> dict[str, object]:
+    """直接返回当前轮原始标准用户消息。"""
+    return dict(context.current.user_message)
 
 
-def _build_system_prompt_from_spec(
-    prompt_center: PromptCenter,
-    context: "ConversationContext",
-    strategy: "BranchStrategy",
-) -> str:
-    """根据新 Prompt Skill 体系构造 responder 系统指令。"""
-    del context
-    spec = strategy.resolved_prompt_spec
-    if spec is None:
-        raise ValueError("resolved_prompt_spec is required")
-    return _build_prompt_shell(prompt_center, strategy).strip()
+def _build_prompt_package(prompt_center: PromptCenter, strategy: "BranchStrategy") -> PromptPackage:
+    prompt_loader = PromptSkillLoader(prompt_center)
+    capability, layered_skills = _resolve_skill_chain(strategy, prompt_loader)
+    all_skills = [capability, *layered_skills]
+
+    renderer_template = prompt_center.render_path(_UNIFIED_RENDERER_FILE, {}).strip()
+    skill_blocks = [_render_skill_block(skill) for skill in all_skills]
+    reference_blocks = [
+        rendered
+        for rendered in (_render_references(prompt_loader=prompt_loader, skill=skill) for skill in all_skills)
+        if rendered
+    ]
+    prompt_text = "\n\n".join(
+        block
+        for block in [
+            renderer_template,
+            *skill_blocks,
+            *reference_blocks,
+        ]
+        if block
+    ).strip()
+    return PromptSkillLoader.build_package(
+        capability=capability,
+        skills=layered_skills,
+        prompt=prompt_text,
+    )
+
+
+def _build_prompt_shell(prompt_center: PromptCenter, strategy: "BranchStrategy") -> PromptPackage:
+    cache_key = _build_prompt_cache_key(prompt_center, strategy)
+    cached = _PROMPT_PACKAGE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    built = _build_prompt_package(prompt_center, strategy)
+    _PROMPT_PACKAGE_CACHE[cache_key] = built
+    return built
 
 
 def build_responder_system_prompt(
@@ -201,10 +211,13 @@ def build_responder_system_prompt(
     strategy: "BranchStrategy",
 ) -> str:
     """构造 responder 阶段系统指令。"""
-    if strategy.resolved_prompt_spec is not None:
-        return _build_system_prompt_from_spec(prompt_center, context, strategy)
-
-    raise ValueError(f"Branch strategy {strategy.strategy_id} is missing resolved_prompt_spec")
+    del context
+    return _build_prompt_shell(prompt_center, strategy).prompt
 
 
-
+def build_responder_prompt_package(
+    prompt_center: PromptCenter,
+    strategy: "BranchStrategy",
+) -> PromptPackage:
+    """构造 responder 阶段 PromptPackage。"""
+    return _build_prompt_shell(prompt_center, strategy)

@@ -11,17 +11,18 @@
 - 调用 router model 做场景判定
 - 解析 `RouteDecision`
 - 读取 router 返回的 `plan`
-- 把 `plan` 归一化为正式教育计划或通用 mode 计划
+- 把 `plan` 归一化为正式教育计划或通用 task 计划
 - 产出当前轮的 `BranchStrategy`
-- 把 Prompt 选择结果收口为 `ResolvedPromptSpec`
+- 同步产出当前轮 `PromptPackage`
 
 ## 与 Prompt Skill 架构的关系
 
 当前版本已经统一到新的 Prompt Skill 架构：
 
 - Prompt 资产目录：`prompt-plugin/`
-- 资产结构：`SKILL.md + references/spec.md`
-- 加载入口：`ava/capabilities/prompt/loaders.py`
+- 资产结构：`SKILL.md + references/spec.md + assets/`
+- 统一对象：`Skill`
+- 统一输出：`PromptPackage`
 
 也就是说，`router_selector` 不再拼接旧式：
 
@@ -29,12 +30,12 @@
 - `branch.md`
 - `mode.md`
 - `style.md`
-- 路径字符串 + 变量字典
+- 多类 Spec 对象
 
 现在它只做两件事：
 
-1. 选出当前轮该使用哪些 Prompt Skill
-2. 把这些 Skill 对应的正式 Spec 对象放进 `ResolvedPromptSpec`
+1. 选出当前轮该使用哪些 Skill
+2. 把这些 Skill 组合成当前轮正式 `PromptPackage`
 
 ## 目录
 
@@ -56,7 +57,6 @@ ava/router_selector/
 - `EducationTurnPlan`
 - `ResolvedEducationPlan`
 - `BranchStrategy`
-- `ResolvedPromptSpec`
 
 ## 不负责
 

@@ -1,141 +1,119 @@
-"""Prompt 资产的正式结构定义。
+"""Prompt Skill 正式数据结构。
 
-该模块只定义稳定的数据结构，不承担任何运行时职责。
+当前模块只保留统一合同中的正式对象：
+- `Skill`
+- `PromptPackage`
 
-当前统一分为两层：
-1. `PromptSkillCard`
-   - 对应每个技能目录下的 `SKILL.md`
-   - 只承载触发摘要、加载策略、引用入口等轻量信息
-2. 结构化正式资产
-   - 对应 `references/spec.md`
-   - 承载系统提示真正依赖的稳定规则与结构字段
+不再保留按 kind 拆散的多套 Spec 类型。
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 
-PromptAssetType = Literal["branch", "mode", "module", "subject", "pedagogy"]
+SkillKind = Literal["capability", "task", "knowledge", "method", "audience"]
 
 
 @dataclass(frozen=True)
-class PromptReferenceEntry:
-    """Skill 引用资源条目。"""
+class Skill:
+    """统一 Skill 对象。
 
-    path: str
-    purpose: str = ""
-    when: str = ""
-
-
-@dataclass(frozen=True)
-class PromptSkillCard:
-    """Skill 入口卡片。
-
-    这是渐进披露的前两层信息：
-    - frontmatter：名称、描述、资产类型、正式引用入口
-    - SKILL 正文：何时触发、何时继续读取 `references/`
+    字段说明：
+    - `name`：全局唯一的 Skill 名称
+    - `description`：用于检索、触发与说明的简述
+    - `kind`：Skill 类型
+    - `version`：Skill 版本号
+    - `load_policy`：加载策略
+    - `purpose`：Skill 目标说明
+    - `instructions`：Skill 执行规则文本
+    - `references`：Skill 引用资源路径
+    - `assets`：Skill 资源路径
+    - `examples`：Skill 触发示例文本
+    - `source_file`：当前 Skill 入口文件的仓库相对路径
+    - `raw`：保留原始解析结果，便于调试
     """
 
     name: str
     description: str
-    asset_id: str
-    asset_type: PromptAssetType
-    version: int
-    entry_reference: str
-    title: str = ""
-    trigger_items: tuple[str, ...] = ()
-    procedure_items: tuple[str, ...] = ()
-    reference_items: tuple[str, ...] = ()
-    decision_notes: tuple[str, ...] = ()
-    pattern: str = ""
-    load_policy: str = ""
-    references: tuple[PromptReferenceEntry, ...] = ()
-    raw: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class BranchSpec:
-    """分支级资产。"""
-
-    asset_id: str
-    version: int
-    name: str
+    kind: SkillKind
+    version: str
+    load_policy: str
     purpose: str
-    rules: tuple[str, ...] = ()
-    raw: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class ModuleSpec:
-    """教育模块资产。"""
-
-    asset_id: str
-    version: int
-    name: str
-    goal: str
-    applies_to: tuple[str, ...] = ()
-    response_structure: tuple[str, ...] = ()
-    global_rules: tuple[str, ...] = ()
-    interaction_policy: tuple[str, ...] = ()
-    output_defaults: dict[str, Any] | None = None
-    instructions: tuple[str, ...] = ()
-    capabilities: tuple[str, ...] = ()
-    supports_modalities: tuple[str, ...] = ()
-    supports_question_kinds: tuple[str, ...] = ()
-    raw: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class SubjectSpec:
-    """教育学科资产。"""
-
-    asset_id: str
-    version: int
-    name: str
-    focus: tuple[str, ...] = ()
-    explanation_strategy: tuple[str, ...] = ()
-    common_mistakes: tuple[str, ...] = ()
-    evidence_preference: tuple[str, ...] = ()
-    ui_hints: dict[str, Any] | None = None
-    instructions: tuple[str, ...] = ()
-    capabilities: tuple[str, ...] = ()
-    supports_artifacts: tuple[str, ...] = ()
-    raw: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class PedagogySpec:
-    """教育教学法资产。"""
-
-    asset_id: str
-    version: int
-    name: str
-    tone: str
-    constraints: tuple[str, ...] = ()
-    output_adjustments: dict[str, Any] | None = None
-    instructions: tuple[str, ...] = ()
-    pedagogy_traits: tuple[str, ...] = ()
-    raw: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class ModeSpec:
-    """通用分支模式资产。"""
-
-    asset_id: str
-    version: int
-    name: str
-    description: str
-    delivery_mode: str
-    ui_mode: str
-    response_shape: str
-    objective: str
-    instructions: tuple[str, ...] = ()
-    interaction_rules: tuple[str, ...] = ()
+    instructions: str
+    references: tuple[str, ...] = ()
+    assets: tuple[str, ...] = ()
     examples: tuple[str, ...] = ()
-    response_contract: dict[str, Any] | None = None
-    speech_policy: dict[str, Any] | None = None
-    ui_policy: dict[str, Any] | None = None
-    raw: dict[str, Any] | None = None
+    source_file: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    def to_metadata(self) -> dict[str, Any]:
+        """导出稳定元数据。"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "kind": self.kind,
+            "version": self.version,
+            "load_policy": self.load_policy,
+            "purpose": self.purpose,
+            "instructions": self.instructions,
+            "references": list(self.references),
+            "assets": list(self.assets),
+            "examples": list(self.examples),
+            "source_file": self.source_file,
+        }
+
+
+@dataclass(frozen=True)
+class PromptPackage:
+    """Prompt 组合结果。
+
+    运行时只消费这个统一对象，不再消费多类 Prompt Spec。
+    """
+
+    capability: Skill
+    skills: tuple[Skill, ...]
+    references: tuple[str, ...]
+    assets: tuple[str, ...]
+    prompt: str
+
+    def skill_names(self, kind: SkillKind | None = None) -> list[str]:
+        """返回当前 PromptPackage 中的 Skill 名称列表。"""
+        selected = self.skills
+        if kind is not None:
+            selected = tuple(skill for skill in self.skills if skill.kind == kind)
+        return [skill.name for skill in selected]
+
+    def primary_skill_name(self, kind: SkillKind) -> str:
+        """返回某类 Skill 的首个名称；不存在时返回空字符串。"""
+        for skill in self.skills:
+            if skill.kind == kind:
+                return skill.name
+        return ""
+
+    def runtime_profile(self) -> dict[str, Any]:
+        """导出运行时稳定使用的 Prompt 组合视图。"""
+        return {
+            "capability": self.capability.name,
+            "task": self.primary_skill_name("task"),
+            "knowledge": self.primary_skill_name("knowledge"),
+            "method": self.primary_skill_name("method"),
+            "audience": self.primary_skill_name("audience"),
+            "skills": self.skill_names(),
+        }
+
+    def to_metadata(self) -> dict[str, Any]:
+        """导出稳定元数据。"""
+        profile = self.runtime_profile()
+        return {
+            "capability": profile["capability"],
+            "task": profile["task"],
+            "knowledge": profile["knowledge"],
+            "method": profile["method"],
+            "audience": profile["audience"],
+            "skills": profile["skills"],
+            "references": list(self.references),
+            "assets": list(self.assets),
+            "prompt_length": len(self.prompt or ""),
+        }

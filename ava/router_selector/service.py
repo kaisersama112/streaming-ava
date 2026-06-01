@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from ava.capabilities.prompt import build_responder_prompt_package
 from ava.capabilities.prompt.prompt_loader import PromptCenter
 from ava.domain.conversation.state import ConversationState
 from ava.inference_runtime.types import (
@@ -274,15 +275,23 @@ class RouterService:
                 context,
                 router_plan=dict(router_plan or {}),
             )
+        selected_prompt_package = getattr(selected_strategy, "prompt_package", None)
+        if selected_prompt_package is None:
+            selected_prompt_package = build_responder_prompt_package(
+                prompt_center=prompt_center,
+                strategy=selected_strategy,
+            )
         payload = self.context_compiler.compile_responder_payload(
             prompt_center=prompt_center,
             context=context,
             strategy=selected_strategy,
             decision=decision,
         )
+        active_skill_names = list(selected_prompt_package.skill_names())
         return TurnPlan(
             decision=decision,
             strategy=selected_strategy,
+            prompt_package=selected_prompt_package,
             payload=TurnPlanPayload(
                 instructions=payload.instructions,
                 input=list(payload.input),
@@ -296,8 +305,8 @@ class RouterService:
             ),
             debug=TurnPlanDebug(
                 router_plan=dict(router_plan or {}),
-                prompt_sections=dict(payload.sections or {}),
-                active_skills=list(payload.active_skills),
+                active_skills=active_skill_names,
+                prompt_package=selected_prompt_package.to_metadata(),
             ),
         )
 

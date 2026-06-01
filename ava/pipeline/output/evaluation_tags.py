@@ -1,16 +1,22 @@
-﻿"""Heuristics that tag each turn for strategy-evaluation analysis."""
+"""为单轮生成轻量评估标签。"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from ava.router_selector.schema import RouteDecision
 from ava.domain.conversation.state import ConversationState
 from ava.domain.conversation.strategy import BranchStrategy
+from ava.router_selector.schema import RouteDecision
 
 
 def _contains_any(text: str, keywords: tuple[str, ...] | list[str]) -> bool:
     return any(keyword in text for keyword in keywords)
+
+
+def _prompt_profile_from_strategy(strategy: BranchStrategy | None) -> dict[str, Any]:
+    if strategy is None:
+        return {}
+    return dict(strategy.prompt_profile())
 
 
 def classify_user_followup_type(
@@ -87,17 +93,17 @@ def build_evaluation_tags(
     analysis = dict(getattr(strategy, "analysis", {}) or {}) if strategy is not None else {}
     frame = dict(analysis.get("education_turn_frame") or analysis.get("task_frame") or {})
     continuity = dict(analysis.get("continuity") or {})
+    prompt_profile = _prompt_profile_from_strategy(strategy)
     return {
-        "branch": decision.turn_scene,
+        "turn_scene": decision.turn_scene,
         "session_scene": decision.session_scene,
-        "strategy_id": strategy.strategy_id if strategy else "",
-        "policy_id": strategy.policy_id if strategy else "",
-        "module": strategy.module if strategy else "",
-        "subject": strategy.subject if strategy else "",
-        "pedagogy": strategy.pedagogy if strategy else "",
-        "render_template": strategy.render_template if strategy else "",
-        "delivery_mode": strategy.delivery_mode if strategy else "",
-        "ui_mode": strategy.ui_mode if strategy else "",
+        "capability": prompt_profile.get("capability", ""),
+        "task": prompt_profile.get("task", ""),
+        "knowledge": prompt_profile.get("knowledge", ""),
+        "method": prompt_profile.get("method", ""),
+        "audience": prompt_profile.get("audience", ""),
+        "skills": list(prompt_profile.get("skills") or []),
+        "prompt_source": strategy.source if strategy else "",
         "user_followup_type": classify_user_followup_type(state, user_message, decision, strategy),
         "input_modalities": modalities,
         "has_artifacts": bool(modalities and modalities != ["text"]),
@@ -106,4 +112,3 @@ def build_evaluation_tags(
         "education_turn_frame": frame,
         "continuity": continuity,
     }
-

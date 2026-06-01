@@ -18,7 +18,7 @@
 它的输出是：
 
 - 当前轮正式 `BranchStrategy`
-- 当前轮正式 `ResolvedPromptSpec`
+- 当前轮正式 `PromptPackage`
 
 ## 新 Prompt Skill 架构口径
 
@@ -26,28 +26,31 @@ Prompt 资产现在统一采用：
 
 ```text
 prompt-plugin/
-  <branch>/SKILL.md
-  <branch>/references/spec.md
-  <branch>/modes/<mode>/SKILL.md
-  <branch>/modes/<mode>/references/spec.md
-  education/SKILL.md
-  education/references/spec.md
-  education/modules/<module>/SKILL.md
-  education/modules/<module>/references/spec.md
-  education/subjects/<subject>/SKILL.md
-  education/subjects/<subject>/references/spec.md
-  education/pedagogies/<pedagogy>/SKILL.md
-  education/pedagogies/<pedagogy>/references/spec.md
+  capabilities/
+    general/
+    education/
+  components/
+    task/
+    knowledge/
+    method/
+    audience/
+  core/
 ```
 
-因此 `router_selector` 只面向两类对象：
+每个 Skill 统一为：
 
-- `PromptSkillCard`
-  - 对应 `SKILL.md`
-  - 提供轻量入口、描述、引用路径
-- 正式 Spec
-  - 对应 `references/spec.md`
-  - 提供稳定结构规则
+```text
+skill/
+  SKILL.md
+  references/spec.md
+  assets/
+```
+
+因此 `router_selector` 只面向一个正式 Prompt 对象：
+
+- `Skill`
+  - 对应统一 Skill 合同
+  - 由 `ava/capabilities/prompt` 负责解析
 
 ## 内部数据流
 
@@ -72,26 +75,15 @@ prompt-plugin/
 负责：
 
 - 归一化 router 给出的教育计划
-- 选择教育分支下的 `module / subject / pedagogy`
-- 通过 `EducationPromptLoader` 读取对应 Skill 与正式 Spec
+- 选择教育组合中的 `task / knowledge / method`
+- 读取正式 `Skill`
 
 ### 4. `strategy_builder.py`
 
 负责：
 
 - 把 `RouteDecision + router_plan` 转成正式 `BranchStrategy`
-- 把 Prompt 选择结果收口为 `ResolvedPromptSpec`
-
-当前 `ResolvedPromptSpec` 已不再保存旧路径字段，而是直接保存：
-
-- `branch_skill`
-- `branch_spec`
-- `mode_skill / mode_spec`
-- `module_skill / module_spec`
-- `subject_skill / subject_spec`
-- `pedagogy_skill / pedagogy_spec`
-
-这样下游 `prompt_builder` 不需要再理解旧目录结构，也不需要再拼路径。
+- 同时构造当前轮正式 `PromptPackage`
 
 ## 设计边界
 
@@ -113,4 +105,4 @@ prompt-plugin/
 
 这一层现在的正式职责可以概括为：
 
-> 从“当前轮要去哪”推进到“当前轮应该带着哪一组 Prompt Skill 与正式 Spec 去执行”。
+> 从“当前轮要去哪”推进到“当前轮应该带着哪一组 Skill 与 PromptPackage 去执行”。
