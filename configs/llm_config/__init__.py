@@ -10,13 +10,12 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
-
 class OpenAIConfig(BaseModel):
     api_base: str = Field("https://dashscope.aliyuncs.com/compatible-mode/v1", description="兼容 OpenAI 的基础 URL")
     api_key: str = Field("", description="LLM 接口密钥")
     model: str = Field("qwen-plus", description="LLM 模型名称")
     multimodal_model: str = Field("qwen3.5-omni-plus", description="多模态 LLM 模型名称")
-    intent_model: str = Field("tongyi-intent-detect-v3", description="意图理解模型名称")
+    router_model: str = Field("qwen3.6-flash", description="意图理解模型名称")
     timeout: int = Field(60, description="LLM 超时时间（秒）")
     intent_timeout: int = Field(8, description="意图理解模型超时时间（秒）")
 

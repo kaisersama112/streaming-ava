@@ -1,4 +1,4 @@
-"""Realtime/full-duplex event definitions and a small in-process event bus."""
+﻿"""Realtime/full-duplex event definitions and a small in-process event bus."""
 
 from __future__ import annotations
 
@@ -33,14 +33,14 @@ class AudioInEvent(BaseRealtimeEvent):
 
 @dataclass(frozen=True)
 class AsrPartialEvent(BaseRealtimeEvent):
-    text: str = ""
+    user_message: dict[str, Any] = field(default_factory=dict)
     stability: float | None = None
     start_ms: int | None = None
     end_ms: int | None = None
 
     def __init__(
             self,
-            text: str,
+            user_message: dict[str, Any],
             stability: float | None = None,
             start_ms: int | None = None,
             end_ms: int | None = None,
@@ -50,7 +50,7 @@ class AsrPartialEvent(BaseRealtimeEvent):
         object.__setattr__(self, "event_type", "asr_partial")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
         object.__setattr__(self, "turn_id", turn_id)
-        object.__setattr__(self, "text", text)
+        object.__setattr__(self, "user_message", dict(user_message or {}))
         object.__setattr__(self, "stability", stability)
         object.__setattr__(self, "start_ms", start_ms)
         object.__setattr__(self, "end_ms", end_ms)
@@ -58,30 +58,27 @@ class AsrPartialEvent(BaseRealtimeEvent):
 
 @dataclass(frozen=True)
 class AsrFinalEvent(BaseRealtimeEvent):
-    text: str = ""
+    user_message: dict[str, Any] = field(default_factory=dict)
     stability: float | None = None
     start_ms: int | None = None
     end_ms: int | None = None
-    attachments: list[dict[str, Any]] = field(default_factory=list)
 
     def __init__(
             self,
-            text: str,
+            user_message: dict[str, Any],
             stability: float | None = None,
             start_ms: int | None = None,
             end_ms: int | None = None,
-            attachments: list[dict[str, Any]] | None = None,
             turn_id: int | None = None,
             ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "asr_final")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
         object.__setattr__(self, "turn_id", turn_id)
-        object.__setattr__(self, "text", text)
+        object.__setattr__(self, "user_message", dict(user_message or {}))
         object.__setattr__(self, "stability", stability)
         object.__setattr__(self, "start_ms", start_ms)
         object.__setattr__(self, "end_ms", end_ms)
-        object.__setattr__(self, "attachments", attachments or [])
 
 
 @dataclass(frozen=True)
@@ -133,21 +130,18 @@ class RouteDecisionEvent(BaseRealtimeEvent):
 
 @dataclass(frozen=True)
 class ContextDebugEvent(BaseRealtimeEvent):
-    multimodal_summary: str = ""
-    artifacts: list[dict[str, Any]] = field(default_factory=list)
+    user_message: dict[str, Any] = field(default_factory=dict)
 
     def __init__(
             self,
-            multimodal_summary: str,
-            artifacts: list[dict[str, Any]],
+            user_message: dict[str, Any],
             turn_id: int | None = None,
             ts: float | None = None,
     ):
         object.__setattr__(self, "event_type", "debug_context")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
         object.__setattr__(self, "turn_id", turn_id)
-        object.__setattr__(self, "multimodal_summary", multimodal_summary)
-        object.__setattr__(self, "artifacts", artifacts)
+        object.__setattr__(self, "user_message", dict(user_message or {}))
 
 
 @dataclass(frozen=True)
@@ -191,9 +185,9 @@ class StrategyDebugEvent(BaseRealtimeEvent):
     delivery_mode: str = ""
     ui_mode: str = ""
     user_followup_type: str = ""
-    artifact_subject_hint: str = ""
-    artifact_task_hint: str = ""
-    artifact_text: str = ""
+    message_block_subject_hint: str = ""
+    message_block_task_hint: str = ""
+    analysis: dict[str, Any] = field(default_factory=dict)
 
     def __init__(
             self,
@@ -205,9 +199,9 @@ class StrategyDebugEvent(BaseRealtimeEvent):
             delivery_mode: str,
             ui_mode: str,
             user_followup_type: str,
-            artifact_subject_hint: str = "",
-            artifact_task_hint: str = "",
-            artifact_text: str = "",
+            message_block_subject_hint: str = "",
+            message_block_task_hint: str = "",
+            analysis: dict[str, Any] | None = None,
             turn_id: int | None = None,
             ts: float | None = None,
     ):
@@ -222,9 +216,9 @@ class StrategyDebugEvent(BaseRealtimeEvent):
         object.__setattr__(self, "delivery_mode", delivery_mode)
         object.__setattr__(self, "ui_mode", ui_mode)
         object.__setattr__(self, "user_followup_type", user_followup_type)
-        object.__setattr__(self, "artifact_subject_hint", artifact_subject_hint)
-        object.__setattr__(self, "artifact_task_hint", artifact_task_hint)
-        object.__setattr__(self, "artifact_text", artifact_text)
+        object.__setattr__(self, "message_block_subject_hint", message_block_subject_hint)
+        object.__setattr__(self, "message_block_task_hint", message_block_task_hint)
+        object.__setattr__(self, "analysis", dict(analysis or {}))
 
 
 @dataclass(frozen=True)
@@ -268,14 +262,20 @@ class AssistantTokenEvent(BaseRealtimeEvent):
 
 @dataclass(frozen=True)
 class AssistantCompletedEvent(BaseRealtimeEvent):
-    text: str = ""
+    assistant_message: dict[str, Any] = field(default_factory=dict)
     interrupted: bool = False
 
-    def __init__(self, text: str, interrupted: bool, turn_id: int | None = None, ts: float | None = None):
+    def __init__(
+            self,
+            assistant_message: dict[str, Any],
+            interrupted: bool,
+            turn_id: int | None = None,
+            ts: float | None = None,
+    ):
         object.__setattr__(self, "event_type", "assistant_completed")
         object.__setattr__(self, "ts", time.time() if ts is None else ts)
         object.__setattr__(self, "turn_id", turn_id)
-        object.__setattr__(self, "text", text)
+        object.__setattr__(self, "assistant_message", dict(assistant_message or {}))
         object.__setattr__(self, "interrupted", bool(interrupted))
 
 
@@ -368,3 +368,4 @@ class RealtimeEventBus:
             kept.append(event)
         for event in kept:
             self.publish(event)
+

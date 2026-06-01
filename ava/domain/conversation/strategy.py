@@ -3,7 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ava.capabilities.prompt.specs import (
+        BranchSpec,
+        ModeSpec,
+        ModuleSpec,
+        PedagogySpec,
+        PromptSkillCard,
+        SubjectSpec,
+    )
 
 
 def _safe_meta_value(value: Any) -> Any:
@@ -88,19 +98,35 @@ class PromptSelectionTrace:
 class ResolvedPromptSpec:
     branch: str
     strategy_id: str
-    base_files: tuple[str, ...]
-    renderer_file: str
-    contract_file: str = ""
-    variables: dict[str, Any] = field(default_factory=dict)
+    composition: str
+    delivery_mode: str
+    branch_skill: "PromptSkillCard"
+    branch_spec: "BranchSpec"
+    mode_skill: "PromptSkillCard | None" = None
+    mode_spec: "ModeSpec | None" = None
+    module_skill: "PromptSkillCard | None" = None
+    module_spec: "ModuleSpec | None" = None
+    subject_skill: "PromptSkillCard | None" = None
+    subject_spec: "SubjectSpec | None" = None
+    pedagogy_skill: "PromptSkillCard | None" = None
+    pedagogy_spec: "PedagogySpec | None" = None
 
     def to_metadata(self) -> dict[str, Any]:
         return {
             "branch": self.branch,
             "strategy_id": self.strategy_id,
-            "base_files": list(self.base_files),
-            "renderer_file": self.renderer_file,
-            "contract_file": self.contract_file,
-            "variable_keys": sorted(str(k) for k in self.variables.keys()),
+            "composition": self.composition,
+            "delivery_mode": self.delivery_mode,
+            "branch_skill_id": getattr(self.branch_skill, "asset_id", ""),
+            "branch_spec_id": getattr(self.branch_spec, "asset_id", ""),
+            "mode_skill_id": getattr(self.mode_skill, "asset_id", ""),
+            "mode_spec_id": getattr(self.mode_spec, "asset_id", ""),
+            "module_skill_id": getattr(self.module_skill, "asset_id", ""),
+            "module_spec_id": getattr(self.module_spec, "asset_id", ""),
+            "subject_skill_id": getattr(self.subject_skill, "asset_id", ""),
+            "subject_spec_id": getattr(self.subject_spec, "asset_id", ""),
+            "pedagogy_skill_id": getattr(self.pedagogy_skill, "asset_id", ""),
+            "pedagogy_spec_id": getattr(self.pedagogy_spec, "asset_id", ""),
         }
 
 

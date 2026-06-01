@@ -493,10 +493,10 @@ def create_app() -> FastAPI:
                         for r in results:
                             if r.is_final:
                                 # final 结果到来时，消费当前暂存附件并作为本轮输入的一部分
-                                attachments = list(runtime.staged_attachments)
+                                content_blocks = list(runtime.staged_attachments)
                                 runtime.session.on_asr_final(
                                     r.text,
-                                    attachments=attachments,
+                                    content_blocks=content_blocks,
                                     stability=r.stability,
                                     start_ms=r.start_ms,
                                     end_ms=r.end_ms,

@@ -1,12 +1,15 @@
-# Memory Module Architecture
+﻿# Memory Module Architecture
 
-## Goal
+## 目标
 
-`ava/domain/memory/` contains the session-memory model used by the conversation runtime.
-It keeps memory responsibilities split into focused components instead of accumulating all
-logic inside `SessionMemory`.
+`ava/domain/memory/` 是会话记忆域模型。
 
-## Directory
+当前版本遵循两条原则：
+
+- 只围绕原始标准消息与其派生记忆工作
+- 不再以旧式附件继承语义作为架构中心
+
+## 目录
 
 ```text
 ava/domain/memory/
@@ -14,46 +17,46 @@ ava/domain/memory/
   session_memory.py
   education.py
   summaries.py
-  artifacts.py
+  message_blocks.py
   retriever.py
   projector.py
   types.py
 ```
 
-## Layering
+## 分层
 
-### Aggregate Root
+### 聚合根
 
 - `SessionMemory`
-- Owns the public memory API used by conversation and context-building code.
-- Composes the internal memory stores and services.
+- 对外提供统一记忆 API
+- 组合教育连续性、摘要记忆、内容块分析缓存、检索器、投影器
 
-### Internal Stores
+### 内部状态/存储
 
 - `EducationMemory`
-- Stores lightweight education-scene continuity state.
+- 保存教育场景连续性状态
 
 - `SummaryMemory`
-- Maintains recent topics and derived session summaries from `turn_records`.
+- 基于 `turn_records` 生成最近主题与派生摘要
 
-- `ArtifactMemoryStore`
-- Caches structured analysis for current or inherited multimodal artifacts.
+- `MessageBlockMemoryStore`
+- 缓存当前轮消息内容块的结构化分析结果
 
-### Memory Services
+### 内部服务
 
 - `MemoryRetriever`
-- Collects the most relevant memory entries for the current turn.
+- 为当前轮挑选最相关的记忆条目
 
 - `MemoryProjector`
-- Builds the model-visible memory projection used by router and responder prompts.
+- 构建给模型可见的记忆投影
 
-### Types
+### 数据类型
 
 - `RetrievedMemory`
-- `ArtifactMemoryEntry`
+- `MessageBlockMemoryEntry`
 - `MemoryProjection`
 
-## Class Graph
+## 关系图
 
 ```text
 ConversationState
@@ -62,44 +65,36 @@ ConversationState
 SessionMemory
   -> EducationMemory
   -> SummaryMemory
-  -> ArtifactMemoryStore
+  -> MessageBlockMemoryStore
   -> MemoryRetriever
   -> MemoryProjector
-
-ContextCompiler
-  -> ava/context_engine/memory.py
-  -> SessionMemory.retrieve_relevant_memories()
-  -> SessionMemory.build_projection()
 ```
 
-## Runtime Order
+## 运行顺序
 
-### 1. Turn write path
+### 1. 写入路径
 
 ```text
-user input
-  -> ConversationState.post_multimodal_turn() / complete_realtime_turn()
-  -> SessionMemory.append_recent_topic()
-  -> SessionMemory.remember_artifact_analysis()
+user_message / assistant_message
+  -> ConversationState.upsert_realtime_user_turn()
+  -> ConversationState.complete_realtime_turn()
   -> SessionMemory.update_education_state_from_strategy()
   -> SessionMemory.refresh_summaries(turn_records=...)
 ```
 
-### 2. Context compile path
+### 2. 记忆投影路径
 
 ```text
-ContextCompiler
-  -> build_memory_projection(...)
+multi_turn_context_builder
   -> SessionMemory.build_projection(...)
   -> MemoryProjector.build(...)
   -> MemoryProjection
 ```
 
-### 3. Retrieval path
+### 3. 记忆检索路径
 
 ```text
-ContextCompiler
-  -> retrieve_relevant_memories(...)
+multi_turn_context_builder
   -> SessionMemory.retrieve_relevant_memories(...)
   -> MemoryRetriever.retrieve(...)
   -> list[RetrievedMemory]
@@ -107,38 +102,53 @@ ContextCompiler
 
 ## Source of Truth
 
-- Conversation records: `ConversationState.turn_records`
-- Education continuity: `EducationMemory`
-- Artifact continuity: `ArtifactMemoryStore`
-- Derived summaries: `SummaryMemory`
+- 会话原始记录：`ConversationState.turn_records`
+- 教育连续性：`EducationMemory`
+- 消息内容块分析缓存：`MessageBlockMemoryStore`
+- 派生摘要：`SummaryMemory`
 
-`recent_topics`, `context_summary`, and `multimodal_context_summary` are derived memory,
-not independent source-of-truth records.
+其中：
 
-## Public API Rule
+- `recent_topics`
+- `context_summary`
+- `multimodal_context_summary`
 
-External code should go through `SessionMemory` instead of mutating internal stores directly.
+都属于派生记忆，不是独立真值源。
 
-Allowed:
+## 对外 API 规则
+
+外部代码应只通过 `SessionMemory` 使用记忆能力，不直接改内部对象。
+
+允许：
 
 ```python
-state.memory.append_recent_topic(...)
 state.memory.set_education_state_value(...)
 state.memory.retrieve_relevant_memories(...)
 state.memory.build_projection(...)
+state.memory.remember_block_analysis(...)
 ```
 
-Avoid:
+避免：
 
 ```python
 state.memory.education_state["key"] = value
-state.memory.recent_topics.append(...)
+state.memory.summary_memory.context_summary = "..."
+state.memory.message_block_store._cache["..."] = {}
 ```
 
-## Context Engine Boundary
+## 边界
 
-`ava/context_engine/memory.py` is a bridge layer. Real memory behavior lives in:
+`ava/domain/memory/` 负责：
 
-- `ava/domain/memory/retriever.py`
-- `ava/domain/memory/projector.py`
-- `ava/domain/memory/session_memory.py`
+- 会话内派生记忆
+- 教育连续性状态
+- 内容块分析缓存
+- 模型可见记忆投影
+
+`ava/domain/memory/` 不负责：
+
+- 原始会话状态持久化
+- UI 文案展示
+- 路由决策
+- 模型请求发送
+

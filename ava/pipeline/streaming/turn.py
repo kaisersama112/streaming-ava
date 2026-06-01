@@ -40,11 +40,11 @@ class TurnControl:
     turn_id: int
     stop_event: threading.Event
     bridge: "RealtimeAudioBridge"
-    user_text: str = ""
+    user_message: dict[str, Any] = field(default_factory=dict)
     tts_pipeline: "StreamingVoicePipeline | None" = None
     status: TurnStatus = TurnStatus.IDLE
     interrupted: bool = False
-    assistant_text: str = ""
+    assistant_message: dict[str, Any] = field(default_factory=dict)
     started_at: float = field(default_factory=time.monotonic)
     finished_at: float | None = None
     asr_final_at: float | None = None

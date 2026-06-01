@@ -1,23 +1,37 @@
 # 模型执行器
 
-`ava.llm_model_executor` 是新的独立模型执行层。
+`ava.llm_model_executor` 是正式的模型执行层。
 
-## 结构
+当前版本统一承载两类执行能力：
 
-- `types.py`：请求、结果、事件等核心类型
-- `service.py`：唯一主实现，统一负责请求规范化、provider 调用、同步与流式执行
-- `__init__.py`：对外导出正式入口
+- OpenAI Responses 执行
+- Agents SDK 执行后端
+
+## 目录
+
+```text
+ava/llm_model_executor/
+  __init__.py
+  types.py
+  service.py
+  agent_backend.py
+```
 
 ## 职责
 
 - 接收外层已经组装好的 `instructions + input`
-- 规范化为 OpenAI Responses 请求
+- 规范化为模型请求
 - 提供同步与流式执行
+- 在需要时切换到 Agents SDK 后端
 
-当前实现不再拆分额外的 request / provider 子模块，避免过度封装。
+## 不负责
 
-## 原则
+- 路由决策
+- 教育计划求解
+- 执行计划构造
+- 多轮上下文拼装
 
-- 不负责业务路由
-- 不负责多轮上下文拼接
-- 不负责 turn plan 推导
+## 边界
+
+`inference_runtime` 负责编排，  
+`llm_model_executor` 负责真正执行。

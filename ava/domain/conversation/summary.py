@@ -1,4 +1,4 @@
-"""Utilities for compressing conversation records into compact summaries."""
+﻿"""Utilities for compressing conversation records into compact summaries."""
 
 from __future__ import annotations
 
@@ -61,13 +61,14 @@ def summarize_turn_records(turn_records: list[dict[str, Any]], max_turns: int = 
         user_message = dict(record.get("user_message") or {})
         assistant_message = dict(record.get("assistant_message") or {})
         user_text = _content_to_text(user_message.get("content", ""))
-        assistant_text = _content_to_text(assistant_message.get("content", ""))
+        assistant_output_text = _content_to_text(assistant_message.get("content", ""))
         turn_status = str(record.get("turn_status", "completed") or "completed").strip()
         label = str(user_text or "").strip()
         if not label:
             continue
-        if assistant_text and turn_status == "completed":
-            lines.append(f"用户: {_clip(label, 80)}\n助手: {_clip(assistant_text, 80)}")
+        if assistant_output_text and turn_status == "completed":
+            lines.append(f"用户: {_clip(label, 80)}\n助手: {_clip(assistant_output_text, 80)}")
         else:
             lines.append(f"用户: {_clip(label, 80)}")
     return "\n".join(lines) if lines else "无"
+

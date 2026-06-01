@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 __all__ = [
-    "ArtifactMemoryEntry",
-    "ArtifactMemoryStore",
+    "MessageBlockMemoryEntry",
+    "MessageBlockMemoryStore",
     "EducationMemory",
     "MemoryProjection",
     "MemoryProjector",
@@ -16,14 +16,14 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    if name in {"ArtifactMemoryEntry", "MemoryProjection", "RetrievedMemory"}:
+    if name in {"MessageBlockMemoryEntry", "MemoryProjection", "RetrievedMemory"}:
         from . import types as types_module
 
         return getattr(types_module, name)
-    if name == "ArtifactMemoryStore":
-        from .artifacts import ArtifactMemoryStore
+    if name == "MessageBlockMemoryStore":
+        from .message_blocks import MessageBlockMemoryStore
 
-        return ArtifactMemoryStore
+        return MessageBlockMemoryStore
     if name == "EducationMemory":
         from .education import EducationMemory
 

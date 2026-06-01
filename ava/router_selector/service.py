@@ -6,10 +6,19 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from ava.capabilities.prompt import PromptCenter
+from ava.capabilities.prompt.prompt_loader import PromptCenter
 from ava.domain.conversation.state import ConversationState
-from ava.llm_model_executor import InferenceTask, LLMService, ModelRequestContext
+from ava.inference_runtime.types import (
+    TurnPlan,
+    TurnPlanDebug,
+    TurnPlanExecution,
+    TurnPlanPayload,
+    TurnPlanRuntimeContext,
+)
+from ava.llm_model_executor.service import LLMService
+from ava.llm_model_executor.types import InferenceTask, ModelRequestContext
 from ava.multi_turn_context_builder import ContextCompiler, ConversationBuildOptions, ConversationContext
+from ava.router_selector.strategy_builder import build_strategy_from_model_plan
 
 from .schema import RouteDecision
 
@@ -35,6 +44,14 @@ class RouterResult:
     request_payload: dict[str, Any]
     raw_output: str
     selection_summary: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PreparedTurn:
+    """已完成路由与计划构建、但尚未进入最终回复执行的单轮结果。"""
+
+    route_result: RouterResult
+    turn_plan: TurnPlan
 
 
 class RouterDecisionPolicy:
@@ -232,4 +249,101 @@ class RouterService:
             request_payload={"instructions": request.instructions, "input": list(request.input)},
             raw_output=raw_output,
             selection_summary=selection_summary,
+        )
+
+    def build_turn_plan(
+            self,
+            *,
+            prompt_center: PromptCenter,
+            state: ConversationState,
+            user_message: dict[str, Any],
+            decision: RouteDecision,
+            history_window: int,
+            max_context_messages: int | None = None,
+            context: ConversationContext | None = None,
+            current_turn_id: int | None = None,
+            strategy: Any | None = None,
+            router_plan: dict[str, Any] | None = None,
+            model: str = "",
+    ) -> TurnPlan:
+        selected_strategy = strategy
+        if selected_strategy is None:
+            selected_strategy = build_strategy_from_model_plan(
+                prompt_center,
+                decision,
+                context,
+                router_plan=dict(router_plan or {}),
+            )
+        payload = self.context_compiler.compile_responder_payload(
+            prompt_center=prompt_center,
+            context=context,
+            strategy=selected_strategy,
+            decision=decision,
+        )
+        return TurnPlan(
+            decision=decision,
+            strategy=selected_strategy,
+            payload=TurnPlanPayload(
+                instructions=payload.instructions,
+                input=list(payload.input),
+            ),
+            execution=TurnPlanExecution(
+                orchestrator_name="Router Prepared Turn Builder",
+                model=str(model or "").strip(),
+            ),
+            runtime_context=TurnPlanRuntimeContext(
+                conversation_context=context,
+            ),
+            debug=TurnPlanDebug(
+                router_plan=dict(router_plan or {}),
+                prompt_sections=dict(payload.sections or {}),
+                active_skills=list(payload.active_skills),
+            ),
+        )
+
+    def prepare_turn(
+            self,
+            *,
+            prompt_center: PromptCenter,
+            state: ConversationState,
+            user_message: dict[str, Any],
+            history_window: int,
+            max_context_messages: int | None = None,
+            current_turn_id: int | None = None,
+            router_model: str = "",
+            responder_model: str = "",
+            timeout: int | None = None,
+            api_base: str = "",
+            api_key: str = "",
+            strategy: Any | None = None,
+    ) -> PreparedTurn:
+        # 意图识别
+        route_result = self.route(
+            user_message=user_message,
+            state=state,
+            history_window=history_window,
+            max_context_messages=max_context_messages,
+            current_turn_id=current_turn_id,
+            model=router_model,
+            timeout=timeout,
+            api_base=api_base,
+            api_key=api_key,
+        )
+        # 路由选取
+        turn_plan = self.build_turn_plan(
+            prompt_center=prompt_center,
+            state=state,
+            user_message=user_message,
+            decision=route_result.decision,
+            history_window=history_window,
+            max_context_messages=max_context_messages,
+            context=route_result.context,
+            current_turn_id=current_turn_id,
+            strategy=strategy,
+            router_plan=route_result.router_plan,
+            model=responder_model,
+        )
+        return PreparedTurn(
+            route_result=route_result,
+            turn_plan=turn_plan,
         )

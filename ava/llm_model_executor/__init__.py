@@ -1,5 +1,6 @@
 """模型执行器。"""
 
+from .agent_backend import AgentBackend, AgentExecutionResult, clear_agent_session, clear_agent_session_async
 from .service import LLMService, OpenAIResponsesProvider, RequestPolicy
 from .types import (
     InferenceCompleted,
@@ -14,6 +15,8 @@ from .types import (
 )
 
 __all__ = [
+    "AgentBackend",
+    "AgentExecutionResult",
     "InferenceCompleted",
     "InferenceError",
     "InferenceEvent",
@@ -26,4 +29,6 @@ __all__ = [
     "OpenAIResponsesProvider",
     "OutputTextDelta",
     "RequestPolicy",
+    "clear_agent_session",
+    "clear_agent_session_async",
 ]

@@ -1,48 +1,54 @@
 # Domain Layer
 
-`ava/domain/` contains the core models and policies of the system.
+`ava/domain/` 保存系统的核心领域模型与领域状态。
 
-It describes what the system is, not how a turn is executed.
+它描述“系统中有什么”，而不是“单轮如何执行”。
 
-## Current packages
+## 当前正式内容
 
-- `context/`
-  - `TurnInput`, `MediaArtifact`, `ConversationContext`
-- `routing/`
-  - `RouteDecision`, routing schema, confidence policy
-- `session/`
-  - `ConversationState`, `SessionMemory`
+- `conversation/`
+  - `ConversationState`
+  - 标准消息读取与派生辅助
+- `memory/`
+  - `SessionMemory`
+  - 教育状态、摘要记忆、附件分析缓存
+- `multimodal/`
+  - `MediaArtifact`
 - `strategy/`
-  - `BranchStrategy`, `ResolvedPromptSpec`
+  - `BranchStrategy`
+  - `ResolvedPromptSpec`
 
-## Boundary
+## 边界
 
-This layer is responsible for:
+该层负责：
 
-- input and context models
-- routing decision models
-- session state machine and memory models
-- prompt-selection strategy models
+- 会话状态与 turn records
+- 领域记忆状态
+- 路由与策略相关领域模型
+- 多模态附件的领域表示
 
-This layer is not responsible for:
+该层不负责：
 
-- calling LLM / TTS / ASR
-- reading prompt asset files
-- orchestrating full turn execution order
+- 调用 LLM / TTS / ASR
+- 读取 prompt 资源文件
+- 编排完整单轮执行流程
+- 把输入包装成任何旧输入对象形式
 
-## State and memory split
+## 状态与记忆分层
 
 - `ConversationState`
-  - session flow state, turn records, route continuity, realtime lifecycle
+  - 只保存原始标准消息与会话运行状态
+  - 不承担摘要、文本提取、UI 标签等派生职责
 - `SessionMemory`
-  - education state, summaries, artifact analysis cache
+  - 保存教育连续性状态
+  - 保存摘要记忆与附件分析缓存
 
-Official access path:
+正式访问路径：
 
 ```python
 state.memory.*
 ```
 
-Memory internals:
+记忆层内部说明：
 
 - `ava/domain/memory/ARCHITECTURE.md`

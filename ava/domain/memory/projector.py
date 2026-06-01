@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ava.domain.memory.types import ArtifactMemoryEntry, MemoryProjection
+from ava.domain.memory.types import MessageBlockMemoryEntry, MemoryProjection
 
 
 def _json_safe(value: Any) -> Any:
@@ -32,17 +32,17 @@ class MemoryProjector:
             user_message: dict[str, Any],
             *,
             profile: str,
-            current_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
-            reference_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+            current_message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+            reference_message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
     ) -> MemoryProjection:
-        target = current_artifacts or reference_artifacts
-        artifact_memory: list[dict[str, Any]] = []
+        target = current_message_blocks or reference_message_blocks
+        message_block_memory: list[dict[str, Any]] = []
         if target:
-            analysis = memory.cached_or_metadata_artifact_analysis(target)
+            analysis = memory.cached_or_metadata_block_analysis(target)
             if analysis:
-                artifact_memory.append(
-                    ArtifactMemoryEntry(
-                        artifact_bundle_key=memory.artifact_bundle_key(target),
+                message_block_memory.append(
+                    MessageBlockMemoryEntry(
+                        block_bundle_key=memory.block_bundle_key(target),
                         analysis=_json_safe(analysis),
                     ).to_payload()
                 )
@@ -51,8 +51,8 @@ class MemoryProjector:
             item.to_payload()
             for item in memory.retrieve_relevant_memories(
                 user_message,
-                current_artifacts=current_artifacts,
-                reference_artifacts=reference_artifacts,
+                current_message_blocks=current_message_blocks,
+                reference_message_blocks=reference_message_blocks,
             )
         ]
 
@@ -61,7 +61,7 @@ class MemoryProjector:
             context_summary=str(memory.context_summary or "").strip(),
             multimodal_context_summary=str(memory.multimodal_context_summary or "").strip(),
             education_state=dict(memory.education_state or {}),
-            artifact_memory=artifact_memory,
+            message_block_memory=message_block_memory,
             retrieved_memories=[_json_safe(item) for item in retrieved_memories],
         )
         if profile == "router":
@@ -83,7 +83,7 @@ class MemoryProjector:
                         "previous_policy_id",
                     ),
                 ),
-                artifact_memory=list(projection.artifact_memory)[:1],
+                message_block_memory=list(projection.message_block_memory)[:1],
                 retrieved_memories=list(projection.retrieved_memories)[:3],
             )
 

@@ -1,4 +1,4 @@
-"""会话级全双工实时运行时。"""
+﻿"""会话级全双工实时运行时。"""
 
 from __future__ import annotations
 import base64
@@ -13,10 +13,8 @@ from ava.multi_turn_context_builder import ContextCompiler, ConversationBuildOpt
 # 评估标签构建
 from ava.pipeline.output import build_evaluation_tags
 
-# 推理运行时：构建轮次计划并执行回复
+# 推理运行时：执行已经准备好的轮次计划
 from ava.inference_runtime import InferenceRuntime
-
-# 路由决策
 from ava.router_selector import RouterService
 
 # 数学语音缓冲与口语化处理
@@ -87,53 +85,6 @@ def _compact_debug_prompt(text: str, limit: int = 1200) -> str:
     return f"{value[:limit].rstrip()}..."
 
 
-def _message_content_to_artifact_payloads(content: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """把标准用户消息中的非文本块转换为调试事件载荷。"""
-    payloads: list[dict[str, Any]] = []
-    for index, block in enumerate(content, start=1):
-        if not isinstance(block, dict):
-            continue
-        block_type = str(block.get("type", "") or "").strip()
-        if block_type == "input_text":
-            continue
-        if block_type == "input_image":
-            image_url = str(block.get("image_url", "") or "").strip()
-            payloads.append(
-                {
-                    "kind": "image",
-                    "name": f"image-{index}",
-                    "mime_type": "image/*",
-                    "summary": "",
-                    "uri": image_url if image_url and not image_url.startswith("data:") else None,
-                    "data_url": image_url if image_url.startswith("data:") else None,
-                }
-            )
-            continue
-        if block_type == "input_audio":
-            payload = dict(block.get("input_audio") or {})
-            payloads.append(
-                {
-                    "kind": "audio",
-                    "name": f"audio-{index}",
-                    "mime_type": f"audio/{str(payload.get('format', '') or 'wav').strip()}",
-                    "summary": "",
-                    "data_url": str(payload.get("data", "") or "").strip(),
-                }
-            )
-            continue
-        if block_type == "input_file":
-            payloads.append(
-                {
-                    "kind": "file",
-                    "name": str(block.get("filename", "") or f"file-{index}").strip(),
-                    "mime_type": "",
-                    "summary": "",
-                    "uri": str(block.get("file_url", "") or "").strip() or None,
-                }
-            )
-    return payloads
-
-
 def _message_content_to_text(content: Any) -> str:
     """
     将消息内容转换为纯文本。
@@ -171,16 +122,6 @@ def _message_content_to_text(content: Any) -> str:
         return "\n".join(parts).strip()
 
     return str(content or "")
-
-
-def _user_message_text(user_message: dict[str, Any]) -> str:
-    """提取标准用户消息中的文本内容。"""
-    return ConversationState._message_text_from_user_message(user_message)
-
-
-def _user_message_summary(user_message: dict[str, Any]) -> str:
-    """生成标准用户消息摘要。"""
-    return ConversationState.user_message_summary(user_message)
 
 
 def _assistant_message_text(assistant_message: dict[str, Any] | None) -> str:
@@ -272,9 +213,7 @@ class RealtimeConversationSession:
             context_compiler=self.context_compiler,
         )
         self.inference_runtime = InferenceRuntime(
-            prompt_center=self.prompt_center,
             context_compiler=self.context_compiler,
-            router_service=self.router_service,
         )
 
         # 实时事件总线
@@ -361,31 +300,18 @@ class RealtimeConversationSession:
                 {
                     "role": "user",
                     "key": f"{turn_key}-user",
-                    "text": user_message_text(user_message),
-                    "summary": user_message_summary(user_message),
-                    "artifacts": _message_content_to_artifact_payloads(list(user_message.get("content") or [])),
+                    "content": list(user_message.get("content") or []),
                     "created_at": record.get("created_at") or "",
                 }
             )
 
-            # 助手文本
-            assistant_text = _assistant_message_text(assistant_message)
-
-            # 补充状态文本
-            if not assistant_text and turn_status == "interrupted":
-                assistant_text = "已中断"
-            elif not assistant_text and turn_status == "error":
-                assistant_text = "本轮未完成"
-            elif not assistant_text and turn_status == "pending":
-                assistant_text = "处理中"
-
             # 助手消息
-            if assistant_text or strategy or evaluation or decision:
+            if list(assistant_message.get("content") or []) or strategy or evaluation or decision:
                 payload.append(
                     {
                         "role": "assistant",
                         "key": f"{turn_key}-assistant",
-                        "text": assistant_text,
+                        "content": list(assistant_message.get("content") or []),
                         "created_at": record.get("created_at") or "",
                         "intent": record.get("intent") or "",
                         "meta": {
@@ -414,7 +340,7 @@ class RealtimeConversationSession:
         with self._lock:
             return self._session_status
 
-    def begin_turn(self, user_text: str = "") -> TurnControl:
+    def begin_turn(self, user_message: dict[str, Any] | None = None) -> TurnControl:
         # 如果上一轮仍在执行，先打断，再为当前输入创建新轮次。
         with self._lock:
             prev_active = self._active
@@ -422,16 +348,23 @@ class RealtimeConversationSession:
             self.interrupt(reason="new_turn")
         with self._lock:
             self._turn_seq += 1
+            normalized_user_message = dict(user_message or {})
             ctrl = TurnControl(
                 turn_id=self._turn_seq,
                 stop_event=threading.Event(),
                 bridge=self.bridge,
-                user_text=user_text,
+                user_message=normalized_user_message,
                 status=TurnStatus.THINKING,
             )
             self._active = ctrl
             self._emit_state(TurnStatus.THINKING, turn_id=ctrl.turn_id, detail="turn_started")
-            self.events.publish(ControlEvent(action="start_turn", detail=user_text[:80], turn_id=ctrl.turn_id))
+            self.events.publish(
+                ControlEvent(
+                    action="start_turn",
+                    detail=_message_content_to_text(normalized_user_message.get("content") or [])[:80],
+                    turn_id=ctrl.turn_id,
+                )
+            )
             return ctrl
 
     def _preempt_active_turn_for_user_input(self, *, reason: str, detail: str = "") -> None:
@@ -504,7 +437,10 @@ class RealtimeConversationSession:
             return
         self.events.publish(
             AsrPartialEvent(
-                text=text,
+                user_message={
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": text}] if str(text or "").strip() else [],
+                },
                 stability=stability,
                 start_ms=start_ms,
                 end_ms=end_ms,
@@ -529,7 +465,7 @@ class RealtimeConversationSession:
             self,
             text: str,
             *,
-            attachments: list[dict[str, Any]] | None = None,
+            content_blocks: list[dict[str, Any]] | None = None,
             stability: float | None = None,
             start_ms: int | None = None,
             end_ms: int | None = None,
@@ -541,7 +477,7 @@ class RealtimeConversationSession:
 
         参数:
         - text: 最终识别文本。
-        - attachments: 当前输入携带的附件块。
+        - content_blocks: 当前输入附带的标准内容块（除文本外也可包含图片、音频、文件）。
         - stability: ASR 稳定度。
         - start_ms: 识别片段起始毫秒。
         - end_ms: 识别片段结束毫秒。
@@ -569,9 +505,9 @@ class RealtimeConversationSession:
         user_message_content: list[dict[str, Any]] = []
         if normalized:
             user_message_content.append({"type": "input_text", "text": normalized})
-        for attachment in list(attachments or []):
-            if isinstance(attachment, dict):
-                user_message_content.append(dict(attachment))
+        for block in list(content_blocks or []):
+            if isinstance(block, dict):
+                user_message_content.append(dict(block))
         user_message = {"role": "user", "content": user_message_content}
         if not user_message_content:
             return None
@@ -590,11 +526,10 @@ class RealtimeConversationSession:
 
         self.events.publish(
             AsrFinalEvent(
-                text=normalized,
+                user_message=user_message,
                 stability=stability,
                 start_ms=start_ms,
                 end_ms=end_ms,
-                attachments=_message_content_to_artifact_payloads(user_message_content),
                 ts=final_ts,
             )
         )
@@ -625,25 +560,29 @@ class RealtimeConversationSession:
         返回:
         - int | None: 新建轮次的 `turn_id`，若未提交则返回 `None`。
         """
-        normalized = _user_message_text(user_message)
-        summary = _user_message_summary(user_message)
         has_non_text_blocks = any(
             isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
             for block in list(user_message.get("content") or [])
         )
+        has_text_blocks = any(
+            isinstance(block, dict)
+            and str(block.get("type", "") or "").strip() == "input_text"
+            and str(block.get("text", "") or "").strip()
+            for block in list(user_message.get("content") or [])
+        )
         if self._shutdown.is_set():
             return None
-        if not normalized and not has_non_text_blocks:
+        if not has_text_blocks and not has_non_text_blocks:
             return None
 
         # 文本或多模态输入都代表明确的新用户轮次。
         # 在轮次创建和状态写入前，先中断任何仍在飞行中的回复。
         self._preempt_active_turn_for_user_input(
             reason="new_user_turn",
-            detail=normalized or summary,
+            detail=_message_content_to_text(user_message.get("content") or []),
         )
 
-        ctrl = self.begin_turn(user_text=normalized or summary)
+        ctrl = self.begin_turn(user_message=user_message)
         ctrl.t0_submit_at = time.monotonic()
         # 先持久化用户侧输入，这样即使后续被打断或报错，
         # 当前轮也仍然有可恢复的输入记录。
@@ -1030,7 +969,8 @@ class RealtimeConversationSession:
         # 没有活动轮次，或当前没有助手文本时，不需要检测。
         if active is None:
             return False
-        if not text or not active.assistant_text:
+        active_assistant_output_text = _assistant_message_text(active.assistant_message)
+        if not text or not active_assistant_output_text:
             return False
 
         now = time.monotonic()
@@ -1053,7 +993,7 @@ class RealtimeConversationSession:
         if len(partial) < echo_min_chars:
             return False
 
-        assistant = self._normalized_match_text(active.assistant_text)
+        assistant = self._normalized_match_text(active_assistant_output_text)
         if not assistant:
             return False
 
@@ -1085,13 +1025,13 @@ class RealtimeConversationSession:
         - None
 
         流程:
-        1. 构建路由上下文并完成路由选择。
-        2. 基于路由结果构建当前轮执行计划。
+        1. 通过路由模块完成当前轮路由与 `TurnPlan` 构建。
+        2. 将 `TurnPlan` 交给推理运行时执行回复。
         3. 将模型流式输出分发到界面事件与 TTS。
         4. 关闭 TTS 与音频泵线程。
         5. 持久化 completed / interrupted / error 状态。
         """
-        assistant_text = ""
+        assistant_output_buffer = ""
         decision = None
         plan = None
         tts_pipeline: StreamingVoicePipeline | None = None
@@ -1121,48 +1061,31 @@ class RealtimeConversationSession:
             )
             self.events.publish(
                 ContextDebugEvent(
-                    multimodal_summary=_user_message_summary(user_message),
-                    artifacts=_message_content_to_artifact_payloads(list(user_message.get("content") or [])),
+                    user_message=user_message,
                     turn_id=ctrl.turn_id,
                 )
             )
-            route_result = self.router_service.route(
-                user_message=user_message,
+            prepared_turn = self.router_service.prepare_turn(
+                prompt_center=self.prompt_center,
                 state=self.state,
+                user_message=user_message,
                 history_window=self.history_window,
-                max_context_messages=self.router_max_context_messages,
+                max_context_messages=self.responder_max_context_messages,
                 current_turn_id=ctrl.turn_id,
-                context=context,
-                model=str(
-                    settings.runtime.router_model
-                    or settings.openai_config.intent_model
-                    or settings.openai_config.model
-                    or ""
-                ).strip(),
-                timeout=int(
-                    getattr(settings.runtime, "router_timeout", settings.openai_config.timeout)
-                    or settings.openai_config.timeout
-                ),
+                router_model=settings.openai_config.router_model,
+                responder_model=settings.openai_config.model,
+                timeout=int(settings.openai_config.timeout),
                 api_base=settings.openai_config.api_base,
                 api_key=settings.openai_config.api_key,
             )
+            route_result = prepared_turn.route_result
+            plan = prepared_turn.turn_plan
             decision = route_result.decision
             context = route_result.context
             ctrl.t2_router_done_at = time.monotonic()
             if ctrl.stop_event.is_set():
                 return
 
-            # 当前轮执行计划会锁定本轮使用的提示词、输入消息与策略。
-            plan = self.inference_runtime.build_turn_plan(
-                state=self.state,
-                user_message=user_message,
-                decision=decision,
-                history_window=self.history_window,
-                max_context_messages=self.responder_max_context_messages,
-                context=context,
-                current_turn_id=ctrl.turn_id,
-                router_plan=route_result.router_plan,
-            )
             ctrl.t3_turn_plan_done_at = time.monotonic()
             self.events.publish(
                 RouteDecisionEvent(
@@ -1187,10 +1110,9 @@ class RealtimeConversationSession:
                     delivery_mode=plan.strategy.delivery_mode,
                     ui_mode=plan.strategy.ui_mode,
                     user_followup_type=evaluation_tags.get("user_followup_type", ""),
-                    artifact_subject_hint=str(plan.strategy.analysis.get("artifact_subject_hint", "") or ""),
-                    artifact_task_hint=str(plan.strategy.analysis.get("artifact_task_hint", "") or ""),
-                    artifact_text=str(
-                        ((plan.strategy.analysis.get("signals", {}) or {}).get("artifact_text", "")) or ""),
+                    message_block_subject_hint=str(plan.strategy.analysis.get("message_block_subject_hint", "") or ""),
+                    message_block_task_hint=str(plan.strategy.analysis.get("message_block_task_hint", "") or ""),
+                    analysis=dict(plan.strategy.analysis or {}),
                     turn_id=ctrl.turn_id,
                 )
             )
@@ -1254,13 +1176,20 @@ class RealtimeConversationSession:
                 返回:
                 - None
                 """
-                nonlocal assistant_text, token_count, token_chars, first_token
+                nonlocal assistant_output_buffer, token_count, token_chars, first_token
                 if ctrl.stop_event.is_set():
                     return
-                assistant_text += token
+                assistant_output_buffer += token
                 token_count += 1
                 token_chars += len(token)
-                ctrl.assistant_text = assistant_text
+                ctrl.assistant_message = {
+                    "role": "assistant",
+                    "content": (
+                        [{"type": "output_text", "text": assistant_output_buffer}]
+                        if str(assistant_output_buffer or "").strip()
+                        else []
+                    ),
+                }
                 if ctrl.first_token_at is None:
                     ctrl.first_token_at = time.monotonic()
                     ctrl.t4_first_token_at = ctrl.first_token_at
@@ -1276,11 +1205,14 @@ class RealtimeConversationSession:
                     else:
                         _submit_tts_text(token)
 
-            reply_result = self.inference_runtime.reply_service.stream(
-                session_id=self.state.session_id,
+            reply_result = self.inference_runtime.stream_reply(
+                state=self.state,
                 plan=plan,
-                model=settings.openai_config.model,
+                user_message=user_message,
+                context=context,
                 on_token=_handle_token,
+                current_turn_id=ctrl.turn_id,
+                model=settings.openai_config.model,
                 metadata={
                     "api_base": settings.openai_config.api_base,
                     "api_key": settings.openai_config.api_key,
@@ -1288,8 +1220,8 @@ class RealtimeConversationSession:
                 },
                 stop_event=ctrl.stop_event,
             )
-            assistant_text = reply_result.assistant_text
-            ctrl.assistant_text = assistant_text
+            ctrl.assistant_message = dict(reply_result.assistant_message or {})
+            assistant_output_buffer = _assistant_message_text(ctrl.assistant_message)
             llm_stream_finished_at = time.monotonic()
             _LOG.info(
                 "Realtime turn llm stream finished: turn=%s backend=%s tokens=%s token_chars=%s assistant_chars=%s elapsed_ms=%s interrupted=%s",
@@ -1297,7 +1229,7 @@ class RealtimeConversationSession:
                 reply_result.backend,
                 token_count,
                 token_chars,
-                len(assistant_text),
+                len(assistant_output_buffer),
                 int(max(0.0, ((llm_stream_finished_at or time.monotonic()) - (
                         llm_stream_started_at or ctrl.started_at)) * 1000.0)),
                 bool(ctrl.stop_event.is_set() or ctrl.interrupted),
@@ -1378,7 +1310,7 @@ class RealtimeConversationSession:
                 forced_pump_stop,
                 token_count,
                 token_chars,
-                len(assistant_text),
+                len(_assistant_message_text(ctrl.assistant_message)),
                 int(
                     max(
                         0.0,
@@ -1405,7 +1337,7 @@ class RealtimeConversationSession:
                 self.state.complete_realtime_turn(
                     ctrl.turn_id,
                     user_message=user_message,
-                    assistant_text=assistant_text,
+                    assistant_message=ctrl.assistant_message,
                     intent=decision.intent or decision.turn_scene,
                     decision=decision.model_dump(),
                     strategy=(plan.strategy.to_metadata() if plan.strategy is not None else None),
@@ -1416,7 +1348,7 @@ class RealtimeConversationSession:
                 turn_finalized = True
             self.events.publish(
                 AssistantCompletedEvent(
-                    text=assistant_text,
+                    assistant_message=ctrl.assistant_message,
                     interrupted=interrupted,
                     turn_id=ctrl.turn_id,
                 )
@@ -1429,7 +1361,7 @@ class RealtimeConversationSession:
                 self.state.complete_realtime_turn(
                     ctrl.turn_id,
                     user_message=user_message,
-                    assistant_text=assistant_text,
+                    assistant_message=ctrl.assistant_message,
                     intent=decision.intent or decision.turn_scene,
                     decision=decision.model_dump(),
                     strategy=None,
@@ -1450,7 +1382,7 @@ class RealtimeConversationSession:
                 self.state.complete_realtime_turn(
                     ctrl.turn_id,
                     user_message=user_message,
-                    assistant_text=assistant_text,
+                    assistant_message=ctrl.assistant_message,
                     intent=(decision.intent or decision.turn_scene) if decision is not None else "",
                     decision=(decision.model_dump() if decision is not None else None),
                     strategy=(plan.strategy.to_metadata() if plan is not None and plan.strategy is not None else None),

@@ -1,4 +1,4 @@
-"""Heuristics that tag each turn for strategy-evaluation analysis."""
+﻿"""Heuristics that tag each turn for strategy-evaluation analysis."""
 
 from __future__ import annotations
 
@@ -19,7 +19,12 @@ def classify_user_followup_type(
     decision: RouteDecision,
     strategy: BranchStrategy | None,
 ) -> str:
-    text = ConversationState._message_text_from_user_message(user_message)
+    text_blocks = [
+        str(block.get("text", "") or "").strip()
+        for block in list(user_message.get("content") or [])
+        if isinstance(block, dict) and str(block.get("type", "") or "").strip() == "input_text"
+    ]
+    text = "\n".join(item for item in text_blocks if item)
     has_artifacts = any(
         isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
         for block in list(user_message.get("content") or [])
@@ -29,13 +34,13 @@ def classify_user_followup_type(
         if record.get("turn_status") == "pending":
             continue
         assistant_message = dict(record.get("assistant_message") or {})
-        has_assistant_text = any(
+        has_assistant_output_text = any(
             isinstance(block, dict)
             and str(block.get("type", "") or "").strip() == "output_text"
             and str(block.get("text", "") or "").strip()
             for block in list(assistant_message.get("content") or [])
         )
-        if record.get("decision") or record.get("strategy") or has_assistant_text:
+        if record.get("decision") or record.get("strategy") or has_assistant_output_text:
             last_turn = record
             break
     last_decision = dict(last_turn.get("decision") or {})
@@ -73,7 +78,12 @@ def build_evaluation_tags(
         str(block.get("type", "") or "").strip().replace("input_", "")
         for block in list(user_message.get("content") or [])
         if isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
-    ] or (["text"] if ConversationState._message_text_from_user_message(user_message) else [])
+    ] or (["text"] if any(
+        isinstance(block, dict)
+        and str(block.get("type", "") or "").strip() == "input_text"
+        and str(block.get("text", "") or "").strip()
+        for block in list(user_message.get("content") or [])
+    ) else [])
     analysis = dict(getattr(strategy, "analysis", {}) or {}) if strategy is not None else {}
     frame = dict(analysis.get("education_turn_frame") or analysis.get("task_frame") or {})
     continuity = dict(analysis.get("continuity") or {})
@@ -96,3 +106,4 @@ def build_evaluation_tags(
         "education_turn_frame": frame,
         "continuity": continuity,
     }
+

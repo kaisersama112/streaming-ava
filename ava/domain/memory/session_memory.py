@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ava.domain.memory.artifacts import ArtifactMemoryStore
+from ava.domain.memory.message_blocks import MessageBlockMemoryStore
 from ava.domain.memory.education import EducationMemory
 from ava.domain.memory.projector import MemoryProjector
 from ava.domain.memory.retriever import MemoryRetriever
@@ -16,7 +16,7 @@ class SessionMemory:
     def __init__(self, memory_size: int = 8) -> None:
         self.memory_size = max(1, int(memory_size or 8))
         self.education_memory = EducationMemory()
-        self.artifact_store = ArtifactMemoryStore()
+        self.message_block_store = MessageBlockMemoryStore()
         self.summary_memory = SummaryMemory(self.memory_size)
         self.retriever = MemoryRetriever()
         self.projector = MemoryProjector()
@@ -38,12 +38,12 @@ class SessionMemory:
         return self.summary_memory.multimodal_context_summary
 
     @property
-    def artifact_analysis_cache(self) -> dict[str, dict[str, Any]]:
-        return self.artifact_store.cache
+    def message_block_analysis_cache(self) -> dict[str, dict[str, Any]]:
+        return self.message_block_store.cache
 
     def reset(self) -> None:
         self.education_memory.reset()
-        self.artifact_store.reset()
+        self.message_block_store.reset()
         self.summary_memory.reset()
 
     def to_payload(
@@ -53,7 +53,7 @@ class SessionMemory:
     ) -> dict[str, Any]:
         return {
             **self.summary_memory.to_payload(turn_records=turn_records),
-            "artifact_analysis_cache": self.artifact_store.to_payload(),
+            "message_block_analysis_cache": self.message_block_store.to_payload(),
             "education_state": self.education_memory.to_payload(),
         }
 
@@ -65,7 +65,7 @@ class SessionMemory:
     ) -> None:
         payload = dict(data.get("memory") or {})
         self.summary_memory.load_payload(payload, turn_records=turn_records)
-        self.artifact_store.load_payload(payload.get("artifact_analysis_cache"))
+        self.message_block_store.load_payload(payload.get("message_block_analysis_cache"))
         self.education_memory.load_payload(payload.get("education_state"))
 
     def refresh_summaries(
@@ -90,9 +90,6 @@ class SessionMemory:
             should_preserve_teaching_state=should_preserve_teaching_state
         )
 
-    def update_education_state_from_text(self, user_text: str) -> None:
-        self.education_memory.update_from_text(user_text)
-
     def update_education_state_from_strategy(
         self,
         strategy: dict[str, Any] | None,
@@ -104,44 +101,44 @@ class SessionMemory:
     def set_education_state_value(self, key: str, value: Any) -> None:
         self.education_memory.set_value(key, value)
 
-    def artifact_bundle_key(
+    def block_bundle_key(
         self,
-        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> str:
-        return self.artifact_store.artifact_bundle_key(artifacts)
+        return self.message_block_store.block_bundle_key(message_blocks)
 
-    def cached_artifact_analysis(
+    def cached_block_analysis(
         self,
-        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
-        return self.artifact_store.cached_artifact_analysis(artifacts)
+        return self.message_block_store.cached_block_analysis(message_blocks)
 
-    def cached_or_metadata_artifact_analysis(
+    def cached_or_metadata_block_analysis(
         self,
-        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
-        return self.artifact_store.cached_or_metadata_artifact_analysis(artifacts)
+        return self.message_block_store.cached_or_metadata_block_analysis(message_blocks)
 
-    def remember_artifact_analysis(
+    def remember_block_analysis(
         self,
-        artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...],
         analysis: dict[str, Any],
     ) -> None:
-        self.artifact_store.remember_artifact_analysis(artifacts, analysis)
+        self.message_block_store.remember_block_analysis(message_blocks, analysis)
 
     def retrieve_relevant_memories(
         self,
         user_message: dict[str, Any],
         *,
-        current_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
-        reference_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        current_message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        reference_message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
         limit: int = 6,
     ) -> list[RetrievedMemory]:
         return self.retriever.retrieve(
             self,
             user_message,
-            current_artifacts=current_artifacts,
-            reference_artifacts=reference_artifacts,
+            current_message_blocks=current_message_blocks,
+            reference_message_blocks=reference_message_blocks,
             limit=limit,
         )
 
@@ -150,15 +147,15 @@ class SessionMemory:
         user_message: dict[str, Any],
         *,
         profile: str,
-        current_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
-        reference_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        current_message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        reference_message_blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
     ) -> MemoryProjection:
         return self.projector.build(
             self,
             user_message,
             profile=profile,
-            current_artifacts=current_artifacts,
-            reference_artifacts=reference_artifacts,
+            current_message_blocks=current_message_blocks,
+            reference_message_blocks=reference_message_blocks,
         )
 
     def to_debug_payload(self) -> dict[str, Any]:
@@ -167,5 +164,5 @@ class SessionMemory:
             "context_summary": self.context_summary,
             "multimodal_context_summary": self.multimodal_context_summary,
             "education_state": dict(self.education_state),
-            "artifact_analysis_cache_size": len(self.artifact_analysis_cache),
+            "message_block_analysis_cache_size": len(self.message_block_analysis_cache),
         }

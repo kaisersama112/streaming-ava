@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from ava.multi_turn_context_builder.types import ConversationContext
-from ava.domain.multimodal.media import MediaArtifact
 
 __all__ = [
     "BranchStrategy",
     "ConversationContext",
     "ConversationState",
     "EducationTurnFrame",
-    "MediaArtifact",
     "PromptSelection",
     "PromptSelectionTrace",
     "ResolvedPromptSpec",

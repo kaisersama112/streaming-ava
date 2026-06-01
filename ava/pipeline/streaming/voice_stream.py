@@ -1,8 +1,9 @@
-"""Low-latency streaming TTS pipeline utilities.
+"""低延迟流式 TTS 管线工具。
 
-`StreamingVoicePipeline` decouples token arrival from provider-specific TTS
-calls. The LLM can submit text fragments quickly while a background worker
-groups them into small speech segments and drains provider audio chunks.
+`StreamingVoicePipeline` 用于把文本流输入与具体 TTS 提供方解耦：
+- 上游文本可以持续快速提交
+- 后台线程负责分段、合并、送入语音合成
+- 语音块结果再按流式方式向外消费
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from ava.capabilities.tts.factory import build_streaming_tts, normalize_tts_erro
 
 @dataclass(frozen=True)
 class VoiceStreamConfig:
-    """Provider-neutral config for one realtime TTS feeder."""
+    """单个实时 TTS 推送器的通用配置。"""
 
     voice: Any
     audio_format: str = "pcm"
@@ -31,27 +32,28 @@ class VoiceStreamConfig:
 
 
 class StreamingVoicePipeline:
-    """Background TTS feeder that decouples synthesis from token streaming.
+    """后台 TTS 推送器。
 
-    Optimized for low-latency streaming with intelligent flush strategies:
-    1. First token flush: 3-4 characters (very aggressive for low latency)
-    2. Punctuation-triggered flush: immediate flush on sentence boundaries
-    3. Time-based flush: 30ms timeout for continuous streaming
-    4. Character-count flush: every 8 characters
+    它负责把文本 token 流与语音合成过程解耦，并尽量降低首包延迟。
+
+    当前采用的刷新策略：
+    1. 首次快速刷新：首批少量字符尽快送出
+    2. 标点触发刷新：遇到句边界立即送出
+    3. 时间触发刷新：持续输出时按短间隔推进
+    4. 字符数触发刷新：缓冲达到阈值后送出
     """
 
     PUNCTUATION = set("。！？!?；;，、,\n")
 
     def __init__(self, config: VoiceStreamConfig) -> None:
         self._config = config
-        # Text submitted by the LLM thread. `None` is the sentinel used to close
-        # the background feeder after all buffered text is flushed.
+        # 上游文本流线程提交到这里。
+        # `None` 作为结束哨兵，表示在缓冲内容送完后关闭后台推送线程。
         self._submit_queue: queue.Queue[str | None] = queue.Queue()
         self._done = threading.Event()
         self._interrupted = threading.Event()
         self._error: Exception | None = None
-        # Stats are read by realtime metrics while the feeder thread is still
-        # running, so every mutable counter is protected by this lock.
+        # 这些统计会被实时指标读取，因此可变计数统一加锁保护。
         self._stats_lock = threading.Lock()
         self._submitted_items = 0
         self._submitted_chars = 0
@@ -66,8 +68,8 @@ class StreamingVoicePipeline:
         self._completed_at: float | None = None
         self._last_submit_at: float | None = None
         self._last_flush_at: float | None = None
-        # Provider selection is delegated to the TTS factory. This keeps the
-        # realtime pipeline independent from Doubao/CosyVoice/StepFun schemas.
+        # 具体 TTS 提供方选择交给工厂层处理，
+        # 这样实时流式链路不需要感知不同厂商的协议差异。
         self._synth = self._create_synth()
         self._flush_char_threshold = 8
         self._first_flush_char_threshold = 4
@@ -92,7 +94,7 @@ class StreamingVoicePipeline:
         )
 
     def submit(self, text: str) -> None:
-        """Queue text from the LLM stream without blocking token generation."""
+        """提交文本片段，但不阻塞上游文本流生成。"""
         if self._interrupted.is_set() or self._done.is_set():
             return
         content = text.strip()
@@ -107,17 +109,19 @@ class StreamingVoicePipeline:
                 self._last_submit_at = time.monotonic()
 
     def interrupt(self) -> None:
-        """Interrupt synthesis as quickly as possible.
+        """尽快中断语音合成。
 
-        This is used by full-duplex "barge-in" to stop feeding new tokens,
-        stop the background feeder loop, and minimize tail audio.
+        用于全双工打断场景：
+        - 停止继续送入新文本
+        - 停止后台推送循环
+        - 尽量减少尾部残留音频
         """
         if self._done.is_set():
             return
         self._interrupted.set()
         with self._stats_lock:
             self._close_requested_at = self._close_requested_at or time.monotonic()
-        # Drain queued tokens so they won't be fed after interrupt.
+        # 清空队列，避免中断后残留文本继续被送入 TTS。
         try:
             while True:
                 queued = self._submit_queue.get_nowait()
@@ -126,12 +130,12 @@ class StreamingVoicePipeline:
                         self._queued_chars = max(0, self._queued_chars - len(queued))
         except queue.Empty:
             pass
-        # Try to complete the underlying synth quickly to stop chunk production.
+        # 尝试尽快结束底层合成，减少音频块继续产生。
         try:
             self._synth.complete(timeout_millis=1)
         except Exception:
             pass
-        # Unblock feeder loop.
+        # 唤醒后台线程，避免阻塞等待。
         try:
             self._submit_queue.put_nowait(None)
         except Exception:
@@ -166,7 +170,7 @@ class StreamingVoicePipeline:
         return self._error
 
     def snapshot(self) -> dict[str, int | float | bool | None]:
-        """Return feeder metrics for realtime trace/debug events."""
+        """返回当前推送器指标快照，供实时调试与追踪使用。"""
         with self._stats_lock:
             return {
                 "submitted_items": self._submitted_items,

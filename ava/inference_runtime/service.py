@@ -5,18 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from ava.capabilities.prompt import PromptCenter
 from ava.domain.conversation.state import ConversationState
-from ava.llm_model_executor import (
+from ava.llm_model_executor.agent_backend import AgentBackend
+from ava.llm_model_executor.service import LLMService
+from ava.llm_model_executor.types import (
     InferenceCompleted,
     InferenceError,
     InferenceTask,
-    LLMService,
-    OutputTextDelta,
     ModelRequestContext,
+    OutputTextDelta,
 )
-from ava.multi_turn_context_builder import ContextCompiler, ConversationBuildOptions, ConversationContext
-from ava.router_selector import RouterService
+from ava.multi_turn_context_builder import ContextCompiler, ConversationContext
+from configs import settings
 
 from .types import TurnPlan
 
@@ -25,50 +25,123 @@ from .types import TurnPlan
 class ReplyExecutionResult:
     """回复执行结果。"""
 
-    assistant_text: str
+    assistant_message: dict[str, Any]
     backend: str
     debug: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(frozen=True)
-class InferenceRuntimeResult:
-    """单轮推理运行结果。"""
-
-    route_result: Any
-    turn_plan: TurnPlan
-    reply_result: ReplyExecutionResult
-
-
 class ReplyService:
-    """把执行计划真正送入模型执行器。"""
+    """把已经准备好的 `TurnPlan` 真正送入模型执行器。"""
 
     def __init__(
             self,
             *,
-            llm_service: LLMService | None = None
+            llm_service: LLMService | None = None,
+            agent_backend: AgentBackend | None = None,
     ) -> None:
         self.llm_service = llm_service or LLMService()
+        self.agent_backend = agent_backend or AgentBackend()
 
-    def generate(
-            self,
+    def _should_use_agents_backend(self, *, plan: TurnPlan, realtime: bool) -> bool:
+        if not bool(getattr(settings.runtime, "agents_sdk_enabled", False)):
+            return False
+        if realtime and not bool(getattr(settings.runtime, "agents_sdk_realtime_enabled", False)):
+            return False
+        strategy = plan.strategy
+        if strategy is None:
+            return False
+        allowed_branches = [
+            str(item or "").strip()
+            for item in list(getattr(settings.runtime, "agents_sdk_branches", []) or [])
+            if str(item or "").strip()
+        ]
+        if allowed_branches and str(strategy.branch or "").strip() not in set(allowed_branches):
+            return False
+        allowed_modules = [
+            str(item or "").strip()
+            for item in list(getattr(settings.runtime, "agents_sdk_education_modules", []) or [])
+            if str(item or "").strip()
+        ]
+        if str(strategy.branch or "").strip() == "education" and allowed_modules:
+            return str(strategy.module or "").strip() in set(allowed_modules)
+        return True
+
+    @staticmethod
+    def _build_model_request_context(
             *,
             session_id: str,
             plan: TurnPlan,
             model: str,
             metadata: dict[str, Any] | None = None,
-    ) -> ReplyExecutionResult:
-
-        context = ModelRequestContext(
+    ) -> ModelRequestContext:
+        """把 `TurnPlan` 显式转换为模型执行层请求对象。"""
+        override_model = str(model or plan.model or "").strip()
+        merged_metadata = dict(metadata or {})
+        if override_model:
+            merged_metadata["model_override"] = override_model
+        return ModelRequestContext(
             task=InferenceTask.GENERATE,
             session_id=session_id,
-            model=str(model or plan.model or "").strip() or "response-model",
+            model=plan.model,
             instructions=plan.instructions,
             input=list(plan.input),
+            metadata=merged_metadata,
+        )
+
+    def generate(
+            self,
+            *,
+            state: ConversationState,
+            session_id: str,
+            plan: TurnPlan,
+            model: str,
+            user_message: dict[str, Any] | None = None,
+            context: ConversationContext | None = None,
+            current_turn_id: int | None = None,
+            metadata: dict[str, Any] | None = None,
+    ) -> ReplyExecutionResult:
+        if (
+                self._should_use_agents_backend(plan=plan, realtime=False)
+                and user_message is not None
+                and context is not None
+        ):
+            result = self.agent_backend.run_sync(
+                state=state,
+                user_message=user_message,
+                decision=plan.decision,
+                plan=plan,
+                context=context,
+                api_base=str((metadata or {}).get("api_base") or settings.openai_config.api_base or "").strip(),
+                api_key=str((metadata or {}).get("api_key") or settings.openai_config.api_key or "").strip(),
+                model=str(model or plan.model or "").strip() or str(settings.openai_config.model or "").strip(),
+                timeout=int((metadata or {}).get("timeout") or settings.openai_config.timeout),
+                current_turn_id=current_turn_id,
+            )
+            return ReplyExecutionResult(
+                assistant_message=result.assistant_message,
+                backend=result.backend,
+                debug={
+                    "agent_debug_events": list(result.debug_events),
+                    "applied_state_patches": list(result.applied_patches),
+                },
+            )
+
+        request = self._build_model_request_context(
+            session_id=session_id,
+            plan=plan,
+            model=model,
             metadata=dict(metadata or {}),
         )
-        result = self.llm_service.generate(context)
+        result = self.llm_service.generate(request)
         return ReplyExecutionResult(
-            assistant_text=result.text,
+            assistant_message={
+                "role": "assistant",
+                "content": (
+                    [{"type": "output_text", "text": str(result.text or "").strip()}]
+                    if str(result.text or "").strip()
+                    else []
+                ),
+            },
             backend="llm_responses",
             debug={"response_metadata": dict(result.metadata or {})},
         )
@@ -76,25 +149,54 @@ class ReplyService:
     def stream(
             self,
             *,
+            state: ConversationState,
             session_id: str,
             plan: TurnPlan,
             model: str,
             on_token: Callable[[str], None],
+            user_message: dict[str, Any] | None = None,
+            context: ConversationContext | None = None,
+            current_turn_id: int | None = None,
             metadata: dict[str, Any] | None = None,
             stop_event=None,
     ) -> ReplyExecutionResult:
+        if (
+                self._should_use_agents_backend(plan=plan, realtime=True)
+                and user_message is not None
+                and context is not None
+        ):
+            result = self.agent_backend.run_stream(
+                state=state,
+                user_message=user_message,
+                decision=plan.decision,
+                plan=plan,
+                context=context,
+                api_base=str((metadata or {}).get("api_base") or settings.openai_config.api_base or "").strip(),
+                api_key=str((metadata or {}).get("api_key") or settings.openai_config.api_key or "").strip(),
+                model=str(model or plan.model or "").strip() or str(settings.openai_config.model or "").strip(),
+                timeout=int((metadata or {}).get("timeout") or settings.openai_config.timeout),
+                on_token=on_token,
+                current_turn_id=current_turn_id,
+                stop_event=stop_event,
+            )
+            return ReplyExecutionResult(
+                assistant_message=result.assistant_message,
+                backend=result.backend,
+                debug={
+                    "agent_debug_events": list(result.debug_events),
+                    "applied_state_patches": list(result.applied_patches),
+                },
+            )
 
-        context = ModelRequestContext(
-            task=InferenceTask.GENERATE,
+        request = self._build_model_request_context(
             session_id=session_id,
-            model=str(model or plan.model or "").strip() or "response-model",
-            instructions=plan.instructions,
-            input=list(plan.input),
+            plan=plan,
+            model=model,
             metadata=dict(metadata or {}),
         )
         parts: list[str] = []
         final_metadata: dict[str, Any] = {}
-        for event in self.llm_service.stream_generate(context, stop_event=stop_event):
+        for event in self.llm_service.stream_generate(request, stop_event=stop_event):
             if isinstance(event, OutputTextDelta):
                 parts.append(event.text)
                 on_token(event.text)
@@ -103,223 +205,83 @@ class ReplyService:
             elif isinstance(event, InferenceError):
                 raise RuntimeError(event.error)
         return ReplyExecutionResult(
-            assistant_text="".join(parts),
+            assistant_message={
+                "role": "assistant",
+                "content": (
+                    [{"type": "output_text", "text": "".join(parts).strip()}]
+                    if "".join(parts).strip()
+                    else []
+                ),
+            },
             backend="llm_responses_stream",
             debug={"response_metadata": final_metadata},
         )
 
 
 class InferenceRuntime:
-    """独立运行时。
+    """独立推理运行时。
 
-    统一负责：
-    - 调用路由模块
-    - 构建当前轮执行计划
-    - 触发最终回复执行
+    当前版本只消费外部已经准备好的 `TurnPlan`，
+    不再在内部负责路由、策略生成或计划构建。
     """
 
     def __init__(
             self,
             *,
-            prompt_center: PromptCenter,
             context_compiler: ContextCompiler | None = None,
             llm_service: LLMService | None = None,
-            router_service: RouterService | None = None,
             reply_service: ReplyService | None = None,
     ) -> None:
-        self.prompt_center = prompt_center
         self.context_compiler = context_compiler or ContextCompiler()
         self.llm_service = llm_service or LLMService()
-        self.router_service = router_service or RouterService(
-            prompt_center=prompt_center,
-            context_compiler=self.context_compiler,
-            llm_service=self.llm_service,
-        )
         self.reply_service = reply_service or ReplyService(
             llm_service=self.llm_service,
         )
 
-    def build_turn_plan(
+    def generate_reply(
             self,
             *,
             state: ConversationState,
             user_message: dict[str, Any],
-            decision: Any,
-            history_window: int,
-            max_context_messages: int | None = None,
-            context: ConversationContext | None = None,
+            context: ConversationContext,
+            plan: TurnPlan,
             current_turn_id: int | None = None,
-            strategy: Any | None = None,
-            router_plan: dict[str, Any] | None = None,
             model: str = "",
-    ) -> TurnPlan:
-        """构造当前轮执行计划。"""
-
-        responder_context = context or self.context_compiler.build_conversation_context(
+            metadata: dict[str, Any] | None = None,
+    ) -> ReplyExecutionResult:
+        return self.reply_service.generate(
             state=state,
-            user_message=user_message,
-            options=ConversationBuildOptions(
-                history_window=history_window,
-                current_turn_id=current_turn_id,
-                max_context_messages=max_context_messages,
-                profile="responder",
-            ),
-        )
-        payload = self.context_compiler.compile_responder_payload(
-            prompt_center=self.prompt_center,
-            context=responder_context,
-            strategy=strategy,
-            decision=decision,
-        )
-        return TurnPlan(
-            decision=decision,
-            orchestrator_name="Independent Inference Runtime",
-            strategy=strategy,
-            instructions=payload.instructions,
-            input=list(payload.input),
-            model=str(model or "").strip(),
-            router_plan=dict(router_plan or {}),
-            metadata={
-                "context": responder_context,
-                "sections": dict(payload.sections or {}),
-                "active_skills": list(payload.active_skills),
-            },
-        )
-
-    def run_turn(
-            self,
-            *,
-            state: ConversationState,
-            user_message: dict[str, Any],
-            history_window: int,
-            max_context_messages: int | None = None,
-            current_turn_id: int | None = None,
-            router_model: str = "",
-            responder_model: str = "",
-            timeout: int | None = None,
-            api_base: str = "",
-            api_key: str = "",
-            strategy: Any | None = None,
-    ) -> InferenceRuntimeResult:
-        route_result = self.router_service.route(
-            user_message=user_message,
-            state=state,
-            history_window=history_window,
-            max_context_messages=max_context_messages,
-            current_turn_id=current_turn_id,
-            model=router_model,
-            timeout=timeout,
-            api_base=api_base,
-            api_key=api_key,
-        )
-        plan = self.build_turn_plan(
-            state=state,
-            user_message=user_message,
-            decision=route_result.decision,
-            history_window=history_window,
-            max_context_messages=max_context_messages,
-            context=route_result.context,
-            current_turn_id=current_turn_id,
-            strategy=strategy,
-            router_plan=route_result.router_plan,
-            model=responder_model,
-        )
-        reply_result = self.reply_service.generate(
             session_id=state.session_id,
             plan=plan,
-            model=responder_model,
-            metadata={"api_base": api_base, "api_key": api_key, "timeout": timeout},
-        )
-        return InferenceRuntimeResult(
-            route_result=route_result,
-            turn_plan=plan,
-            reply_result=reply_result,
+            model=model,
+            user_message=user_message,
+            context=context,
+            current_turn_id=current_turn_id,
+            metadata=dict(metadata or {}),
         )
 
-
-def build_turn_plan(
-        state: ConversationState,
-        user_message: dict[str, Any],
-        decision: Any,
-        prompt_center: PromptCenter,
-        history_window: int,
-        max_context_messages: int | None = None,
-        context: ConversationContext | None = None,
-        current_turn_id: int | None = None,
-        compiler: ContextCompiler | None = None,
-        strategy: Any | None = None,
-        router_plan: dict[str, Any] | None = None,
-        model: str = "",
-) -> TurnPlan:
-    """兼容函数入口：构造当前轮执行计划。"""
-
-    runtime = InferenceRuntime(
-        prompt_center=prompt_center,
-        context_compiler=compiler,
-    )
-    return runtime.build_turn_plan(
-        state=state,
-        user_message=user_message,
-        decision=decision,
-        history_window=history_window,
-        max_context_messages=max_context_messages,
-        context=context,
-        current_turn_id=current_turn_id,
-        strategy=strategy,
-        router_plan=router_plan,
-        model=model,
-    )
-
-
-def generate_reply_sync(
-        *,
-        state,
-        turn_input,
-        decision,
-        plan: TurnPlan,
-        context,
-        api_base: str,
-        api_key: str,
-        model: str,
-        timeout: int,
-        current_turn_id: int | None = None,
-) -> ReplyExecutionResult:
-    """兼容函数入口：同步生成回复。"""
-
-    del state, turn_input, decision, context, current_turn_id
-    service = ReplyService()
-    return service.generate(
-        session_id="runtime",
-        plan=plan,
-        model=model,
-        metadata={"api_base": api_base, "api_key": api_key, "timeout": timeout},
-    )
-
-
-def stream_reply_with_callbacks(
-        *,
-        state,
-        turn_input,
-        decision,
-        plan: TurnPlan,
-        context,
-        api_base: str,
-        api_key: str,
-        model: str,
-        timeout: int,
-        on_token,
-        current_turn_id: int | None = None,
-        stop_event=None,
-) -> ReplyExecutionResult:
-    """兼容函数入口：流式生成回复。"""
-
-    del state, turn_input, decision, context, current_turn_id
-    service = ReplyService()
-    return service.stream(
-        session_id="runtime",
-        plan=plan,
-        model=model,
-        on_token=on_token,
-        metadata={"api_base": api_base, "api_key": api_key, "timeout": timeout},
-        stop_event=stop_event,
-    )
+    def stream_reply(
+            self,
+            *,
+            state: ConversationState,
+            user_message: dict[str, Any],
+            context: ConversationContext,
+            plan: TurnPlan,
+            on_token: Callable[[str], None],
+            current_turn_id: int | None = None,
+            model: str = "",
+            metadata: dict[str, Any] | None = None,
+            stop_event=None,
+    ) -> ReplyExecutionResult:
+        return self.reply_service.stream(
+            state=state,
+            session_id=state.session_id,
+            plan=plan,
+            model=model,
+            on_token=on_token,
+            user_message=user_message,
+            context=context,
+            current_turn_id=current_turn_id,
+            metadata=dict(metadata or {}),
+            stop_event=stop_event,
+        )

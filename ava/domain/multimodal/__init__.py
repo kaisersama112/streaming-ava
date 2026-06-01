@@ -1,5 +1,5 @@
-"""Multimodal domain models."""
+"""多模态领域模型导出。"""
 
-from ava.domain.multimodal.media import MediaArtifact, TurnInput
+from ava.domain.multimodal.media import MediaArtifact
 
-__all__ = ["MediaArtifact", "TurnInput"]
+__all__ = ["MediaArtifact"]

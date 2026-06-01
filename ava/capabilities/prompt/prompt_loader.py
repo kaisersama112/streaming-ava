@@ -1,37 +1,35 @@
-"""Prompt loader, markdown asset parser, and Jinja renderer."""
+"""PromptCenter：Prompt 资产统一入口。
+
+职责：
+- 读取 `prompt-plugin/` 下的模板与 Skill 资产
+- 提供 Jinja 渲染能力
+- 为上层 loader 暴露轻量 Skill 卡片与正式结构引用入口
+"""
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
 from jinja2 import BaseLoader, Environment
 
+from .parsers import MarkdownAsset, PromptMarkdownParser, PromptSkillCardParser, PromptSpecParser
 from .prompt_config import PromptCenterConfig
-
-_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
-_SECTION_RE = re.compile(r"^##\s+(.+?)\n(.*?)(?=^##\s+|\Z)", re.DOTALL | re.MULTILINE)
-_H1_RE = re.compile(r"^#\s+(.+?)\n", re.MULTILINE)
-
-
-@dataclass(frozen=True)
-class MarkdownAsset:
-    meta: dict[str, Any]
-    title: str
-    sections: dict[str, str]
-    raw_text: str
-    path: str
+from .registry import PromptSkillRegistry
+from .specs import PromptSkillCard
+from .store import PromptAssetStore
 
 
 class PromptCenter:
+    """Prompt 资产统一访问入口。"""
+
     def __init__(self, config: PromptCenterConfig):
         self.config = config
-        self._cache: dict[str, str] = {}
-        self._yaml_cache: dict[str, Any] = {}
-        self._markdown_cache: dict[str, MarkdownAsset] = {}
+        self.markdown_parser = PromptMarkdownParser()
+        self.skill_card_parser = PromptSkillCardParser()
+        self.spec_parser = PromptSpecParser()
+        self.registry = PromptSkillRegistry()
+        self.store = PromptAssetStore(config.prompt_dir, markdown_parser=self.markdown_parser)
         self._jinja = Environment(
             loader=BaseLoader(),
             autoescape=False,
@@ -40,80 +38,31 @@ class PromptCenter:
         )
 
     def _resolve(self, relative_path: str) -> Path:
-        return Path(self.config.prompt_dir) / relative_path
+        return self.store.resolve(relative_path)
 
     def get(self, name: str) -> str:
-        if name in self._cache:
-            return self._cache[name]
-
         file_name = self.config.file_map().get(name, name)
         if not file_name:
             raise KeyError(f"Unknown prompt name: {name}")
-
-        path = self._resolve(file_name)
-        if not path.exists():
-            raise FileNotFoundError(f"Prompt file not found: {path}")
-
-        text = path.read_text(encoding="utf-8").strip()
-        self._cache[name] = text
-        return text
+        return self.store.read_text(file_name).strip()
 
     def load_yaml(self, relative_path: str) -> Any:
-        if relative_path in self._yaml_cache:
-            return self._yaml_cache[relative_path]
-
-        path = self._resolve(relative_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Prompt yaml file not found: {path}")
-
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        self._yaml_cache[relative_path] = data
-        return data
+        return self.store.load_yaml(relative_path)
 
     def load_markdown_asset(self, relative_path: str) -> MarkdownAsset:
-        if relative_path in self._markdown_cache:
-            return self._markdown_cache[relative_path]
-
-        path = self._resolve(relative_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Prompt markdown file not found: {path}")
-
-        raw = path.read_text(encoding="utf-8")
-        if not raw.strip():
-            raise ValueError(f"Prompt markdown file is empty: {path}")
-
-        meta, body = self._parse_frontmatter(raw)
-        title, sections = self._parse_sections(body)
-        asset = MarkdownAsset(
-            meta=meta,
-            title=title,
-            sections=sections,
-            raw_text=raw,
-            path=str(path),
-        )
-        self._markdown_cache[relative_path] = asset
-        return asset
+        return self.store.load_markdown(relative_path)
 
     def load_markdown_sections(self, relative_path: str) -> dict[str, str]:
         return self.load_markdown_asset(relative_path).sections
 
-    def _parse_frontmatter(self, text: str) -> tuple[dict[str, Any], str]:
-        match = _FRONTMATTER_RE.match(text)
-        if not match:
-            return {}, text
-        meta = yaml.safe_load(match.group(1)) or {}
-        if not isinstance(meta, dict):
-            raise ValueError("Frontmatter must be a mapping")
-        return meta, text[match.end():]
+    def load_skill_card(self, skill_file: str) -> PromptSkillCard:
+        """读取 `SKILL.md` 轻量技能卡片。"""
+        return self.skill_card_parser.parse(self.load_markdown_asset(skill_file))
 
-    def _parse_sections(self, body: str) -> tuple[str, dict[str, str]]:
-        title_match = _H1_RE.search(body)
-        title = title_match.group(1).strip() if title_match else ""
-        sections: dict[str, str] = {}
-        for match in _SECTION_RE.finditer(body):
-            name = match.group(1).strip().lower()
-            sections[name] = match.group(2).strip()
-        return title, sections
+    def load_skill_reference_asset(self, skill_file: str, relative_path: str) -> MarkdownAsset:
+        """从 Skill 目录内继续读取按需引用文件。"""
+        resolved = self.registry.resolve_relative(skill_file, relative_path)
+        return self.load_markdown_asset(resolved)
 
     def render(self, name: str, variables: dict[str, Any] | None = None) -> str:
         text = self.get(name)

@@ -1,9 +1,8 @@
 """Prompt capability facade."""
 
-from .branch_runtime import BranchPromptRuntime
 from .factories import build_prompt_center
-from .education_catalog import EducationPromptAssets, EducationPromptCatalog
-from .education_runtime import EducationPromptRuntime
+from .loaders import BranchPromptLoader, EducationPromptAssets, EducationPromptLoader, PromptSkillAsset
+from .parsers import MarkdownAsset
 from .prompt_builder import (
     build_responder_system_prompt,
     build_router_system_prompt,
@@ -11,19 +10,30 @@ from .prompt_builder import (
 )
 from .prompt_config import PromptCenterConfig
 from .prompt_loader import PromptCenter
-from .prompt_runtime import ModeSpec, ModuleSpec, PedagogySpec, PluginSpec, SubjectSpec
+from .specs import (
+    BranchSpec,
+    ModeSpec,
+    ModuleSpec,
+    PedagogySpec,
+    PromptReferenceEntry,
+    PromptSkillCard,
+    SubjectSpec,
+)
 
 __all__ = [
-    "BranchPromptRuntime",
+    "BranchPromptLoader",
+    "BranchSpec",
     "EducationPromptAssets",
-    "EducationPromptCatalog",
-    "EducationPromptRuntime",
+    "EducationPromptLoader",
+    "MarkdownAsset",
     "ModeSpec",
     "ModuleSpec",
     "PedagogySpec",
     "PromptCenter",
     "PromptCenterConfig",
-    "PluginSpec",
+    "PromptReferenceEntry",
+    "PromptSkillAsset",
+    "PromptSkillCard",
     "SubjectSpec",
     "build_prompt_center",
     "build_responder_system_prompt",

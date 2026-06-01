@@ -1,4 +1,4 @@
-"""会话状态持久化领域模型。"""
+﻿"""会话状态持久化领域模型。"""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from ava.domain.memory import SessionMemory
-from ava.domain.memory.message import user_message_summary, user_message_text
-from ava.domain.multimodal import MediaArtifact
 
 
 class ConversationState:
@@ -26,7 +24,12 @@ class ConversationState:
     _INLINE_REFERENCE_TURNS = 2
     _INLINE_REFERENCE_MAX_BYTES = 1_500_000
 
-    def __init__(self, state_file: Path | str, memory_size: int = 8, session_id: str = _DEFAULT_SESSION_ID) -> None:
+    def __init__(
+            self,
+            state_file: Path | str,
+            memory_size: int = 8,
+            session_id: str = _DEFAULT_SESSION_ID
+    ) -> None:
         self.state_file = Path(state_file)
         self.memory_size = memory_size
         self.session_id = self.normalize_session_id(session_id)
@@ -84,20 +87,20 @@ class ConversationState:
         scenario_policy = dict(frame.get("scenario_policy") or {})
         compact_analysis: dict[str, Any] = {}
         for key in (
-            "subject",
-            "subject_axis",
-            "primary_scenario",
-            "primary_action",
-            "learning_objects",
-            "object_scope",
-            "object_continuity",
-            "answer_boundary",
-            "current_turn_is_followup",
-            "current_object_continues",
-            "explicit_topic_switch",
-            "artifact_subject_hint",
-            "artifact_task_hint",
-            "prompt_context_policy",
+                "subject",
+                "subject_axis",
+                "primary_scenario",
+                "primary_action",
+                "learning_objects",
+                "object_scope",
+                "object_continuity",
+                "answer_boundary",
+                "current_turn_is_followup",
+                "current_object_continues",
+                "explicit_topic_switch",
+                "message_block_subject_hint",
+                "message_block_task_hint",
+                "prompt_context_policy",
         ):
             value = analysis.get(key)
             if value not in (None, "", [], {}, ()):
@@ -144,8 +147,10 @@ class ConversationState:
                 "current_object_continues": bool(continuity.get("current_object_continues", False)),
                 "same_object_probability": continuity.get("same_object_probability", 0.0),
                 "object_continuity": continuity.get("object_continuity", ""),
-                "artifact_continuity": continuity.get("artifact_continuity", ""),
-                "carry_reference_artifacts": bool(continuity.get("carry_reference_artifacts", False)),
+                "message_block_continuity": continuity.get("message_block_continuity", ""),
+                "carry_reference_message_blocks": bool(
+                    continuity.get("carry_reference_message_blocks", False)
+                ),
                 "allow_fast_path": bool(continuity.get("allow_fast_path", False)),
                 "user_requests_pedagogy_change_only": bool(
                     continuity.get(
@@ -178,22 +183,22 @@ class ConversationState:
             return {}
         compact: dict[str, Any] = {}
         for key in (
-            "branch",
-            "session_scene",
-            "strategy_id",
-            "policy_id",
-            "module",
-            "subject",
-            "pedagogy",
-            "render_template",
-            "delivery_mode",
-            "ui_mode",
-            "user_followup_type",
-            "input_modalities",
-            "has_artifacts",
-            "intent",
-            "route_confidence",
-            "turn_result",
+                "branch",
+                "session_scene",
+                "strategy_id",
+                "policy_id",
+                "module",
+                "subject",
+                "pedagogy",
+                "render_template",
+                "delivery_mode",
+                "ui_mode",
+                "user_followup_type",
+                "input_modalities",
+                "has_artifacts",
+                "intent",
+                "route_confidence",
+                "turn_result",
         ):
             value = evaluation.get(key)
             if value not in (None, "", [], {}, ()):
@@ -273,25 +278,6 @@ class ConversationState:
             "content": normalized,
         }
 
-    @classmethod
-    def _assistant_text_from_message(cls, assistant_message: dict[str, Any] | None) -> str:
-        """从标准助手消息中提取文本。"""
-        parts: list[str] = []
-        for block in list((assistant_message or {}).get("content") or []):
-            if not isinstance(block, dict):
-                continue
-            if str(block.get("type", "") or "").strip() != "output_text":
-                continue
-            text = str(block.get("text", "") or "").strip()
-            if text:
-                parts.append(text)
-        return "\n".join(parts).strip()
-
-    @classmethod
-    def _artifact_records_from_turn_record(cls, record: dict[str, Any]) -> list[dict[str, Any]]:
-        """从 turn record 中提取正式附件记录。"""
-        user_message = cls.normalize_user_message(record.get("user_message") or {})
-        return cls._artifacts_from_user_message(user_message)
 
     @classmethod
     def _record_with_derived_fields(cls, record: dict[str, Any]) -> dict[str, Any]:
@@ -301,51 +287,8 @@ class ConversationState:
         user_message = cls.normalize_user_message(copied.get("user_message") or {})
         assistant_message = cls.normalize_assistant_message(copied.get("assistant_message") or {})
 
-        if not user_message.get("content"):
-            artifacts = list(copied.get("artifact_records") or copied.get("artifacts") or [])
-            user_text = str(copied.get("user_text", "") or "").strip()
-            content: list[dict[str, Any]] = []
-            if user_text:
-                content.append({"type": "input_text", "text": user_text})
-            for item in artifacts:
-                if not isinstance(item, dict):
-                    continue
-                kind = str(item.get("kind", "") or "").strip()
-                if kind == "image":
-                    image_url = str(item.get("data_url") or item.get("uri") or "").strip()
-                    if image_url:
-                        content.append({"type": "input_image", "image_url": image_url})
-                elif kind == "audio":
-                    data_url = str(item.get("data_url", "") or "").strip()
-                    fmt = str((item.get("metadata") or {}).get("format", "") or "").strip()
-                    if data_url:
-                        content.append(
-                            {
-                                "type": "input_audio",
-                                "input_audio": {"data": data_url, "format": fmt or "wav"},
-                            }
-                        )
-                else:
-                    block: dict[str, Any] = {"type": "input_file"}
-                    name = str(item.get("name", "") or "").strip()
-                    uri = str(item.get("uri", "") or "").strip()
-                    data_url = str(item.get("data_url", "") or "").strip()
-                    if name:
-                        block["filename"] = name
-                    if uri:
-                        block["file_url"] = uri
-                    if data_url:
-                        block["file_data"] = data_url
-                    if len(block) > 1:
-                        content.append(block)
-            user_message = {"role": "user", "content": content}
-
-        if assistant_message.get("content"):
-            pass
-        else:
-            assistant_text = str(copied.get("assistant_text", "") or "").strip()
-            if assistant_text:
-                assistant_message = {"role": "assistant", "content": [{"type": "output_text", "text": assistant_text}]}
+        user_message = cls.normalize_user_message(user_message)
+        assistant_message = cls.normalize_assistant_message(assistant_message)
 
         copied["user_message"] = user_message
         copied["assistant_message"] = assistant_message
@@ -353,9 +296,6 @@ class ConversationState:
         copied["strategy"] = cls._compact_strategy_payload(dict(copied.get("strategy") or {}))
         copied["evaluation"] = cls._compact_evaluation_payload(dict(copied.get("evaluation") or {}))
         copied["decision"] = dict(copied.get("decision") or {})
-        copied.pop("artifact_records", None)
-        for legacy_key in ("user_text", "multimodal_summary", "artifacts", "assistant_text"):
-            copied.pop(legacy_key, None)
         return copied
 
     def _compact_turn_record(self, record: dict[str, Any]) -> dict[str, Any]:
@@ -394,83 +334,14 @@ class ConversationState:
         self._normalize_loaded_route_state()
         self.memory.refresh_summaries(turn_records=self.turn_records)
 
-    @staticmethod
-    def _message_text_from_user_message(user_message: dict[str, Any]) -> str:
-        """提取标准用户消息中的纯文本内容。"""
-        return user_message_text(user_message)
-
-    @staticmethod
-    def _artifacts_from_user_message(user_message: dict[str, Any]) -> list[dict[str, Any]]:
-        """把标准用户消息中的非文本块提取为附件缓存结构。"""
-        artifacts: list[dict[str, Any]] = []
-        for index, block in enumerate(list(user_message.get("content") or []), start=1):
-            if not isinstance(block, dict):
-                continue
-            block_type = str(block.get("type", "") or "").strip()
-            if block_type == "input_text":
-                continue
-            if block_type == "input_image":
-                image_url = str(block.get("image_url", "") or "").strip()
-                if image_url:
-                    artifacts.append(
-                        {
-                            "kind": "image",
-                            "name": f"image-{index}",
-                            "mime_type": "image/*",
-                            "summary": "",
-                            "uri": image_url if not image_url.startswith("data:") else None,
-                            "data_url": image_url if image_url.startswith("data:") else None,
-                            "metadata": {},
-                        }
-                    )
-                continue
-            if block_type == "input_audio":
-                payload = dict(block.get("input_audio") or {})
-                audio_data = str(payload.get("data", "") or "").strip()
-                audio_format = str(payload.get("format", "") or "").strip()
-                if audio_data:
-                    artifacts.append(
-                        {
-                            "kind": "audio",
-                            "name": f"audio-{index}",
-                            "mime_type": f"audio/{audio_format or 'wav'}",
-                            "summary": "",
-                            "uri": None,
-                            "data_url": audio_data,
-                            "metadata": {"format": audio_format},
-                        }
-                    )
-                continue
-            if block_type == "input_file":
-                artifact: dict[str, Any] = {
-                    "kind": "file",
-                    "name": str(block.get("filename", "") or f"file-{index}").strip(),
-                    "mime_type": "",
-                    "summary": "",
-                    "uri": None,
-                    "metadata": {},
-                }
-                file_url = str(block.get("file_url", "") or "").strip()
-                file_data = str(block.get("file_data", "") or "").strip()
-                if file_url:
-                    artifact["uri"] = file_url
-                if file_data:
-                    artifact["data_url"] = file_data
-                artifacts.append(artifact)
-        return artifacts
-
-    @classmethod
-    def user_message_summary(cls, user_message: dict[str, Any]) -> str:
-        """生成标准用户消息摘要。"""
-        return user_message_summary(user_message)
-
     def _last_decision_payload_from_turn_records(self) -> tuple[dict[str, Any], dict[str, Any]]:
         for record in reversed(self.turn_records):
             if str(record.get("turn_status", "completed") or "completed").strip() == "pending":
                 continue
             decision = record.get("decision")
             strategy = record.get("strategy")
-            if isinstance(decision, dict) and any(str(decision.get(key) or "").strip() for key in ("session_scene", "turn_scene")):
+            if isinstance(decision, dict) and any(
+                    str(decision.get(key) or "").strip() for key in ("session_scene", "turn_scene")):
                 return dict(decision), (dict(strategy) if isinstance(strategy, dict) else {})
         return {}, {}
 
@@ -582,10 +453,10 @@ class ConversationState:
         self.save()
 
     def apply_route(
-        self,
-        session_scene: str,
-        turn_scene: str,
-        should_preserve_teaching_state: bool = True,
+            self,
+            session_scene: str,
+            turn_scene: str,
+            should_preserve_teaching_state: bool = True,
     ) -> None:
         """Update scene state and optionally reset teaching progress."""
         self.session_scene = session_scene
@@ -599,10 +470,10 @@ class ConversationState:
         }
 
     def update_responder_conversation_state(
-        self,
-        *,
-        conversation_id: str | None = None,
-        previous_response_id: str | None = None,
+            self,
+            *,
+            conversation_id: str | None = None,
+            previous_response_id: str | None = None,
     ) -> None:
         if conversation_id is not None:
             self.responder_conversation_id = str(conversation_id or "").strip()
@@ -613,50 +484,13 @@ class ConversationState:
         self.responder_conversation_id = ""
         self.responder_previous_response_id = ""
 
-    def post_turn(self, user_text: str, assistant_text: str, intent: str) -> None:
-        """Append turn content and refresh derived summary fields."""
-        user_message = self.normalize_user_message(
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": str(user_text or "").strip()}]
-                if str(user_text or "").strip()
-                else [],
-            }
-        )
-        assistant_message = self.normalize_assistant_message(
-            {
-                "role": "assistant",
-                "content": [{"type": "output_text", "text": str(assistant_text or "").strip()}]
-                if str(assistant_text or "").strip()
-                else [],
-            }
-        )
-        self.turn_count += 1
-        self.intent_counter[intent] = self.intent_counter.get(intent, 0) + 1
-        self.memory.append_recent_topic(user_message_text(user_message) or user_message_summary(user_message))
-        self.turn_records.append(
-            {
-                "role": "turn",
-                "source": "legacy_text",
-                "user_message": user_message,
-                "assistant_message": assistant_message,
-                "intent": intent,
-                "decision": {},
-                "strategy": {},
-                "evaluation": {},
-                "turn_status": "completed",
-                "created_at": datetime.now().isoformat(timespec="seconds"),
-            }
-        )
-        self._refresh_summaries()
-
     def upsert_realtime_user_turn(
-        self,
-        turn_id: int,
-        user_message: dict[str, Any],
-        *,
-        source: str = "runtime",
-        refresh_summaries: bool = False,
+            self,
+            turn_id: int,
+            user_message: dict[str, Any],
+            *,
+            source: str = "runtime",
+            refresh_summaries: bool = False,
     ) -> None:
         """Persist the user side of a realtime turn before the assistant finishes.
 
@@ -664,11 +498,9 @@ class ConversationState:
         interrupted or still in flight.
         """
         normalized_user_message = self.normalize_user_message(user_message)
-        user_history_text = self.user_message_summary(normalized_user_message) or self._message_text_from_user_message(normalized_user_message)
         record = next((item for item in reversed(self.turn_records) if item.get("turn_id") == turn_id), None)
         if record is None:
             self.turn_count += 1
-            self.memory.append_recent_topic(user_history_text)
             self.turn_records.append(
                 {
                     "role": "turn",
@@ -692,40 +524,32 @@ class ConversationState:
             self._refresh_summaries()
 
     def complete_realtime_turn(
-        self,
-        turn_id: int,
-        *,
-        user_message: dict[str, Any],
-        assistant_text: str,
-        intent: str,
-        decision: dict[str, Any] | None = None,
-        strategy: dict[str, Any] | None = None,
-        evaluation: dict[str, Any] | None = None,
-        turn_status: str = "completed",
-        persist: bool = True,
-        llm_response_state: dict[str, Any] | None = None,
+            self,
+            turn_id: int,
+            *,
+            user_message: dict[str, Any],
+            assistant_message: dict[str, Any],
+            intent: str,
+            decision: dict[str, Any] | None = None,
+            strategy: dict[str, Any] | None = None,
+            evaluation: dict[str, Any] | None = None,
+            turn_status: str = "completed",
+            persist: bool = True,
+            llm_response_state: dict[str, Any] | None = None,
     ) -> None:
         """Finalize a realtime turn previously inserted by upsert_realtime_user_turn."""
         normalized_user_message = self.normalize_user_message(user_message)
-        assistant_message = self.normalize_assistant_message(
-            {"role": "assistant", "content": [{"type": "output_text", "text": assistant_text}]}
-            if str(assistant_text or "").strip()
-            else {"role": "assistant", "content": []}
-        )
+        normalized_assistant_message = self.normalize_assistant_message(assistant_message)
         record = next((item for item in reversed(self.turn_records) if item.get("turn_id") == turn_id), None)
         if record is None:
             self.turn_count += 1
             self.intent_counter[intent] = self.intent_counter.get(intent, 0) + 1
-            self.memory.append_recent_topic(
-                self.user_message_summary(normalized_user_message)
-                or self._message_text_from_user_message(normalized_user_message)
-            )
             self.turn_records.append(
                 {
                     "role": "turn",
                     "source": "runtime",
                     "user_message": normalized_user_message,
-                    "assistant_message": assistant_message,
+                    "assistant_message": normalized_assistant_message,
                     "intent": intent,
                     "decision": decision or {},
                     "strategy": self._compact_strategy_payload(strategy or {}),
@@ -742,7 +566,7 @@ class ConversationState:
             self.intent_counter[intent] = self.intent_counter.get(intent, 0) + 1
 
         record["user_message"] = normalized_user_message
-        record["assistant_message"] = assistant_message
+        record["assistant_message"] = normalized_assistant_message
         record["intent"] = intent
         record["decision"] = decision or {}
         record["strategy"] = self._compact_strategy_payload(strategy or {})
@@ -767,7 +591,7 @@ class ConversationState:
                 user_message=normalized_user_message,
             )
 
-        if assistant_text.strip() and turn_status == "completed":
+        if normalized_assistant_message.get("content") and turn_status == "completed":
             self.update_responder_conversation_state(
                 conversation_id=(llm_response_state or {}).get("conversation_id"),
                 previous_response_id=(llm_response_state or {}).get("response_id"),
@@ -777,134 +601,14 @@ class ConversationState:
         if persist:
             self.save()
 
-    def _summarize_turn_records(self, turn_records: list[dict[str, Any]]) -> str:
-        if not turn_records:
-            return "无"
-
-        lines: list[str] = []
-        for record in turn_records:
-            turn_status = str(record.get("turn_status", "completed") or "completed").strip()
-            user_message = self.normalize_user_message(record.get("user_message") or {})
-            assistant_message = self.normalize_assistant_message(record.get("assistant_message") or {})
-            user_text = user_message_text(user_message).strip()
-            multimodal_summary = user_message_summary(user_message).strip()
-            assistant_text = (
-                self._assistant_text_from_message(assistant_message).strip()
-                if turn_status == "completed"
-                else ""
-            )
-            label = user_text or multimodal_summary or "无"
-            artifacts = self._artifacts_from_user_message(user_message)
-            if artifacts:
-                artifact_labels = []
-                for artifact in artifacts:
-                    kind = artifact.get("kind", "file")
-                    name = artifact.get("name", "")
-                    summary = str(artifact.get("summary", "")).strip()
-                    if summary:
-                        artifact_labels.append(f"[{kind}] {name}: {summary}")
-                    else:
-                        artifact_labels.append(f"[{kind}] {name}")
-                if artifact_labels:
-                    label = f"{label}\n附件: {'; '.join(artifact_labels)}"
-            if assistant_text:
-                assistant_text = assistant_text[:80]
-                lines.append(f"用户: {label}\n助手: {assistant_text}")
-            else:
-                lines.append(f"用户: {label}")
-        return "\n".join(lines) if lines else "无"
-
-    def recent_reference_artifacts(
-        self,
-        *,
-        current_turn_id: int | None = None,
-        limit_turns: int = 1,
-    ) -> tuple[MediaArtifact, ...]:
-        if limit_turns <= 0:
-            return ()
-
-        collected: list[MediaArtifact] = []
-        turns_with_media = 0
-        for record in reversed(self.turn_records):
-            if current_turn_id is not None and record.get("turn_id") == current_turn_id:
-                continue
-            raw_artifacts = self._artifact_records_from_turn_record(record)
-            media = [
-                self._record_to_artifact(item)
-                for item in raw_artifacts
-                if item.get("kind") in {"image", "audio", "video"} and item.get("data_url")
-            ]
-            media = [item for item in media if item is not None]
-            if not media:
-                continue
-            collected.extend(media)
-            turns_with_media += 1
-            if turns_with_media >= limit_turns:
-                break
-        return tuple(collected)
-
-    @staticmethod
-    def _artifact_to_record(artifact) -> dict[str, Any]:
-        record = {
-            "kind": artifact.kind,
-            "name": artifact.name,
-            "mime_type": artifact.mime_type,
-            "summary": artifact.summary,
-            "uri": artifact.uri,
-            "metadata": artifact.metadata,
-        }
-        size_bytes = int((artifact.metadata or {}).get("size_bytes", 0) or 0)
-        if (
-            artifact.kind in {"image", "audio", "video"}
-            and artifact.data_url
-            and (size_bytes <= ConversationState._INLINE_REFERENCE_MAX_BYTES or size_bytes == 0)
-        ):
-            record["data_url"] = artifact.data_url
-        return record
-
     def _serialize_turn_records_for_save(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         serialized: list[dict[str, Any]] = []
-        inline_turns_remaining = self._INLINE_REFERENCE_TURNS
 
         for record in reversed(records):
             copied = self._compact_turn_record(record)
-            artifacts: list[dict[str, Any]] = []
-            artifact_items = [dict(item) for item in self._artifact_records_from_turn_record(record)]
-            keep_inline_for_turn = inline_turns_remaining > 0 and any(
-                item.get("kind") in {"image", "audio", "video"} and item.get("data_url") for item in artifact_items
-            )
-            if keep_inline_for_turn:
-                inline_turns_remaining -= 1
-
-            for item in artifact_items:
-                if not (keep_inline_for_turn and item.get("kind") in {"image", "audio", "video"}):
-                    item.pop("data_url", None)
-                artifacts.append(item)
-            if artifacts:
-                copied["artifact_records"] = artifacts
             serialized.append(copied)
 
         serialized.reverse()
         return serialized
 
-    @staticmethod
-    def _record_to_artifact(item: dict[str, Any]) -> MediaArtifact | None:
-        kind = str(item.get("kind", "") or "").strip()
-        mime_type = str(item.get("mime_type", "") or "").strip()
-        name = str(item.get("name", "") or "").strip()
-        data_url = str(item.get("data_url", "") or "").strip()
-        if kind not in {"image", "audio", "video"} or not data_url:
-            return None
-        return MediaArtifact(
-            kind=kind,
-            name=name or kind,
-            mime_type=mime_type or {
-                "image": "image/png",
-                "audio": "audio/wav",
-                "video": "video/mp4",
-            }.get(kind, "application/octet-stream"),
-            summary=str(item.get("summary", "") or ""),
-            data_url=data_url,
-            uri=item.get("uri"),
-            metadata=dict(item.get("metadata") or {}),
-        )
+

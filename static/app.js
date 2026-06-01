@@ -1,4 +1,4 @@
-const el = (id) => document.getElementById(id);
+﻿const el = (id) => document.getElementById(id);
 
 const logEl = el("log");
 const connStateEl = el("connState");
@@ -222,6 +222,92 @@ function attachmentSummary(attachments = []) {
   return attachments.map((item) => `[${describeAttachment(item)}] ${item.name}`).join("\n");
 }
 
+function normalizeUserMessageContent(content = []) {
+  if (!Array.isArray(content)) return [];
+  return content.filter((block) => block && typeof block === "object");
+}
+
+function extractAttachmentsFromContent(content = []) {
+  const attachments = [];
+  normalizeUserMessageContent(content).forEach((block, index) => {
+    const blockType = String(block.type || "").trim();
+    if (blockType === "input_image") {
+      const imageUrl = String(block.image_url || "").trim();
+      attachments.push({
+        name: `image-${index + 1}`,
+        mime_type: "image/*",
+        uri: imageUrl && !imageUrl.startsWith("data:") ? imageUrl : "",
+        data_url: imageUrl.startsWith("data:") ? imageUrl : "",
+        preview_url: imageUrl,
+      });
+      return;
+    }
+    if (blockType === "input_audio") {
+      const payload = block.input_audio || {};
+      const audioData = String(payload.data || "").trim();
+      const audioFormat = String(payload.format || "wav").trim();
+      attachments.push({
+        name: `audio-${index + 1}`,
+        mime_type: `audio/${audioFormat}`,
+        data_url: audioData,
+        preview_url: audioData,
+      });
+      return;
+    }
+    if (blockType === "input_file") {
+      attachments.push({
+        name: String(block.filename || `file-${index + 1}`).trim(),
+        mime_type: String(block.mime_type || "").trim(),
+        uri: String(block.file_url || block.uri || "").trim(),
+        data_url: String(block.file_data || "").trim(),
+        preview_url: String(block.file_url || block.uri || block.file_data || "").trim(),
+      });
+    }
+  });
+  return attachments;
+}
+
+function contentBlocksToDisplayText(content = []) {
+  const lines = [];
+  normalizeUserMessageContent(content).forEach((block, index) => {
+    const blockType = String(block.type || "").trim();
+    if (blockType === "input_text" || blockType === "output_text") {
+      const text = String(block.text || "").trim();
+      if (text) lines.push(text);
+      return;
+    }
+    if (blockType === "input_image") {
+      lines.push(`[图片] image-${index + 1}`);
+      return;
+    }
+    if (blockType === "input_audio") {
+      lines.push(`[音频] audio-${index + 1}`);
+      return;
+    }
+    if (blockType === "input_file") {
+      lines.push(`[文件] ${String(block.filename || `file-${index + 1}`).trim()}`);
+    }
+  });
+  return lines.join("\n").trim() || "无";
+}
+
+function normalizeAssistantMessageContent(content = []) {
+  if (!Array.isArray(content)) return [];
+  return content.filter((block) => block && typeof block === "object");
+}
+
+function assistantMessageToDisplayText(message = {}) {
+  return contentBlocksToDisplayText(normalizeAssistantMessageContent(message.content || []));
+}
+
+function userMessageToDisplayText(message = {}) {
+  return contentBlocksToDisplayText(normalizeUserMessageContent(message.content || []));
+}
+
+function userMessageToAttachments(message = {}) {
+  return extractAttachmentsFromContent(normalizeUserMessageContent(message.content || []));
+}
+
 function compactValue(value, fallback = "-") {
   return value && String(value).trim() ? String(value).trim() : fallback;
 }
@@ -338,7 +424,7 @@ function renderMessageMeta(container, meta = {}) {
   container.hidden = count === 0;
 }
 
-function createMessageNode(role, key, text = "", attachments = [], meta = null, timestamp = null) {
+function createMessageNode(role, key, text = "", attachments = [], meta = null, timestamp = null, contentBlocks = []) {
   const article = document.createElement("article");
   article.className = `message ${role}`;
   article.dataset.key = key;
@@ -356,17 +442,18 @@ function createMessageNode(role, key, text = "", attachments = [], meta = null, 
   headEl.appendChild(timeEl);
   article.appendChild(headEl);
 
-  if (attachments.length) {
+  const mergedAttachments = attachments.length ? attachments : extractAttachmentsFromContent(contentBlocks);
+  if (mergedAttachments.length) {
     const attachmentBlock = document.createElement("div");
     attachmentBlock.className = "message-text";
-    attachmentBlock.textContent = attachmentSummary(attachments);
+    attachmentBlock.textContent = attachmentSummary(mergedAttachments);
     article.appendChild(attachmentBlock);
-    appendAttachmentPreviews(article, attachments);
+    appendAttachmentPreviews(article, mergedAttachments);
   }
 
   const textEl = document.createElement("div");
   textEl.className = "message-text";
-  textEl.textContent = text;
+  textEl.textContent = text || contentBlocksToDisplayText(contentBlocks);
   article.appendChild(textEl);
 
   const metaEl = document.createElement("div");
@@ -404,7 +491,8 @@ function addMessage(role, text, options = {}) {
     text,
     options.attachments || [],
     options.meta || null,
-    options.timestamp || Date.now()
+    options.timestamp || Date.now(),
+    options.contentBlocks || []
   );
   if (options.interrupted) {
     node.classList.add("interrupted");
@@ -446,11 +534,12 @@ function appendAssistantToken(turnId, token) {
   scrollTranscriptToBottom();
 }
 
-function finishAssistant(turnId, interrupted = false, text = "") {
+function finishAssistant(turnId, interrupted = false, assistantMessage = null) {
   const key = String(turnId || activeAssistantTurnId || "");
   if (!key) return;
   const node = ensureAssistantMessage(key);
   const textEl = getMessageTextEl(node);
+  const text = assistantMessageToDisplayText(assistantMessage || {});
   if (textEl && !textEl.textContent && text) {
     textEl.textContent = text;
   }
@@ -461,8 +550,8 @@ function finishAssistant(turnId, interrupted = false, text = "") {
   setSpeakerState(interrupted ? "已打断" : "回复完成", interrupted ? "warn" : "ok");
 }
 
-function upsertPartialDraft(text) {
-  const clean = (text || "").trim();
+function upsertPartialDraft(userMessage = null) {
+  const clean = userMessageToDisplayText(userMessage || {});
   if (!clean) {
     flushPartialDraft();
     return;
@@ -1012,9 +1101,10 @@ function renderHello(msg) {
     clearTranscript();
     for (const item of msg.history) {
       if (!item || !item.role) continue;
-      addMessage(item.role, item.text || item.summary || "", {
+      addMessage(item.role, "", {
         key: item.key || `${item.role}-${Date.now()}-${localMessageSeq++}`,
         attachments: item.artifacts || [],
+        contentBlocks: item.content || [],
         meta: item.meta || null,
         timestamp: item.ts || item.timestamp || Date.now(),
       });
@@ -1062,22 +1152,26 @@ function handleEvent(msg) {
     return;
   }
   if (msg.type === "asr_partial") {
-    setLiveText(partialEl, msg.text, "等待实时识别...");
-    upsertPartialDraft(msg.text);
+    const userMessage = msg.user_message || { role: "user", content: [] };
+    setLiveText(partialEl, userMessageToDisplayText(userMessage), "等待实时识别...");
+    upsertPartialDraft(userMessage);
     return;
   }
   if (msg.type === "asr_final") {
-    setLiveText(finalEl, msg.text, "等待最终转写...");
+    const userMessage = msg.user_message || { role: "user", content: [] };
+    setLiveText(finalEl, userMessageToDisplayText(userMessage), "等待最终转写...");
     setLiveText(partialEl, "", "等待实时识别...");
     flushPartialDraft();
-    const text = (msg.text || "").trim();
-    const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
-    if (text || attachments.length) {
+    const text = userMessageToDisplayText(userMessage);
+    const attachments = userMessageToAttachments(userMessage);
+    const contentBlocks = normalizeUserMessageContent(userMessage.content || []);
+    if (contentBlocks.length) {
       const key = `user-final-${msg.ts || Date.now()}-${text || attachments.map((item) => item.name || "").join("-")}`;
-      addMessage("user", text || attachmentSummary(attachments), {
+      addMessage("user", text, {
         key,
         attachments,
         timestamp: msg.ts || Date.now(),
+        contentBlocks,
       });
     }
     return;
@@ -1106,7 +1200,11 @@ function handleEvent(msg) {
     if (msg.interrupted && turnKey) {
       interruptedAssistantTurns.add(turnKey);
     }
-    finishAssistant(msg.turn_id, !!msg.interrupted, msg.text || "");
+    finishAssistant(
+      msg.turn_id,
+      !!msg.interrupted,
+      msg.assistant_message || { role: "assistant", content: [] }
+    );
     if (msg.interrupted) {
       log("助手回复已被打断");
     }
@@ -1162,7 +1260,7 @@ function handleEvent(msg) {
     setCodeText(currentStrategySourceEl, msg.strategy_source || "-");
     setCodeText(currentArtifactSubjectHintEl, msg.artifact_subject_hint || "-");
     setCodeText(currentArtifactTaskHintEl, msg.artifact_task_hint || "-");
-    setCodeText(artifactTextViewEl, msg.artifact_text || "无");
+    setCodeText(artifactTextViewEl, JSON.stringify(msg.analysis || {}, null, 2) || "{}", "{}");
     ensureAssistantMessage(msg.turn_id);
     setMessageMeta(msg.turn_id, {
       branch: msg.branch || "",
@@ -1181,7 +1279,10 @@ function handleEvent(msg) {
     return;
   }
   if (msg.type === "debug_context") {
-    setCodeText(multimodalSummaryEl, msg.multimodal_summary || "无");
+    setCodeText(
+      multimodalSummaryEl,
+      JSON.stringify((msg.user_message || {}).content || [], null, 2) || "[]"
+    );
     return;
   }
   if (msg.type === "debug_prompt") {
@@ -1488,7 +1589,6 @@ function buildAttachmentPayload() {
     mime_type: item.mime_type,
     data_base64: item.data_base64 || inlineSourceToBase64(getAttachmentPreviewSource(item)),
     uri: item.uri || "",
-    summary: item.summary || "",
   }));
 }
 
@@ -1679,3 +1779,4 @@ setMetricValue(metricInterruptCountEl, 0, (value) => `${Number(value || 0)}`);
 setLevel(0);
 updateAttachmentState();
 updateHistoryPanelSummary();
+

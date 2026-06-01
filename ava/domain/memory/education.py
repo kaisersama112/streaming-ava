@@ -1,24 +1,28 @@
-"""Education-scene continuity memory."""
+"""教育场景连续性记忆。"""
 
 from __future__ import annotations
 
-import re
 from typing import Any
-
-from .message import user_message_summary
 
 
 class EducationMemory:
+    """管理教育域的连续性状态。
+
+    该状态只保存结构化原始信息，不负责文本摘要、展示文案或 UI 标签生成。
+    """
+
     def __init__(self) -> None:
+        """初始化教育记忆状态。"""
         self._state = self.empty_state()
 
     @staticmethod
     def empty_state() -> dict[str, Any]:
+        """返回空的教育记忆状态。"""
         return {
             "subject": "",
             "knowledge_point": "",
             "stage": "",
-            "last_problem": "",
+            "last_problem": {},
             "level": "",
             "learning_scenario": "",
             "learning_objects": [],
@@ -35,48 +39,49 @@ class EducationMemory:
 
     @property
     def state(self) -> dict[str, Any]:
+        """返回当前状态副本。"""
         return dict(self._state)
 
     def set_value(self, key: str, value: Any) -> None:
+        """按键写入状态值。
+
+        参数:
+        - key: 状态键名。
+        - value: 要写入的值。
+        """
         normalized_key = str(key or "").strip()
         if not normalized_key:
             return
         self._state[normalized_key] = value
 
     def reset(self) -> None:
+        """重置为初始空状态。"""
         self._state = self.empty_state()
 
     def load_payload(self, payload: dict | None) -> None:
+        """从持久化载荷恢复状态。
+
+        参数:
+        - payload: 持久化层读取出的教育状态对象。
+        """
         state = self.empty_state()
         state.update(dict(payload or {}))
+        if not isinstance(state.get("last_problem"), dict):
+            state["last_problem"] = {}
         self._state = state
 
     def to_payload(self) -> dict[str, Any]:
+        """导出可持久化的状态载荷。"""
         return dict(self._state)
 
     def apply_route_transition(self, *, should_preserve_teaching_state: bool) -> None:
+        """在路由切换时应用教育状态保留策略。
+
+        参数:
+        - should_preserve_teaching_state: 是否保留当前教育连续性状态。
+        """
         if not should_preserve_teaching_state:
             self._state = self.empty_state()
-
-    def update_from_text(self, user_text: str) -> None:
-        match_subject = re.search(r"(??|??|??|??|??|??|??|??|??)", user_text)
-        if match_subject:
-            self._state["subject"] = match_subject.group(1)
-
-        match_point = re.search(
-            r"(?:??|??|??|??|??|??|????|??)([\u4e00-\u9fa5A-Za-z0-9_??,??()\-]{2,30})",
-            user_text,
-        )
-        if "???" in user_text and not match_point:
-            self._state["knowledge_point"] = user_text[:30]
-        elif match_point:
-            self._state["knowledge_point"] = match_point.group(1).strip("????")
-
-        if any(keyword in user_text for keyword in ["??", "??", "??", "???"]):
-            self._state["stage"] = "??"
-        if any(keyword in user_text for keyword in ["??", "??", "??"]):
-            self._state["stage"] = "??"
-            self._state["last_problem"] = user_text[:40]
 
     def update_from_strategy(
         self,
@@ -84,6 +89,12 @@ class EducationMemory:
         *,
         user_message: dict[str, Any] | None = None,
     ) -> None:
+        """根据当前轮策略结果更新教育记忆。
+
+        参数:
+        - strategy: 当前轮教育策略对象。
+        - user_message: 当前轮原始标准用户消息。
+        """
         if not strategy:
             return
 
@@ -121,7 +132,7 @@ class EducationMemory:
 
         if learning_scenario:
             self._state["learning_scenario"] = learning_scenario
-            self._state["stage"] = "??" if learning_scenario == "practice" else "??"
+            self._state["stage"] = "练习" if learning_scenario == "practice" else "讲解"
         if learning_objects:
             self._state["learning_objects"] = learning_objects
         if object_scope:
@@ -139,9 +150,7 @@ class EducationMemory:
             self._state["knowledge_point"] = knowledge_point
 
         if user_message is not None and "problem" in set(learning_objects):
-            current_problem = user_message_summary(user_message)
-            if current_problem:
-                self._state["last_problem"] = current_problem[:80]
+            self._state["last_problem"] = dict(user_message)
 
         branch = str(strategy.get("branch") or "").strip()
         strategy_id = str(strategy.get("strategy_id") or "").strip()
