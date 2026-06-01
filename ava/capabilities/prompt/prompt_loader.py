@@ -37,16 +37,11 @@ class PromptCenter:
         """读取任意相对路径文本。"""
         return self.store.read_text(relative_path)
 
-    def load_markdown_asset(self, relative_path: str) -> MarkdownAsset:
-        return self.store.load_markdown(relative_path)
-
     def load_skill(self, skill_file: str) -> Skill:
         """读取并解析单个 Skill。"""
-        return self.skill_parser.parse(self.load_markdown_asset(skill_file))
-
-    def resolve_skill_relative_path(self, skill: Skill, relative_path: str) -> str:
-        """解析 Skill 内部 references/assets 的相对路径。"""
-        return self.registry.resolve_relative(skill.source_file, relative_path)
+        skill_markdown_content = self.store.load_markdown(skill_file)
+        skill = self.skill_parser.parse(skill_markdown_content)
+        return skill
 
     def render_path(self, relative_path: str, variables: dict[str, Any] | None = None) -> str:
         """渲染某个文本模板文件。"""

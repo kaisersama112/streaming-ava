@@ -59,5 +59,9 @@ class PromptSkillRegistry:
 
     @staticmethod
     def resolve_relative(base_file: str, relative_path: str) -> str:
-        """按 POSIX 规则解析 Skill 内部相对路径。"""
+        """"
+        解析 Skill 内部 references/assets 的相对路径。
+        按 POSIX 规则解析 Skill 内部相对路径。
+        """
+
         return str((PurePosixPath(base_file).parent / relative_path).as_posix())

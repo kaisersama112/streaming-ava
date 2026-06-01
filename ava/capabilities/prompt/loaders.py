@@ -62,15 +62,16 @@ class PromptSkillLoader:
     def _load(self, skill_file: str) -> Skill:
         if skill_file in self._cache:
             return self._cache[skill_file]
-        loaded = self.prompt_center.load_skill(skill_file)
-        self._cache[skill_file] = loaded
-        return loaded
+        skill = self.prompt_center.load_skill(skill_file)
+        self._cache[skill_file] = skill
+        return skill
 
     def load_reference_texts(self, skill: Skill) -> list[tuple[str, str]]:
         """读取当前 Skill 引用的全部规范文本。"""
         texts: list[tuple[str, str]] = []
         for relative_path in skill.references:
-            resolved = self.prompt_center.resolve_skill_relative_path(skill, relative_path)
+
+            resolved = self.prompt_center.registry.resolve_relative(skill.source_file, relative_path)
             texts.append((resolved, self.prompt_center.read_text(resolved).strip()))
         return texts
 

@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from ava.domain.conversation.strategy import BranchStrategy
     from ava.multi_turn_context_builder.types import ConversationContext
 
-
 _PROMPT_PACKAGE_CACHE: dict[tuple[str, str, str], PromptPackage] = {}
 _ROUTER_SKILL_FILE = "core/router/SKILL.md"
 _UNIFIED_RENDERER_FILE = "core/renderer/prompt_renderer.md"
@@ -67,9 +66,9 @@ def _render_skill_block(skill: Skill) -> str:
 
 
 def _render_references(
-    *,
-    prompt_loader: PromptSkillLoader,
-    skill: Skill,
+        *,
+        prompt_loader: PromptSkillLoader,
+        skill: Skill,
 ) -> str:
     """把当前 Skill 的引用规范渲染为附加块。"""
     sections: list[str] = []
@@ -104,10 +103,10 @@ def _resolve_skill_chain(strategy: "BranchStrategy", prompt_loader: PromptSkillL
 
 
 def _tracked_asset_versions(
-    *,
-    prompt_center: PromptCenter,
-    prompt_loader: PromptSkillLoader,
-    skills: list[Skill],
+        *,
+        prompt_center: PromptCenter,
+        prompt_loader: PromptSkillLoader,
+        skills: list[Skill],
 ) -> dict[str, dict[str, int]]:
     """收集需要参与 PromptPackage 缓存失效的资产版本。"""
     tracked_files = [_UNIFIED_RENDERER_FILE]
@@ -115,7 +114,8 @@ def _tracked_asset_versions(
         if skill.source_file:
             tracked_files.append(skill.source_file)
         for relative_path in skill.references:
-            tracked_files.append(prompt_center.resolve_skill_relative_path(skill, relative_path))
+            skill_resolve_relative = prompt_center.registry.resolve_relative(skill.source_file, relative_path)
+            tracked_files.append(skill_resolve_relative)
 
     asset_versions: dict[str, dict[str, int]] = {}
     for relative_path in dict.fromkeys(tracked_files):
@@ -154,6 +154,7 @@ def _build_prompt_cache_key(prompt_center: PromptCenter, strategy: "BranchStrate
 def build_router_system_prompt(prompt_center: PromptCenter) -> str:
     """读取 router 阶段正式 Skill 指令。"""
     loader = PromptSkillLoader(prompt_center)
+
     router_skill = prompt_center.load_skill(_ROUTER_SKILL_FILE)
     blocks = [_render_skill_block(router_skill)]
     router_references = _render_references(prompt_loader=loader, skill=router_skill)
@@ -206,9 +207,9 @@ def _build_prompt_shell(prompt_center: PromptCenter, strategy: "BranchStrategy")
 
 
 def build_responder_system_prompt(
-    prompt_center: PromptCenter,
-    context: "ConversationContext",
-    strategy: "BranchStrategy",
+        prompt_center: PromptCenter,
+        context: "ConversationContext",
+        strategy: "BranchStrategy",
 ) -> str:
     """构造 responder 阶段系统指令。"""
     del context
@@ -216,8 +217,8 @@ def build_responder_system_prompt(
 
 
 def build_responder_prompt_package(
-    prompt_center: PromptCenter,
-    strategy: "BranchStrategy",
+        prompt_center: PromptCenter,
+        strategy: "BranchStrategy",
 ) -> PromptPackage:
     """构造 responder 阶段 PromptPackage。"""
     return _build_prompt_shell(prompt_center, strategy)

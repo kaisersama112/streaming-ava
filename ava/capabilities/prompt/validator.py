@@ -29,6 +29,7 @@ class SkillValidator:
         names: dict[str, str] = {}
         for skill_file in self._skill_files():
             try:
+
                 skill = self.prompt_center.load_skill(skill_file)
             except Exception as exc:
                 issues.append(ValidationIssue(path=skill_file, message=str(exc)))
