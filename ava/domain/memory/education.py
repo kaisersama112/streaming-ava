@@ -8,7 +8,8 @@ from typing import Any
 class EducationMemory:
     """管理教育域的连续性状态。
 
-    该状态只保存结构化原始信息，不负责文本摘要、展示文案或 UI 标签生成。
+    该状态只保存教育连续性所需的结构化状态，
+    不负责文本摘要、展示文案或界面标签生成。
     """
 
     def __init__(self) -> None:
@@ -32,9 +33,13 @@ class EducationMemory:
             "secondary_actions": [],
             "answer_boundary": "",
             "previous_branch": "",
-            "previous_strategy_id": "",
-            "previous_policy_id": "",
-            "previous_strategy_state": {},
+            "previous_subject": "",
+            "previous_primary_scenario": "",
+            "previous_primary_action": "",
+            "previous_learning_objects": [],
+            "previous_object_scope": "",
+            "previous_object_continuity": "",
+            "previous_answer_boundary": "",
         }
 
     @property
@@ -65,9 +70,16 @@ class EducationMemory:
         - payload: 持久化层读取出的教育状态对象。
         """
         state = self.empty_state()
-        state.update(dict(payload or {}))
+        raw_payload = dict(payload or {})
+        for key in tuple(state.keys()):
+            if key in raw_payload:
+                state[key] = raw_payload[key]
         if not isinstance(state.get("last_problem"), dict):
             state["last_problem"] = {}
+        for key in ("learning_objects", "secondary_actions", "previous_learning_objects"):
+            value = state.get(key)
+            if not isinstance(value, list):
+                state[key] = []
         self._state = state
 
     def to_payload(self) -> dict[str, Any]:
@@ -153,21 +165,11 @@ class EducationMemory:
             self._state["last_problem"] = dict(user_message)
 
         branch = str(strategy.get("branch") or "").strip()
-        strategy_id = str(strategy.get("strategy_id") or "").strip()
-        policy_id = str(strategy.get("policy_id") or analysis.get("selected_policy_id") or "").strip()
-        previous_state = {
-            "previous_branch": branch,
-            "previous_strategy_id": strategy_id,
-            "previous_policy_id": policy_id,
-            "previous_subject": subject,
-            "previous_primary_scenario": learning_scenario,
-            "previous_primary_action": primary_action,
-            "previous_learning_objects": learning_objects,
-            "previous_object_scope": object_scope,
-            "previous_object_continuity": object_continuity,
-            "previous_answer_boundary": answer_boundary,
-        }
         self._state["previous_branch"] = branch
-        self._state["previous_strategy_id"] = strategy_id
-        self._state["previous_policy_id"] = policy_id
-        self._state["previous_strategy_state"] = previous_state
+        self._state["previous_subject"] = str(self._state.get("subject") or "").strip()
+        self._state["previous_primary_scenario"] = str(self._state.get("learning_scenario") or "").strip()
+        self._state["previous_primary_action"] = str(self._state.get("primary_action") or "").strip()
+        self._state["previous_learning_objects"] = list(self._state.get("learning_objects") or [])
+        self._state["previous_object_scope"] = str(self._state.get("object_scope") or "").strip()
+        self._state["previous_object_continuity"] = str(self._state.get("object_continuity") or "").strip()
+        self._state["previous_answer_boundary"] = str(self._state.get("answer_boundary") or "").strip()

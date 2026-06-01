@@ -131,8 +131,6 @@ class ConversationState:
         if continuity:
             compact_analysis["continuity"] = {
                 "previous_branch": continuity.get("previous_branch", ""),
-                "previous_strategy_id": continuity.get("previous_strategy_id", ""),
-                "previous_policy_id": continuity.get("previous_policy_id", ""),
                 "previous_subject": continuity.get("previous_subject", ""),
                 "previous_primary_scenario": continuity.get("previous_primary_scenario", ""),
                 "previous_primary_action": continuity.get("previous_primary_action", ""),
@@ -159,9 +157,6 @@ class ConversationState:
         prompt_package = dict(strategy.get("prompt_package") or {})
         compact = {
             "branch": str(strategy.get("branch") or "").strip(),
-            "strategy_id": str(strategy.get("strategy_id") or "").strip(),
-            "name": str(strategy.get("name") or "").strip(),
-            "policy_id": str(strategy.get("policy_id") or "").strip(),
             "module": str(strategy.get("module") or "").strip(),
             "scene": str(strategy.get("scene") or "").strip(),
             "subject": str(strategy.get("subject") or "").strip(),

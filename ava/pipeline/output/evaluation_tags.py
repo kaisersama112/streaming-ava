@@ -19,6 +19,12 @@ def _prompt_profile_from_strategy(strategy: BranchStrategy | None) -> dict[str, 
     return dict(strategy.prompt_profile())
 
 
+def _same_prompt_profile(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """判断两轮是否命中了同一组正式 Prompt 语义。"""
+    keys = ("capability", "task", "knowledge", "method", "audience")
+    return all(str(left.get(key) or "").strip() == str(right.get(key) or "").strip() for key in keys)
+
+
 def classify_user_followup_type(
     state: ConversationState,
     user_message: dict[str, Any],
@@ -51,6 +57,8 @@ def classify_user_followup_type(
             break
     last_decision = dict(last_turn.get("decision") or {})
     last_strategy = dict(last_turn.get("strategy") or {})
+    current_prompt_profile = _prompt_profile_from_strategy(strategy)
+    last_prompt_profile = dict(last_strategy.get("prompt_profile") or {})
 
     if not text and has_artifacts:
         return "attachment_only"
@@ -68,7 +76,7 @@ def classify_user_followup_type(
         return "social_backchannel"
 
     if last_decision.get("turn_scene") == decision.turn_scene:
-        if last_strategy.get("strategy_id") == (strategy.strategy_id if strategy else ""):
+        if _same_prompt_profile(last_prompt_profile, current_prompt_profile):
             return "continue_same_strategy"
         return "continue_same_branch"
     return "new_topic"

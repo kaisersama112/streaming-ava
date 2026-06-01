@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
-from app import app
+# from app import app
+import uvicorn
+from configs import settings
+from app import create_app
 
 if __name__ == "__main__":
-    import uvicorn
-    from configs import settings
-
-    host = getattr(settings.server, "host", "0.0.0.0")
-    port = int(getattr(settings.server, "port", 7000))
-    uvicorn.run(app, host=host, port=port, reload=getattr(settings.server, "reload", False))
-
+    host = settings.server.host
+    port = settings.server.port
+    uvicorn.run(create_app(), host=host, port=port)

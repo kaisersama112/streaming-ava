@@ -86,7 +86,6 @@ def _build_mode_strategy_from_plan(
         interaction_rules=(),
         analysis={
             "mode": mode,
-            "selected_strategy_id": strategy_id,
             "selected_strategy_source": "router_model_plan",
             "router_plan": plan,
             "plan_reason": str(plan.get("plan_reason") or "").strip(),
@@ -117,7 +116,6 @@ def _build_education_strategy_from_plan(
     module = education_plan.module
     subject = education_plan.subject
     pedagogy = education_plan.pedagogy
-    policy_id = education_plan.policy_id
     prompt_overrides = education_plan.prompt_overrides
     learning_objects = education_plan.learning_objects or ("problem",)
     has_non_text_blocks = any(
@@ -156,7 +154,6 @@ def _build_education_strategy_from_plan(
     selection = PromptSelection(
         branch=decision.turn_scene,
         strategy_id=strategy_id,
-        policy_id=policy_id,
         module=module,
         scene=module,
         subject=subject,
@@ -175,7 +172,6 @@ def _build_education_strategy_from_plan(
         strategy_id=strategy_id,
         name=f"{module} / {subject} / {pedagogy}",
         description=f"{decision.turn_scene} 单轮计划：task={module}, knowledge={subject}, method={pedagogy}",
-        policy_id=policy_id,
         module=module,
         scene=module,
         subject=subject,
@@ -186,7 +182,6 @@ def _build_education_strategy_from_plan(
         interaction_rules=(),
         response_contract=dict(resolved_plan.response_contract),
         speech_policy=dict(resolved_plan.speech_policy),
-        ui_policy={"ui_mode_default": resolved_plan.ui_mode},
         analysis={
             "subject": subject,
             "primary_scenario": turn_frame.primary_scenario,
@@ -200,8 +195,6 @@ def _build_education_strategy_from_plan(
             "scene": module,
             "subject_axis": subject,
             "pedagogy": pedagogy,
-            "selected_strategy_id": strategy_id,
-            "selected_policy_id": policy_id,
             "selected_strategy_source": "router_model_plan",
             "education_turn_frame": turn_frame.to_metadata(),
             "router_plan": _plan(router_plan),

@@ -453,6 +453,7 @@ def create_app() -> FastAPI:
     import pathlib
 
     static_dir = pathlib.Path(__file__).resolve().parent / "static"
+    print(static_dir)
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -763,6 +764,5 @@ def create_app() -> FastAPI:
 
     return app
 
-
-# 模块级应用实例，供 uvicorn / gunicorn 直接加载
-app = create_app()
+# # 模块级应用实例，供 uvicorn / gunicorn 直接加载
+# app = create_app()

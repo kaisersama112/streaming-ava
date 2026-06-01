@@ -1,4 +1,4 @@
-"""Model-visible memory projection builder."""
+"""面向模型的记忆投影视图构建器。"""
 
 from __future__ import annotations
 
@@ -79,8 +79,14 @@ class MemoryProjector:
                         "object_continuity",
                         "primary_action",
                         "answer_boundary",
-                        "previous_strategy_id",
-                        "previous_policy_id",
+                        "previous_branch",
+                        "previous_subject",
+                        "previous_primary_scenario",
+                        "previous_primary_action",
+                        "previous_learning_objects",
+                        "previous_object_scope",
+                        "previous_object_continuity",
+                        "previous_answer_boundary",
                     ),
                 ),
                 message_block_memory=list(projection.message_block_memory)[:1],

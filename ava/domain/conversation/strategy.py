@@ -25,7 +25,6 @@ class PromptSelection:
 
     branch: str
     strategy_id: str
-    policy_id: str = ""
     mode: str = ""
     module: str = ""
     scene: str = ""
@@ -35,8 +34,6 @@ class PromptSelection:
     def to_metadata(self) -> dict[str, Any]:
         return {
             "branch": self.branch,
-            "strategy_id": self.strategy_id,
-            "policy_id": self.policy_id,
             "mode": self.mode,
             "module": self.module,
             "scene": self.scene,
@@ -149,13 +146,19 @@ class EducationTurnFrame:
 
 @dataclass(frozen=True)
 class BranchStrategy:
-    """当前轮的结构化执行策略。"""
+    """当前轮的结构化执行策略。
+
+    `strategy_id` 仅作为内部缓存、调试和去重标识使用，
+    不再作为正式运行时语义对外暴露。
+
+    `name` / `description` 仅保留给内部调试阅读，
+    不再进入正式元数据、状态落盘或运行时主语义。
+    """
 
     branch: str
     strategy_id: str
     name: str
     description: str
-    policy_id: str = ""
     mode: str = ""
     module: str = ""
     scene: str = ""
@@ -168,7 +171,6 @@ class BranchStrategy:
     interaction_rules: tuple[str, ...] = ()
     response_contract: dict[str, Any] = field(default_factory=dict)
     speech_policy: dict[str, Any] = field(default_factory=dict)
-    ui_policy: dict[str, Any] = field(default_factory=dict)
     analysis: dict[str, Any] = field(default_factory=dict)
     source: str = "rules"
     selection: PromptSelection | None = None
@@ -190,10 +192,6 @@ class BranchStrategy:
         )
         return {
             "branch": self.branch,
-            "strategy_id": self.strategy_id,
-            "name": self.name,
-            "description": self.description,
-            "policy_id": self.policy_id,
             "mode": self.mode,
             "module": self.module,
             "scene": self.scene,
@@ -205,7 +203,6 @@ class BranchStrategy:
             "interaction_rules": list(self.interaction_rules),
             "response_contract": dict(self.response_contract),
             "speech_policy": dict(self.speech_policy),
-            "ui_policy": dict(self.ui_policy),
             "analysis": dict(self.analysis),
             "source": self.source,
             "selection": self.selection.to_metadata() if self.selection is not None else {},

@@ -28,8 +28,6 @@ class EducationTurnPlan:
     object_continuity: str = "uncertain"
     question_kind: str | None = None
     message_block_role: str | None = None
-    ui_mode_hint: str | None = None
-    policy_id: str = ""
     prompt_overrides: tuple[str, ...] = ()
     secondary_actions: tuple[str, ...] = ()
     confidence: float = 0.0
@@ -38,10 +36,10 @@ class EducationTurnPlan:
 
     @classmethod
     def from_payload(
-        cls,
-        payload: dict[str, Any] | None,
-        *,
-        confidence: float = 0.0,
+            cls,
+            payload: dict[str, Any] | None,
+            *,
+            confidence: float = 0.0,
     ) -> "EducationTurnPlan":
         """从 router 原始 plan 字典构建计划对象。"""
         data = dict(payload or {})
@@ -53,14 +51,13 @@ class EducationTurnPlan:
             answer_boundary=str(data.get("answer_boundary") or "direct_explain").strip() or "direct_explain",
             learner_state=str(data.get("learner_state") or "").strip() or "followup",
             primary_scenario=str(data.get("primary_scenario") or "practice").strip() or "practice",
-            primary_action=str(data.get("primary_action") or "solve_current_problem").strip() or "solve_current_problem",
+            primary_action=str(
+                data.get("primary_action") or "solve_current_problem").strip() or "solve_current_problem",
             learning_objects=_string_tuple(data.get("learning_objects")) or ("problem",),
             object_scope=str(data.get("object_scope") or "whole_problem").strip() or "whole_problem",
             object_continuity=str(data.get("object_continuity") or "uncertain").strip() or "uncertain",
             question_kind=(str(data.get("question_kind") or "").strip() or None),
             message_block_role=(str(data.get("message_block_role") or "").strip() or None),
-            ui_mode_hint=(str(data.get("ui_mode_hint") or "").strip() or None),
-            policy_id=str(data.get("policy_id") or "").strip(),
             prompt_overrides=_string_tuple(data.get("prompt_overrides")),
             secondary_actions=_string_tuple(data.get("secondary_actions")),
             confidence=float(data.get("confidence") or confidence or 0.0),
@@ -84,12 +81,9 @@ class EducationTurnPlan:
             "object_continuity": self.object_continuity,
             "question_kind": self.question_kind or "",
             "message_block_role": self.message_block_role or "",
-            "ui_mode_hint": self.ui_mode_hint or "",
-            "policy_id": self.policy_id,
             "prompt_overrides": list(self.prompt_overrides),
             "secondary_actions": list(self.secondary_actions),
             "confidence": round(float(self.confidence), 4),
             "plan_reason": self.plan_reason,
             "raw_plan": dict(self.raw_plan),
         }
-

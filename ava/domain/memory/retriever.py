@@ -1,4 +1,4 @@
-"""Relevant memory retrieval for one turn."""
+"""单轮相关记忆检索器。"""
 
 from __future__ import annotations
 
@@ -45,8 +45,14 @@ class MemoryRetriever:
                 "object_continuity",
                 "primary_action",
                 "answer_boundary",
-                "previous_strategy_id",
-                "previous_policy_id",
+                "previous_branch",
+                "previous_subject",
+                "previous_primary_scenario",
+                "previous_primary_action",
+                "previous_learning_objects",
+                "previous_object_scope",
+                "previous_object_continuity",
+                "previous_answer_boundary",
             ),
         )
         if compact_education:

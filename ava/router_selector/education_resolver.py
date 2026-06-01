@@ -23,8 +23,6 @@ class ResolvedEducationPlan:
     task: Skill
     knowledge: Skill
     method: Skill
-    delivery_mode: str
-    ui_mode: str
     response_contract: dict[str, Any]
     speech_policy: dict[str, Any]
 
@@ -69,8 +67,6 @@ class EducationPlanResolver:
         knowledge = loader.load_knowledge(knowledge_name)
         method = loader.load_method(plan.pedagogy.replace("_", "-"))
 
-        delivery_mode = self._select_delivery_mode(loader, task)
-        ui_mode = self._select_ui_mode(loader, task)
         response_contract = {
             "module": plan.module,
             "pedagogy": plan.pedagogy,
@@ -78,7 +74,6 @@ class EducationPlanResolver:
         }
         speech_policy = {
             "method": method.name,
-            "policy_id": plan.policy_id,
             "learner_state": plan.learner_state,
         }
         return ResolvedEducationPlan(
@@ -87,8 +82,6 @@ class EducationPlanResolver:
             task=task,
             knowledge=knowledge,
             method=method,
-            delivery_mode=delivery_mode,
-            ui_mode=ui_mode,
             response_contract=response_contract,
             speech_policy=speech_policy,
         )
@@ -120,8 +113,6 @@ class EducationPlanResolver:
             object_continuity=plan.object_continuity,
             question_kind=plan.question_kind,
             message_block_role=plan.message_block_role,
-            ui_mode_hint=plan.ui_mode_hint,
-            policy_id=plan.policy_id,
             prompt_overrides=plan.prompt_overrides,
             secondary_actions=plan.secondary_actions,
             confidence=plan.confidence or decision.confidence,
@@ -169,13 +160,3 @@ class EducationPlanResolver:
         if learner_state == "verifying":
             return "targeted_answer"
         return "direct_explain"
-
-    @staticmethod
-    def _select_delivery_mode(loader: PromptSkillLoader, task: Skill) -> str:
-        delivery_mode = loader.get_reference_setting(task, "delivery_mode")
-        return delivery_mode or "speech_ui_dual"
-
-    @staticmethod
-    def _select_ui_mode(loader: PromptSkillLoader, task: Skill) -> str:
-        ui_mode = loader.get_reference_setting(task, "ui_mode")
-        return ui_mode or "learning_card"
