@@ -1,1408 +1,244 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>AVA 实时控制台</title>
-    <style>
-        :root {
-            --bg: #f3efe7;
-            --bg-soft: #faf7f1;
-            --surface: rgba(255, 255, 255, 0.84);
-            --surface-strong: rgba(255, 255, 255, 0.94);
-            --surface-alt: #f6f1e8;
-            --line: rgba(42, 34, 26, 0.1);
-            --line-strong: rgba(42, 34, 26, 0.16);
-            --text: #1e1a16;
-            --muted: #6d6358;
-            --accent: #b76033;
-            --accent-soft: rgba(183, 96, 51, 0.12);
-            --accent-strong: #8f431e;
-            --ok: #1f8a63;
-            --warn: #b57a18;
-            --danger: #b2422f;
-            --shadow: 0 18px 42px rgba(58, 43, 28, 0.08);
-            --shadow-soft: 0 8px 20px rgba(58, 43, 28, 0.05);
-            --radius-card: 28px;
-            --radius-panel: 22px;
-            --radius-pill: 999px;
-            --ease-out: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-            --display-font: "Iowan Old Style", "Georgia", "Songti SC", "Times New Roman", serif;
-            --history-pane-height: calc(100vh - 44px);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html,
-        body {
-            margin: 0;
-            height: 100%;
-            min-height: 100%;
-            color: var(--text);
-            font-family: "Avenir Next", "SF Pro Display", "PingFang SC", "Noto Sans SC", sans-serif;
-            background: radial-gradient(circle at top left, rgba(183, 96, 51, 0.08), transparent 24%),
-            linear-gradient(180deg, var(--bg-soft), var(--bg));
-        }
-
-        body {
-            padding: 18px;
-            overflow: hidden;
-        }
-
-        a {
-            color: inherit;
-        }
-
-        button,
-        input,
-        textarea {
-            font: inherit;
-        }
-
-        input,
-        textarea {
-            width: 100%;
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            background: var(--surface-strong);
-            color: var(--text);
-            transition: border-color var(--ease-out), box-shadow var(--ease-out), background var(--ease-out);
-        }
-
-        input {
-            padding: 12px 14px;
-        }
-
-        textarea {
-            min-height: 168px;
-            resize: vertical;
-            padding: 16px 18px;
-            line-height: 1.72;
-        }
-
-        input:focus-visible,
-        textarea:focus-visible,
-        button:focus-visible,
-        summary:focus-visible,
-        a:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(183, 96, 51, 0.14);
-            border-color: rgba(183, 96, 51, 0.32);
-        }
-
-        button {
-            appearance: none;
-            border: 1px solid transparent;
-            border-radius: 18px;
-            min-height: 48px;
-            padding: 12px 16px;
-            cursor: pointer;
-            font-weight: 700;
-            transition: transform var(--ease-out),
-            background var(--ease-out),
-            box-shadow var(--ease-out),
-            border-color var(--ease-out),
-            opacity var(--ease-out);
-        }
-
-        button:hover {
-            transform: translateY(-1px);
-        }
-
-        button:disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-primary {
-            color: #fff9f2;
-            background: linear-gradient(135deg, #201b17, #553020);
-            box-shadow: 0 10px 24px rgba(42, 29, 20, 0.18);
-        }
-
-        .btn-accent {
-            color: #fff8f2;
-            background: linear-gradient(135deg, #cc7142, #ad4f29);
-            box-shadow: 0 10px 24px rgba(183, 96, 51, 0.2);
-        }
-
-        .btn-live {
-            color: #f5fffa;
-            background: linear-gradient(135deg, #2a966d, #1f7a58);
-            box-shadow: 0 10px 24px rgba(31, 138, 99, 0.2);
-        }
-
-        .btn-warning {
-            color: #fffaf3;
-            background: linear-gradient(135deg, #c59432, #ac7614);
-            box-shadow: 0 10px 24px rgba(181, 122, 24, 0.18);
-        }
-
-        .btn-soft {
-            color: var(--text);
-            background: var(--surface-strong);
-            border-color: var(--line);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-        }
-
-        .btn-danger {
-            color: #fff8f6;
-            background: linear-gradient(135deg, #c45f4c, #9c3728);
-            box-shadow: 0 10px 24px rgba(156, 55, 40, 0.18);
-        }
-
-        .app-shell {
-            max-width: 1680px;
-            margin: 0 auto;
-            display: grid;
-            gap: 0;
-            height: var(--history-pane-height);
-        }
-
-        .card {
-            border: 1px solid var(--line);
-            border-radius: var(--radius-card);
-            background: var(--surface);
-            box-shadow: var(--shadow);
-            backdrop-filter: blur(16px) saturate(120%);
-        }
-
-        .workspace {
-            display: grid;
-            grid-template-columns: minmax(292px, 328px) minmax(0, 1fr) minmax(340px, 396px);
-            gap: 18px;
-            align-items: start;
-            height: 100%;
-            min-height: 0;
-        }
-
-        .sidebar,
-        .main-column,
-        .history-column {
-            min-width: 0;
-            display: grid;
-            gap: 18px;
-            height: 100%;
-            min-height: 0;
-        }
-
-        .main-column {
-            grid-template-rows: minmax(0, 0.94fr) minmax(260px, 0.72fr);
-            align-content: start;
-        }
-
-        .panel,
-        .stage-card,
-        .composer-card,
-        .history-card {
-            padding: 18px;
-        }
-
-        .panel,
-        .history-card {
-            position: sticky;
-            top: 22px;
-        }
-
-        .panel {
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 241, 233, 0.9));
-            max-height: var(--history-pane-height);
-            overflow: auto;
-        }
-
-        .section-label {
-            margin: 0 0 6px;
-            color: var(--accent-strong);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-        }
-
-        .section-title {
-            margin: 0;
-            font-family: var(--display-font);
-            font-size: 28px;
-            line-height: 1;
-            letter-spacing: -0.03em;
-        }
-
-        .section-copy {
-            margin: 8px 0 0;
-            color: var(--muted);
-            font-size: 14px;
-            line-height: 1.7;
-        }
-
-        .panel-copy {
-            max-width: 28ch;
-        }
-
-        .meta-stack {
-            display: grid;
-            gap: 0;
-        }
-
-        .meta-item {
-            display: grid;
-            gap: 6px;
-            padding: 14px 0;
-            border-top: 1px dashed rgba(42, 34, 26, 0.12);
-        }
-
-        .meta-item:first-child {
-            padding-top: 0;
-            border-top: 0;
-        }
-
-        .meta-item small {
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .meta-item code,
-        .log {
-            display: block;
-            border-radius: 16px;
-            padding: 11px 13px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 239, 231, 0.9));
-            border: 1px solid rgba(42, 34, 26, 0.08);
-            color: var(--text);
-            overflow: auto;
-        }
-
-        .meta-item code + code,
-        .meta-item code + pre,
-        .meta-item pre + code {
-            margin-top: 6px;
-        }
-
-        .meta-item code a {
-            text-decoration: none;
-        }
-
-        .meta-item code a:hover {
-            text-decoration: underline;
-        }
-
-        .session-switch-row {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .inline-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-        }
-
-        .metric-item {
-            display: grid;
-            gap: 4px;
-            padding: 12px 14px;
-            border-radius: 18px;
-            border: 1px solid var(--line);
-            background: linear-gradient(180deg, var(--surface-strong), rgba(246, 241, 233, 0.92));
-        }
-
-        .metric-item small {
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .metric-value {
-            font-size: 20px;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-        }
-
-        .log {
-            margin: 0;
-            min-height: 140px;
-            max-height: 260px;
-            white-space: pre-wrap;
-            word-break: break-word;
-            font-size: 12px;
-            line-height: 1.55;
-        }
-
-        .stage-card {
-            display: grid;
-            gap: 14px;
-            overflow: hidden;
-            background: radial-gradient(circle at top right, rgba(183, 96, 51, 0.09), transparent 24%),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 233, 0.92));
-        }
-
-        .call-state-card,
-        .call-live-card,
-        .pane-card,
-        .attachment-card {
-            border-radius: var(--radius-panel);
-            border: 1px solid var(--line);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 243, 236, 0.92));
-        }
-
-        .pill {
-            display: grid;
-            gap: 4px;
-            padding: 14px 16px;
-            border-radius: 18px;
-            border: 1px solid var(--line);
-            background: var(--surface-strong);
-        }
-
-        .pill-label {
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.13em;
-            text-transform: uppercase;
-        }
-
-        .pill-value {
-            font-size: 17px;
-            font-weight: 700;
-        }
-
-        .ok {
-            color: var(--ok);
-        }
-
-        .warn {
-            color: var(--warn);
-        }
-
-        .danger {
-            color: var(--danger);
-        }
-
-        .muted {
-            color: var(--muted);
-        }
-
-        .call-console {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(288px, 340px);
-            gap: 14px;
-            min-height: 0;
-            align-items: stretch;
-        }
-
-        .call-primary {
-            display: grid;
-            gap: 12px;
-            min-height: 0;
-        }
-
-        .call-state-card {
-            display: grid;
-            gap: 12px;
-            padding: 16px;
-            align-content: start;
-        }
-
-        .focus-label {
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-        }
-
-        .focus-state {
-            display: grid;
-            gap: 8px;
-        }
-
-        .call-state-main {
-            display: flex;
-            justify-content: space-between;
-            gap: 18px;
-            align-items: flex-start;
-        }
-
-        .call-state-main .pill-value {
-            font-family: var(--display-font);
-            font-size: 34px;
-            line-height: 0.96;
-        }
-
-        .call-state-copy {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.58;
-            max-width: 22ch;
-        }
-
-        .meter-box {
-            display: grid;
-            gap: 8px;
-            padding: 12px 13px;
-            border-radius: 18px;
-            background: var(--surface-alt);
-        }
-
-        .call-toolbar {
-            display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 8px;
-        }
-
-        .call-toolbar button {
-            min-height: 40px;
-            padding: 8px 10px;
-            border-radius: 16px;
-        }
-
-        .meter-copy {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .meter-track {
-            position: relative;
-            height: 12px;
-            border-radius: var(--radius-pill);
-            overflow: hidden;
-            background: rgba(42, 34, 26, 0.08);
-        }
-
-        .meter-fill {
-            position: absolute;
-            inset: 0 auto 0 0;
-            width: 0%;
-            border-radius: inherit;
-            background: linear-gradient(90deg, var(--ok), #e0a13a, var(--accent));
-            transition: width 90ms linear;
-        }
-
-        .call-state-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
-        }
-
-        .call-state-chip {
-            display: grid;
-            gap: 4px;
-            padding: 10px 11px;
-            border-radius: 16px;
-            border: 1px solid rgba(42, 34, 26, 0.08);
-            background: rgba(255, 255, 255, 0.72);
-        }
-
-        .call-state-chip .pill-label {
-            font-size: 10px;
-        }
-
-        .call-state-chip .pill-value {
-            font-size: 15px;
-        }
-
-        .call-control-card {
-            display: grid;
-            gap: 14px;
-            padding: 18px;
-        }
-
-        .call-control-note {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .control-group {
-            display: grid;
-            gap: 10px;
-        }
-
-        .controls-primary,
-        .controls-secondary {
-            display: grid;
-            gap: 10px;
-        }
-
-        .controls-primary {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
-        .controls-secondary {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .call-live-card {
-            display: grid;
-            gap: 10px;
-            padding: 16px;
-            min-height: 0;
-        }
-
-        .live-stack {
-            display: grid;
-            gap: 8px;
-            min-height: 0;
-        }
-
-        .live-stream-block {
-            display: grid;
-            gap: 7px;
-            min-height: 0;
-            padding: 12px 13px;
-            border-radius: 18px;
-            border: 1px solid rgba(42, 34, 26, 0.08);
-            background: rgba(255, 255, 255, 0.68);
-        }
-
-        .live-stream-block small {
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-        }
-
-        .live-text {
-            margin: 0;
-            white-space: pre-wrap;
-            word-break: break-word;
-            line-height: 1.62;
-            max-height: 96px;
-            overflow: auto;
-        }
-
-        .composer-card {
-            display: grid;
-            gap: 12px;
-            overflow: hidden;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 232, 0.92));
-        }
-
-        .composer-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(42, 34, 26, 0.08);
-        }
-
-        .composer-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 300px;
-            gap: 14px;
-            align-items: start;
-            min-height: 0;
-        }
-
-        .pane-card,
-        .attachment-card {
-            display: grid;
-            gap: 10px;
-            padding: 14px;
-            min-height: 0;
-        }
-
-        .pane-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .pane-head small {
-            color: var(--accent-strong);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-        }
-
-        .pane-head span {
-            color: var(--muted);
-            font-size: 12px;
-        }
-
-        .send-row {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .hint {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.65;
-        }
-
-        .attachment-input {
-            display: none;
-        }
-
-        .attachment-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .attachment-list {
-            display: grid;
-            gap: 8px;
-            max-height: 148px;
-            overflow: auto;
-            padding-right: 4px;
-        }
-
-        #textInput {
-            min-height: 96px;
-            max-height: 136px;
-        }
-
-        .attachment-item {
-            display: grid;
-            gap: 6px;
-            padding: 12px 14px;
-            border-radius: 16px;
-            border: 1px solid var(--line);
-            background: linear-gradient(180deg, var(--surface-strong), rgba(246, 241, 233, 0.92));
-        }
-
-        .attachment-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .attachment-meta {
-            display: grid;
-            gap: 2px;
-        }
-
-        .attachment-name {
-            font-size: 14px;
-            font-weight: 700;
-        }
-
-        .attachment-desc {
-            color: var(--muted);
-            font-size: 12px;
-        }
-
-        .attachment-preview {
-            overflow: hidden;
-            border-radius: 14px;
-            border: 1px solid rgba(42, 34, 26, 0.08);
-            background: rgba(42, 34, 26, 0.04);
-        }
-
-        .attachment-preview img,
-        .attachment-preview video,
-        .attachment-preview audio {
-            display: block;
-            width: 100%;
-        }
-
-        .history-card {
-            display: flex;
-            flex-direction: column;
-            height: var(--history-pane-height);
-            max-height: var(--history-pane-height);
-            min-height: var(--history-pane-height);
-            overflow: hidden;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 232, 0.9));
-        }
-
-        .history-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: flex-start;
-            margin-bottom: 12px;
-        }
-
-        .history-tag {
-            padding: 10px 12px;
-            border-radius: 16px;
-            border: 1px solid rgba(42, 34, 26, 0.08);
-            background: var(--surface-strong);
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .history-shell {
-            flex: 1;
-            min-height: 0;
-            display: grid;
-            grid-template-rows: auto minmax(0, 1fr);
-            gap: 14px;
-        }
-
-        .history-summary {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
-        }
-
-        .history-summary-card {
-            display: grid;
-            gap: 4px;
-            padding: 10px 12px;
-            border-radius: 18px;
-            border: 1px solid var(--line);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 233, 0.92));
-        }
-
-        .history-summary-card small {
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .history-summary-card strong,
-        .history-summary-card code {
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        .history-summary-card code {
-            padding: 0;
-            border: 0;
-            background: transparent;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .history-scroll {
-            min-height: 0;
-            overflow: hidden;
-            padding: 10px;
-            border-radius: 22px;
-            border: 1px solid rgba(42, 34, 26, 0.08);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 239, 231, 0.72));
-        }
-
-        .transcript {
-            height: 100%;
-            overflow: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            padding-right: 6px;
-        }
-
-        .message {
-            display: grid;
-            gap: 10px;
-            max-width: 100%;
-            padding: 14px 16px;
-            border-radius: 22px;
-            border: 1px solid var(--line);
-            background: var(--surface-strong);
-            box-shadow: var(--shadow-soft);
-            animation: messageEnter 220ms var(--ease-out);
-        }
-
-        .message.user {
-            align-self: flex-end;
-            background: linear-gradient(135deg, rgba(183, 96, 51, 0.14), rgba(183, 96, 51, 0.06));
-            border-color: rgba(183, 96, 51, 0.18);
-        }
-
-        .message.assistant {
-            align-self: flex-start;
-        }
-
-        .message.system {
-            align-self: center;
-            max-width: 100%;
-            background: rgba(42, 34, 26, 0.05);
-        }
-
-        .message.interrupted {
-            opacity: 0.8;
-            border-style: dashed;
-        }
-
-        .message-role {
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-        }
-
-        .message-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .message-time {
-            flex: 0 0 auto;
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            opacity: 0.9;
-        }
-
-        .message-text {
-            white-space: pre-wrap;
-            word-break: break-word;
-            line-height: 1.68;
-        }
-
-        .message-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .message-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 5px 9px;
-            border-radius: var(--radius-pill);
-            border: 1px solid rgba(42, 34, 26, 0.08);
-            background: rgba(255, 255, 255, 0.58);
-            font-size: 11px;
-        }
-
-        .message-chip strong {
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        details.debug-panel {
-            border-radius: 18px;
-            border: 1px solid var(--line);
-            background: var(--surface-strong);
-            /*overflow: hidden;*/
-        }
-
-        details.debug-panel summary {
-            list-style: none;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-            padding: 14px 16px;
-            color: var(--muted);
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        details.debug-panel summary::-webkit-details-marker {
-            display: none;
-        }
-
-        details.debug-panel summary::after {
-            content: "+";
-            color: var(--accent-strong);
-            font-size: 16px;
-            transition: transform var(--ease-out);
-        }
-
-        details.debug-panel[open] summary::after {
-            transform: rotate(45deg);
-        }
-
-        .debug-body {
-            display: grid;
-            gap: 14px;
-            padding: 0 16px 16px;
-        }
-
-        .player-frame {
-            overflow: hidden;
-            border-radius: 18px;
-            border: 1px solid var(--line);
-            background: rgba(42, 34, 26, 0.04);
-        }
-
-        .player-frame iframe {
-            width: 100%;
-            height: 200px;
-            border: 0;
-            background: #fff;
-        }
-
-        #attachmentList:empty::before,
-        #transcript:empty::before {
-            display: grid;
-            place-items: center;
-            min-height: 150px;
-            padding: 24px;
-            border-radius: 18px;
-            border: 1px dashed rgba(42, 34, 26, 0.14);
-            background: rgba(255, 255, 255, 0.42);
-            color: var(--muted);
-            text-align: center;
-            line-height: 1.75;
-        }
-
-        #attachmentList:empty::before {
-            content: "";
-        }
-
-        #transcript:empty::before {
-            content: "";
-        }
-
-        .transcript::-webkit-scrollbar,
-        .attachment-list::-webkit-scrollbar,
-        .log::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
-
-        .transcript::-webkit-scrollbar-thumb,
-        .attachment-list::-webkit-scrollbar-thumb,
-        .log::-webkit-scrollbar-thumb {
-            border: 2px solid transparent;
-            border-radius: var(--radius-pill);
-            background: rgba(109, 99, 88, 0.34);
-            background-clip: padding-box;
-        }
-
-        .transcript::-webkit-scrollbar-track,
-        .attachment-list::-webkit-scrollbar-track,
-        .log::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        @keyframes messageEnter {
-            from {
-                transform: translateY(8px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @media (max-width: 1440px) {
-            .workspace {
-                grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(320px, 380px);
-            }
-
-            .call-console {
-                grid-template-columns: 1fr;
-            }
-
-            .call-state-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-
-            .call-toolbar {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-
-            .controls-primary {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 1240px) {
-            body {
-                overflow: auto;
-            }
-
-            .app-shell,
-            .sidebar,
-            .main-column,
-            .history-column {
-                height: auto;
-            }
-
-            .workspace {
-                grid-template-columns: 1fr;
-                height: auto;
-            }
-
-            .panel,
-            .history-card {
-                position: static;
-            }
-
-            .panel {
-                max-height: none;
-            }
-
-            .history-card {
-                height: auto;
-                max-height: none;
-                min-height: 560px;
-            }
-
-            .history-summary {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-
-            .composer-grid,
-            .call-console {
-                grid-template-columns: 1fr;
-            }
-
-            .main-column {
-                grid-template-rows: none;
-            }
-
-            .call-state-main {
-                display: grid;
-                gap: 12px;
-            }
-
-            .call-state-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-
-            .call-toolbar {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-
-            .controls-primary {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-        }
-
-        @media (max-width: 760px) {
-            body {
-                padding: 14px;
-            }
-
-            .card {
-                border-radius: 22px;
-            }
-
-            .panel,
-            .stage-card,
-            .composer-card,
-            .history-card {
-                padding: 18px;
-            }
-
-            .stage-head,
-            .composer-head,
-            .history-head,
-            .send-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .metrics-grid,
-            .controls-primary,
-            .controls-secondary {
-                grid-template-columns: 1fr;
-            }
-
-            .message {
-                max-width: 100%;
-            }
-
-            .call-state-grid,
-            .history-summary {
-                grid-template-columns: 1fr;
-            }
-
-            .call-toolbar {
-                grid-template-columns: 1fr 1fr;
-            }
-
-            .player-frame iframe {
-                height: 180px;
-            }
-        }
-    </style>
+    <title>AVA · 端云协同多智能体实时演示</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20261117-router-test"/>
 </head>
 <body>
 <div class="app-shell">
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-dot"></span>
+            <div>
+                <div class="brand-name">AVA</div>
+                <div class="brand-sub">端云协同 · 多智能体实时助手</div>
+            </div>
+        </div>
+
+        <div class="session-switch">
+            <label for="sessionId">会话</label>
+            <input id="sessionId" type="text" placeholder="default" value="default"/>
+            <button class="btn btn-ghost btn-sm" id="btnApplySession" type="button">切换</button>
+            <code id="currentSessionId">default</code>
+        </div>
+
+        <div class="topbar-pills">
+            <span class="pill"><span class="pill-label">连接</span><span class="pill-value muted" id="connState">未连接</span></span>
+            <span class="pill"><span class="pill-label">会话</span><span class="pill-value muted" id="sessionState">-</span></span>
+            <span class="pill"><span class="pill-label">麦克风</span><span class="pill-value muted" id="micState">未开启</span></span>
+            <span class="pill"><span class="pill-label">静音</span><span class="pill-value muted" id="muteState">未静音</span></span>
+            <span class="call-timer" id="callTimer">00:00</span>
+        </div>
+    </header>
+
     <div class="workspace">
-        <aside class="sidebar">
-            <section class="card panel">
-                <h2 class="section-title">会话信息</h2>
-                <div class="meta-stack">
-                    <div class="meta-item">
-                        <small>会话 ID</small>
-                        <div class="session-switch-row">
-                            <input id="sessionId" type="text" placeholder="default" value="default"/>
-                            <button class="btn-soft" id="btnApplySession" type="button">切换</button>
-                        </div>
-                        <code id="currentSessionId">default</code>
-                    </div>
-
-                    <div class="meta-item">
-                        <small>连接地址</small>
-                        <code id="wsUrl">-</code>
-                    </div>
-
-                    <div class="meta-item">
-                        <small>路由 / 处理器</small>
-                        <code id="currentRoute">-</code>
-                        <code id="currentHandler">-</code>
-                    </div>
-
-                    <div class="meta-item">
-                        <small>能力 / 任务 / 知识</small>
-                        <code id="currentCapability">-</code>
-                        <code id="currentTask">-</code>
-                        <code id="currentKnowledge">-</code>
-                    </div>
-
-                    <div class="meta-item">
-                        <small>方法 / 受众 / 追问</small>
-                        <code id="currentMethod">-</code>
-                        <code id="currentAudience">-</code>
-                        <code id="currentFollowupType">-</code>
-                    </div>
-
-                    <div class="meta-item">
-                        <small>技能 / Prompt 来源</small>
-                        <code id="currentSkills">-</code>
-                        <code id="currentPromptSource">-</code>
-                    </div>
-
-                    <div class="meta-item">
-                        <small>实时播放器</small>
-                        <code><a id="playerUrl" href="#" target="_blank" rel="noreferrer">-</a></code>
-                        <div class="inline-actions">
-                            <button class="btn-soft" id="btnCopyPromptContext" type="button">复制 Prompt 调试上下文
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <details class="debug-panel">
-                    <summary>高级调试</summary>
-                    <div class="debug-body">
-                        <div class="meta-item">
-                            <small>音频规格</small>
-                            <code id="audioSpec">-</code>
-                        </div>
-
-                        <div class="meta-item">
-                            <small>当前多模态输入</small>
-                            <code id="multimodalSummary">无</code>
-                        </div>
-
-                        <div class="meta-item">
-                            <small>结构化分析</small>
-                            <pre class="log" id="artifactTextView">无</pre>
-                        </div>
-
-                        <div class="metrics-grid">
-                            <div class="metric-item">
-                                <small>ASR 最终结果</small>
-                                <div class="metric-value" id="metricAsrFinalLatency">-</div>
-                            </div>
-                            <div class="metric-item">
-                                <small>首个文本片段</small>
-                                <div class="metric-value" id="metricFirstTokenLatency">-</div>
-                            </div>
-                            <div class="metric-item">
-                                <small>首段音频</small>
-                                <div class="metric-value" id="metricFirstAudioLatency">-</div>
-                            </div>
-                            <div class="metric-item">
-                                <small>打断次数</small>
-                                <div class="metric-value" id="metricInterruptCount">0</div>
-                            </div>
-                        </div>
-
-                        <div class="meta-item">
-                            <small>轮次时序</small>
-                            <pre class="log" id="timelineView">无</pre>
-                        </div>
-
-                        <div class="meta-item">
-                            <small>系统指令</small>
-                            <pre class="log" id="promptView">无</pre>
-                        </div>
-
-                        <div class="meta-item">
-                            <small>事件日志</small>
-                            <pre class="log" id="log"></pre>
-                        </div>
-                    </div>
-                </details>
-            </section>
-        </aside>
-
-        <main class="main-column">
-            <section class="card stage-card">
-                <div class="call-console">
-                    <div class="call-primary">
-                        <div class="call-state-card">
-                            <div class="pill-value muted" id="speakerState">等待回复</div>
-                            <div class="call-state-grid">
-                                <div class="call-state-chip">
-                                    <span class="pill-label">连接</span>
-                                    <span class="pill-value muted" id="connState">未连接</span>
-                                </div>
-                                <div class="call-state-chip">
-                                    <span class="pill-label">麦克风</span>
-                                    <span class="pill-value muted" id="micState">未开启</span>
-                                </div>
-                                <div class="call-state-chip">
-                                    <span class="pill-label">会话</span>
-                                    <span class="pill-value muted" id="sessionState">-</span>
-                                </div>
-                                <div class="call-state-chip">
-                                    <span class="pill-label">静音</span>
-                                    <span class="pill-value muted" id="muteState">未静音</span>
-                                </div>
-                            </div>
-
-                            <div class="meter-box">
-                                <div class="meter-copy">
-                                    <span>输入音量</span>
-                                    <span id="levelValue">0%</span>
-                                </div>
-                                <div class="meter-track">
-                                    <div class="meter-fill" id="levelFill"></div>
-                                </div>
-                            </div>
-                            <div class="call-toolbar">
-                                <button id="btnConnect" class="btn-primary">连接</button>
-                                <button id="btnMic" class="btn-accent">开麦</button>
-                                <button id="btnInterrupt" class="btn-danger">打断</button>
-                                <button id="btnMute" class="btn-soft">静音</button>
-                                <button id="btnClear" class="btn-soft">清空</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="call-live-card">
-                        <div class="focus-label">实时转写</div>
-                        <div class="live-stack">
-                            <div class="live-stream-block">
-                                <small>ASR 实时结果</small>
-                                <p class="live-text" id="partial">等待实时识别...</p>
-                            </div>
-                            <div class="live-stream-block">
-                                <small>ASR 最终结果</small>
-                                <p class="live-text" id="final">等待最终转写...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-
-            </section>
-
-            <section class="card composer-card">
-                <div class="composer-head">
-                    <div>
-                        <h2 class="section-title">文本与附件</h2>
-                    </div>
-                </div>
-
-                <div class="composer-grid">
-                    <div class="pane-card">
-                        <div class="pane-head">
-                            <small>消息草稿</small>
-                            <span>按 Enter 发送，按 Shift + Enter 换行</span>
-                        </div>
-                        <input id="textInput"/>
-                        <div class="send-row">
-                            <button id="btnSend" class="btn-primary">发送文本</button>
-                        </div>
-                    </div>
-
-                    <div class="attachment-card">
-                        <div class="pane-head">
-                            <small>会话附件</small>
-                            <span>持续挂载到当前会话中</span>
-                        </div>
-                        <div class="attachment-row">
-                            <input id="attachmentInput" class="attachment-input" type="file" multiple
-                                   accept="image/*,audio/*,video/*,.pdf,.txt,.md,.json"/>
-                            <button id="btnPickAttachment" class="btn-soft">添加附件</button>
-                            <button id="btnClearAttachment" class="btn-soft">清空附件</button>
-                        </div>
-
-                        <div class="hint" id="stagedAttachmentState">
-                            附件上传后，会固定挂载在当前会话上，直到手动移除。
-                        </div>
-                        <div class="attachment-list" id="attachmentList"></div>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <aside class="history-column">
-            <section class="card history-card">
-                <div class="history-head">
-                    <div>
-                        <h2 class="section-title">会话历史</h2>
-                    </div>
-                </div>
-                <div class="history-shell">
+        <!-- 左列：对话 -->
+        <div class="chat-column">
+            <section class="card chat-card">
+                <div class="card-title">
+                    对话
                     <div class="history-summary">
-                        <div class="history-summary-card">
-                            <small>消息数</small>
-                            <strong id="historyMessageCount">0</strong>
+                        <span>消息 <strong id="historyMessageCount">0</strong></span>
+                        <span>轮次 <strong id="historyTurnCount">0</strong></span>
+                        <span>焦点 <strong id="historyFocus">-</strong></span>
+                    </div>
+                </div>
+
+                <div class="transcript" id="transcript"></div>
+
+                <div class="asr-strip">
+                    <div class="asr-block">
+                        <small>ASR 实时结果</small>
+                        <p id="partial">等待实时识别...</p>
+                    </div>
+                    <div class="asr-block">
+                        <small>ASR 最终结果</small>
+                        <p id="final">等待最终转写...</p>
+                    </div>
+                </div>
+
+                <div class="composer">
+                    <div class="composer-row">
+                        <textarea id="textInput" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+                        <button id="btnSend" class="btn btn-primary" type="button">发送</button>
+                    </div>
+                    <div class="attachment-tools">
+                        <input id="attachmentInput" class="attachment-input" type="file" multiple
+                               accept="image/*,audio/*,video/*,.pdf,.txt,.md,.json"/>
+                        <button id="btnPickAttachment" class="btn btn-ghost btn-sm" type="button">添加附件</button>
+                        <input id="attachmentUrlInput" type="text" placeholder="或粘贴附件 URL（图片 / 音视频 / 文件）"/>
+                        <button id="btnAddAttachmentUrl" class="btn btn-ghost btn-sm" type="button">添加链接</button>
+                        <button id="btnClearAttachment" class="btn btn-ghost btn-sm" type="button">清空附件</button>
+                    </div>
+                    <div class="hint" id="stagedAttachmentState">未选择附件。</div>
+                    <div class="attachment-list" id="attachmentList"></div>
+                </div>
+            </section>
+
+            <section class="card voice-card">
+                <div class="voice-buttons">
+                    <button id="btnConnect" class="btn btn-primary" type="button">连接会话</button>
+                    <button id="btnMic" class="btn btn-accent" type="button">开启麦克风</button>
+                    <button id="btnMute" class="btn btn-warn" type="button">静音</button>
+                    <button id="btnInterrupt" class="btn btn-danger" type="button">打断</button>
+                    <button id="btnClear" class="btn btn-ghost" type="button">清空</button>
+                </div>
+                <div class="meter-box">
+                    <span>输入音量</span>
+                    <div class="meter-track"><div class="meter-fill" id="levelFill"></div></div>
+                    <span id="levelValue">0%</span>
+                </div>
+                <span class="speaker-pill"><span class="pill-label">播报</span><span class="pill-value muted" id="speakerState">等待回复</span></span>
+            </section>
+        </div>
+
+        <!-- 右列：全链路观测 -->
+        <div class="observe-column">
+            <section class="card observe-card">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="pipeline" type="button">链路</button>
+                    <button class="tab-btn" data-tab="state" type="button">状态 <span class="tab-badge" id="tabBadgeState" hidden></span></button>
+                    <button class="tab-btn" data-tab="context" type="button">上下文</button>
+                    <button class="tab-btn" data-tab="perf" type="button">性能</button>
+                    <button class="tab-btn" data-tab="routertest" type="button">路由测试</button>
+                    <button class="tab-btn" data-tab="logs" type="button">日志</button>
+                </div>
+
+                <div class="tab-body">
+                    <!-- 链路 -->
+                    <div class="tab-panel" data-panel="pipeline">
+                        <div class="field">
+                            <small>路由（turn / session）</small>
+                            <div class="field-row">
+                                <code id="currentRoute">-</code>
+                                <span class="confidence-badge" id="routeConfidence">-</span>
+                            </div>
                         </div>
-                        <div class="history-summary-card">
-                            <small>轮次数</small>
-                            <strong id="historyTurnCount">0</strong>
+                        <div class="field">
+                            <small>处理器</small>
+                            <code id="currentHandler">-</code>
                         </div>
-                        <div class="history-summary-card">
-                            <small>当前焦点</small>
-                            <code id="historyFocus">-</code>
+                        <div class="profile-grid">
+                            <div class="field"><small>能力</small><code id="currentCapability">-</code></div>
+                            <div class="field"><small>任务</small><code id="currentTask">-</code></div>
+                            <div class="field"><small>知识</small><code id="currentKnowledge">-</code></div>
+                            <div class="field"><small>方法</small><code id="currentMethod">-</code></div>
+                            <div class="field"><small>受众</small><code id="currentAudience">-</code></div>
+                            <div class="field"><small>追问类型</small><code id="currentFollowupType">-</code></div>
+                            <div class="field"><small>技能</small><code id="currentSkills">-</code></div>
+                            <div class="field"><small>Prompt 来源</small><code id="currentPromptSource">-</code></div>
+                        </div>
+                        <div class="field">
+                            <small>模型选择（端云 / 分层）</small>
+                            <code id="modelSelectionView">-</code>
+                        </div>
+                        <div class="field">
+                            <small>技能编排</small>
+                            <pre id="orchestrationView">无</pre>
                         </div>
                     </div>
-                    <div class="history-scroll">
-                        <div class="transcript" id="transcript"></div>
+
+                    <!-- 状态 -->
+                    <div class="tab-panel" data-panel="state" hidden>
+                        <div class="field">
+                            <small>状态 Patch（白名单）</small>
+                            <pre id="statePatchView">无</pre>
+                        </div>
+                        <div class="field">
+                            <small>Agent 事件</small>
+                            <pre id="agentEventsView">无</pre>
+                        </div>
+                    </div>
+
+                    <!-- 上下文 -->
+                    <div class="tab-panel" data-panel="context" hidden>
+                        <div class="field">
+                            <small>系统指令</small>
+                            <pre id="promptView">无</pre>
+                        </div>
+                        <div class="field">
+                            <small>当前多模态输入</small>
+                            <pre id="multimodalSummary">无</pre>
+                        </div>
+                        <div class="field">
+                            <small>附件结构化分析</small>
+                            <pre id="artifactTextView">无</pre>
+                        </div>
+                        <div>
+                            <button class="btn btn-ghost btn-sm" id="btnCopyPromptContext" type="button">复制 Prompt 调试上下文</button>
+                        </div>
+                    </div>
+
+                    <!-- 性能 -->
+                    <div class="tab-panel" data-panel="perf" hidden>
+                        <div class="metrics-grid">
+                            <div class="metric-item"><small>ASR 最终结果</small><div class="metric-value" id="metricAsrFinalLatency">-</div></div>
+                            <div class="metric-item"><small>首个文本片段</small><div class="metric-value" id="metricFirstTokenLatency">-</div></div>
+                            <div class="metric-item"><small>首段音频</small><div class="metric-value" id="metricFirstAudioLatency">-</div></div>
+                            <div class="metric-item"><small>打断次数</small><div class="metric-value" id="metricInterruptCount">0</div></div>
+                        </div>
+                        <div class="field">
+                            <small>轮次时序（t0 → t8）</small>
+                            <div id="timelineView"></div>
+                        </div>
+                    </div>
+
+                    <!-- 路由测试 -->
+                    <div class="tab-panel" data-panel="routertest" hidden>
+                        <div class="field">
+                            <small>路由契约 / 端云配置</small>
+                            <pre id="rtContract">加载中...</pre>
+                        </div>
+                        <div class="field">
+                            <small>测试输入（文本 + 可选图片，支持多模态）</small>
+                            <textarea id="rtText" class="rt-input" placeholder="例如：帮我解这道题 / 这道题我做得对吗 / 今天天气怎么样"></textarea>
+                            <input id="rtImageUrl" type="text" placeholder="图片 URL 或 data: base64（可选，多模态）"/>
+                            <div class="rt-controls">
+                                <label>目标
+                                    <select id="rtTarget">
+                                        <option value="production">生产链路（端侧优先 + 云兜底）</option>
+                                        <option value="edge">端侧小模型直测（剪枝 + INT8）</option>
+                                    </select>
+                                </label>
+                                <label>视图
+                                    <select id="rtMode">
+                                        <option value="full">完整（意图 + 规划）</option>
+                                        <option value="classify">仅分类</option>
+                                        <option value="plan">仅规划</option>
+                                    </select>
+                                </label>
+                                <button class="btn btn-primary btn-sm" id="btnRunRouterTest" type="button">运行测试</button>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <small>结果</small>
+                            <div class="rt-result-meta" id="rtMeta">尚未运行。</div>
+                            <div class="rt-grid">
+                                <div class="rt-block"><small>分类</small><pre id="rtClassification">-</pre></div>
+                                <div class="rt-block"><small>规划</small><pre id="rtPlanning">-</pre></div>
+                            </div>
+                            <div class="rt-block"><small>原始输出</small><pre id="rtRaw">-</pre></div>
+                        </div>
+                    </div>
+
+                    <!-- 日志 -->
+                    <div class="tab-panel" data-panel="logs" hidden>
+                        <div class="field" style="flex:1; min-height:0;">
+                            <small>事件日志（最新在上）</small>
+                            <div class="log-box" id="log"></div>
+                        </div>
+                        <div class="meta-line">连接地址：<code id="wsUrl">-</code></div>
+                        <div class="meta-line">音频规格：<code id="audioSpec">-</code></div>
+                        <div class="meta-line">实时播放器：<a id="playerUrl" href="#" target="_blank" rel="noreferrer">-</a></div>
                     </div>
                 </div>
             </section>
-        </aside>
+        </div>
     </div>
 </div>
 
-<script type="module" src="/static/app.js?v=20260531-frontend-ws-fix-1"></script>
+<script type="module" src="/static/js/main.js?v=20261117-router-test"></script>
 </body>
 </html>
