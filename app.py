@@ -20,6 +20,7 @@ from ava.capabilities.asr.asr_streaming_client import StreamingASRClient
 from ava.capabilities.asr.asr_streaming_sdk import ASRError
 from ava.capabilities.asr.factory import build_asr_config
 from ava.pipeline.streaming import RealtimeConversationSession
+from ava.core.tracing import trace_event
 from ava.domain.conversation.state import ConversationState
 from configs import settings
 
@@ -42,7 +43,7 @@ class WSRuntime:
     """
 
     session: RealtimeConversationSession
-    asr: StreamingASRClient
+    asr: StreamingASRClient | None
     player_url: str
     asr_task: asyncio.Task | None = None
     event_task: asyncio.Task | None = None
@@ -448,6 +449,10 @@ def create_app() -> FastAPI:
     """创建 FastAPI 应用并注册 HTTP / WebSocket 路由。"""
     app = FastAPI(title="streaming-ava-realtime")
 
+    from ava.interfaces.http.router_test import router as router_test_router
+
+    app.include_router(router_test_router)
+
     # 提供一个最小可用的静态前端页面（非 Streamlit）。
     # 使用静态文件部署更轻量，无需额外打包工具即可直接运行。
     import pathlib
@@ -477,9 +482,14 @@ def create_app() -> FastAPI:
         # 从配置中组装 ASRConfig，兼容旧的扁平配置和新的 provider 配置。
         asr_cfg = build_asr_config(settings.asr_config)
 
-        # 创建实时会话与播放器桥接
+        # 创建实时会话与播放器桥接；ASR 不可用（如缺密钥）时降级为纯文本模式
         session, player_url = _build_bridge_session(ws, session_id)
-        runtime = WSRuntime(session=session, asr=StreamingASRClient(asr_cfg), player_url=player_url)
+        try:
+            asr_client: StreamingASRClient | None = StreamingASRClient(asr_cfg)
+        except Exception as exc:
+            _LOG.warning("ASR unavailable, text-only mode: %s", exc)
+            asr_client = None
+        runtime = WSRuntime(session=session, asr=asr_client, player_url=player_url)
 
         # 临时 PCM 缓冲区：将前端持续发送的小块音频拼成适合 ASR 上传的帧大小
         pcm_buffer = bytearray()
@@ -487,6 +497,8 @@ def create_app() -> FastAPI:
 
         async def _asr_result_loop():
             """Poll ASR results and forward them into the realtime session."""
+            if runtime.asr is None:
+                return
             try:
                 while not ws_closed.is_set():
                     results = runtime.asr.pop_results(max_items=16)
@@ -534,8 +546,15 @@ def create_app() -> FastAPI:
 
         try:
             # 启动流式 ASR，并创建两个后台消费任务
-            runtime.asr.start()
-            runtime.asr_task = asyncio.create_task(_asr_result_loop())
+            if runtime.asr is not None:
+                runtime.asr.start()
+                runtime.asr_task = asyncio.create_task(_asr_result_loop())
+            else:
+                await _safe_send_json(
+                    ws,
+                    {"type": "control", "action": "asr_unavailable", "detail": "text_only_mode"},
+                    ws_closed,
+                )
             runtime.event_task = asyncio.create_task(_session_event_loop())
 
             # 建连成功后向前端发送 hello 包，声明协议与初始状态
@@ -573,6 +592,8 @@ def create_app() -> FastAPI:
 
                     # 将音频帧通知给 session，用于本地实时状态跟踪
                     runtime.session.on_audio_frame(audio_bytes, ts=time.monotonic())
+                    if runtime.asr is None:
+                        continue
 
                     # 放入缓冲区，按固定帧大小切片发送给 ASR
                     pcm_buffer.extend(audio_bytes)
@@ -644,6 +665,8 @@ def create_app() -> FastAPI:
                     continue
 
                 if mtype == "mic_stopped":
+                    if runtime.asr is None:
+                        continue
                     # 前端通知“麦克风已停止采集”
                     # 将剩余缓冲区补齐后提交给 ASR，并显式 commit 当前输入段
                     try:
@@ -678,6 +701,16 @@ def create_app() -> FastAPI:
                     continue
 
                 if mtype == "playback_started":
+                    ctrl = runtime.session.active
+                    if ctrl is not None and ctrl.t8_playback_started_at is None:
+                        ctrl.t8_playback_started_at = time.monotonic()
+                        trace_event(
+                            "playback.started",
+                            actor="frontend",
+                            session_id=runtime.session.state.session_id,
+                            turn_id=ctrl.turn_id,
+                            trace_id=ctrl.trace_id,
+                        )
                     continue
 
                 if mtype == "text":
@@ -737,10 +770,11 @@ def create_app() -> FastAPI:
             runtime.session.shutdown()
 
             # 停止 ASR
-            try:
-                runtime.asr.stop()
-            except Exception:
-                pass
+            if runtime.asr is not None:
+                try:
+                    runtime.asr.stop()
+                except Exception:
+                    pass
 
             # 取消后台 ASR 结果任务
             if runtime.asr_task is not None:

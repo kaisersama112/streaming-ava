@@ -285,6 +285,35 @@ class ContextCompiler:
                 trimmed.append({**message, "content": new_content})
         return trimmed
 
+    @classmethod
+    def _flatten_current_artifacts(
+        cls,
+        state: ConversationState | None,
+        user_message: dict[str, Any],
+    ) -> dict[str, Any]:
+        """当前轮附件块转为缓存视觉/附件分析文本，供纯文本云模型消费。
+
+        原始多模态块已在 turn intake 由端侧视觉分析消费并缓存；
+        云侧（text-only）不能直接 fetch 本地/私有 image_url，故编译为分析文本。
+        """
+        content = user_message.get("content")
+        if not isinstance(content, list):
+            return dict(user_message)
+        new_content: list[dict[str, Any]] = []
+        for block in content:
+            if not isinstance(block, dict) or str(block.get("type", "") or "").strip() not in ARTIFACT_BLOCK_TYPES:
+                new_content.append(block)
+                continue
+            block_type = str(block.get("type", "") or "").strip()
+            summary = ""
+            if state is not None:
+                analysis = state.memory.cached_or_metadata_block_analysis(blocks_to_artifacts([block]))
+                summary = str(analysis.get("summary", "") or "").strip()
+            label = {"input_image": "图片", "input_audio": "音频", "input_file": "文件"}.get(block_type, "附件")
+            text = f"[{label}分析] {summary}" if summary else f"[{label}附件]"
+            new_content.append({"type": "input_text", "text": text})
+        return {**user_message, "content": new_content}
+
     def build_router_input(
         self,
         *,
@@ -378,7 +407,7 @@ class ContextCompiler:
             system=instructions.text,
             developer=developer,
             history=self._trim_history_artifacts(list(context.conversation)),
-            user=dict(context.current.user_message),
+            user=self._flatten_current_artifacts(state, context.current.user_message),
         )
         return CompiledConversationPayload(
             instructions=layered.render_instructions(),
@@ -425,7 +454,7 @@ class ContextCompiler:
             system=instructions.text,
             developer=developer,
             history=history,
-            user=dict(context.current.user_message),
+            user=self._flatten_current_artifacts(state, context.current.user_message),
         )
         return CompiledConversationPayload(
             instructions=layered.render_instructions(),

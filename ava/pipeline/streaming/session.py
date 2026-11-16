@@ -24,6 +24,7 @@ from ava.pipeline.speech import LatexAwareSpeechBuffer, should_apply_math_oraliz
 from ava.pipeline.streaming.barge_in import BargeInConfig, BargeInDetector
 
 # 实时事件定义
+from ava.core.tracing import new_trace_id, record_turn_evaluation, trace_event
 from ava.core.events.realtime import (
     AsrFinalEvent,
     AsrPartialEvent,
@@ -34,6 +35,7 @@ from ava.core.events.realtime import (
     ContextDebugEvent,
     ErrorEvent,
     MetricsDebugEvent,
+    PipelineDebugEvent,
     PromptPackageDebugEvent,
     PromptDebugEvent,
     RealtimeEventBus,
@@ -200,10 +202,14 @@ class RealtimeConversationSession:
         self.max_context_messages = settings.runtime.max_context_messages
 
         # 路由阶段最大上下文消息数
-        self.router_max_context_messages = int(self.max_context_messages)
+        self.router_max_context_messages = int(
+            getattr(settings.runtime, "router_max_context_messages", 0) or self.max_context_messages
+        )
 
         # 回复阶段最大上下文消息数
-        self.responder_max_context_messages = int(self.max_context_messages)
+        self.responder_max_context_messages = int(
+            getattr(settings.runtime, "responder_max_context_messages", 0) or self.max_context_messages
+        )
 
         # 提示词中心
         self.prompt_center = build_prompt_center()
@@ -628,6 +634,7 @@ class RealtimeConversationSession:
                 self.bridge.new_stream()
                 self.events.publish(ControlEvent(action="new_stream", detail="bridge_rebuilt", turn_id=ctrl.turn_id))
             except Exception as exc:
+                _LOG.exception("Bridge rebuild on interrupt failed: turn=%s", ctrl.turn_id)
                 self.events.publish(ErrorEvent(scope="bridge", message=str(exc), turn_id=ctrl.turn_id))
 
         self._emit_state(TurnStatus.LISTENING, turn_id=ctrl.turn_id, detail="interrupted")
@@ -674,6 +681,7 @@ class RealtimeConversationSession:
                 "t5_first_tts_submit": _delta(active.t5_first_tts_submit_at),
                 "t6_first_tts_chunk": _delta(active.t6_first_tts_chunk_at),
                 "t7_first_push_pcm": _delta(active.t7_first_push_pcm_at),
+                "t8_playback_started": _delta(active.t8_playback_started_at),
             }
         self.events.publish(
             MetricsDebugEvent(
@@ -1059,6 +1067,14 @@ class RealtimeConversationSession:
 
         try:
             ctrl.t1_prepare_state_done_at = time.monotonic()
+            ctrl.trace_id = ctrl.trace_id or new_trace_id()
+            # 端侧视觉分析（image->text）填充共享缓存，供路由/意图/主干多模态使用。
+            from ava.domain.multimodal.continuity import artifact_blocks, blocks_to_artifacts
+            from ava.domain.multimodal.edge_vision import ensure_visual_analysis
+
+            ensure_visual_analysis(
+                self.state.memory, blocks_to_artifacts(artifact_blocks(user_message))
+            )
             # 先构建用于路由的紧凑上下文。
             # 回复阶段会在执行计划构建时使用更完整的上下文。
             context = self.context_compiler.build_conversation_context(
@@ -1082,13 +1098,15 @@ class RealtimeConversationSession:
                 state=self.state,
                 user_message=user_message,
                 history_window=self.history_window,
-                max_context_messages=self.responder_max_context_messages,
+                max_context_messages=self.router_max_context_messages,
                 current_turn_id=ctrl.turn_id,
                 router_model=settings.openai_config.router_model,
                 responder_model=settings.openai_config.model,
                 timeout=int(settings.openai_config.timeout),
                 api_base=settings.openai_config.api_base,
                 api_key=settings.openai_config.api_key,
+                responder_max_context_messages=self.responder_max_context_messages,
+                trace_id=ctrl.trace_id,
             )
             route_result = prepared_turn.route_result
             plan = prepared_turn.turn_plan
@@ -1220,7 +1238,7 @@ class RealtimeConversationSession:
                 state=self.state,
                 plan=plan,
                 user_message=user_message,
-                context=context,
+                context=plan.runtime_context.conversation_context,
                 on_token=_handle_token,
                 current_turn_id=ctrl.turn_id,
                 model=settings.openai_config.model,
@@ -1230,8 +1248,21 @@ class RealtimeConversationSession:
                     "timeout": settings.openai_config.timeout,
                 },
                 stop_event=ctrl.stop_event,
+                trace_id=ctrl.trace_id,
             )
             ctrl.assistant_message = dict(reply_result.assistant_message or {})
+            reply_debug = dict(reply_result.debug or {})
+            self.events.publish(
+                PipelineDebugEvent(
+                    backend=reply_result.backend,
+                    model_selection=reply_debug.get("model_selection") or {},
+                    applied_state_patches=reply_debug.get("applied_state_patches") or [],
+                    rejected_state_patches=reply_debug.get("rejected_state_patches") or [],
+                    orchestration=reply_debug.get("orchestration") or {},
+                    agent_debug_events=reply_debug.get("agent_debug_events") or [],
+                    turn_id=ctrl.turn_id,
+                )
+            )
             assistant_output_buffer = _assistant_message_text(ctrl.assistant_message)
             llm_stream_finished_at = time.monotonic()
             _LOG.info(
@@ -1406,4 +1437,25 @@ class RealtimeConversationSession:
                 error_text = str(tts_pipeline.error)
                 if "wait for complete timeout" not in error_text.lower():
                     self.events.publish(ErrorEvent(scope="tts", message=error_text, turn_id=ctrl.turn_id))
+            timeline_ms: dict[str, float | None] = {}
+            if ctrl.t0_submit_at is not None:
+                def _eval_delta(ts_value: float | None) -> float | None:
+                    if ts_value is None:
+                        return None
+                    return max(0.0, (ts_value - ctrl.t0_submit_at) * 1000.0)
+
+                timeline_ms = {
+                    "t2_router_done": _eval_delta(ctrl.t2_router_done_at),
+                    "t4_first_token": _eval_delta(ctrl.t4_first_token_at),
+                    "total": _eval_delta(time.monotonic()),
+                }
+            record_turn_evaluation(
+                session_id=self.session_id,
+                turn_id=ctrl.turn_id,
+                trace_id=ctrl.trace_id,
+                evaluation=locals().get("evaluation") or {},
+                decision=decision,
+                reply_debug=locals().get("reply_debug") or {},
+                timeline_ms=timeline_ms,
+            )
             self.end_turn(ctrl)

@@ -100,6 +100,24 @@ class RealtimeAudioBridge:
             _LOG.info("RealtimeAudioBridge launched at %s (sr=%s).", self._url, self.config.sample_rate)
             return self._url
 
+    def _close_ui(self) -> None:
+        """Best-effort close of the gradio server to free its port.
+
+        Caller must hold ``self._lock``. The CloseStream sentinel only ends the
+        handler generator; it does NOT stop the gradio server, so without this
+        the port stays bound and a subsequent ``launch()`` on the same port
+        fails with "Cannot find empty port in range".
+        """
+        stream = self._stream
+        if stream is None:
+            return
+        try:
+            ui = getattr(stream, "ui", None)
+            if ui is not None and hasattr(ui, "close"):
+                ui.close(verbose=False)
+        except Exception:
+            _LOG.exception("Failed to close gradio UI server.")
+
     def stop_current_stream(self) -> None:
         """Request the current FastRTC receive stream to close.
 
@@ -115,6 +133,8 @@ class RealtimeAudioBridge:
                 self._queue.put_nowait(None)
             except Exception:
                 _LOG.exception("Failed to enqueue close sentinel for stop_current_stream().")
+            # Free the gradio port so new_stream() can rebind it.
+            self._close_ui()
             # Allow relaunch to create a new handler stream.
             self._launched = False
 
@@ -136,6 +156,8 @@ class RealtimeAudioBridge:
                 self._queue.put_nowait(None)
             except Exception:
                 pass
+            # Free the old gradio port before relaunching on the same port.
+            self._close_ui()
             # Replace the queue so a new handler won't see old sentinels/frames.
             self._queue = queue.Queue()
             self._launched = False
@@ -198,6 +220,8 @@ class RealtimeAudioBridge:
                 self._queue.put_nowait(None)
             except Exception:
                 _LOG.exception("Failed to enqueue close sentinel for handler.")
+            # 释放 gradio 端口，避免配置变更重建桥接时端口泄漏。
+            self._close_ui()
             # 清理stream
             self._stream = None
             _LOG.info("RealtimeAudioBridge closed.")

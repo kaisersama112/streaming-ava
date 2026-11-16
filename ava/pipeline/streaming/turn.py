@@ -40,6 +40,7 @@ class TurnControl:
     turn_id: int
     stop_event: threading.Event
     bridge: "RealtimeAudioBridge"
+    trace_id: str = ""
     user_message: dict[str, Any] = field(default_factory=dict)
     tts_pipeline: "StreamingVoicePipeline | None" = None
     status: TurnStatus = TurnStatus.IDLE
@@ -59,6 +60,7 @@ class TurnControl:
     t5_first_tts_submit_at: float | None = None
     t6_first_tts_chunk_at: float | None = None
     t7_first_push_pcm_at: float | None = None
+    t8_playback_started_at: float | None = None
     worker_thread: threading.Thread | None = None
     pump_thread: threading.Thread | None = None
     pump_metrics: dict[str, Any] = field(default_factory=dict)
