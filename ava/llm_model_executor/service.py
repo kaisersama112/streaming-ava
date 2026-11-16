@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from typing import Any
 
+import httpx
 from openai import OpenAI
 
 from configs import settings
@@ -115,10 +116,10 @@ class RequestPolicy:
         return override or str(context.model or "").strip()
 
     @staticmethod
-    def resolve_timeout(context: ModelRequestContext) -> int:
+    def resolve_timeout(context: ModelRequestContext) -> float:
         override = (context.metadata or {}).get("timeout")
         if override is not None:
-            return int(override)
+            return float(override)
         if context.task == InferenceTask.ROUTE:
             return int(getattr(settings.runtime, "router_timeout", 30) or 30)
         return int(getattr(settings.openai_config, "timeout", 60) or 60)
@@ -150,6 +151,8 @@ class OpenAIResponsesProvider:
             kwargs["base_url"] = self.api_base
         if timeout is not None:
             kwargs["timeout"] = timeout
+        # Windows 注册表代理可能含非法 IPv6 项，trust_env 会让 httpx 构造期崩溃
+        kwargs["http_client"] = httpx.Client(trust_env=False, timeout=timeout if timeout is not None else 60.0)
         return OpenAI(**kwargs)
 
     @staticmethod
@@ -180,6 +183,17 @@ class OpenAIResponsesProvider:
     def stream(self, request: InferenceRequest, *, stop_event=None):
         client = self._client(timeout=request.timeout)
         final_parts: list[str] = []
+        response_meta: dict[str, Any] = {}
+
+        def _capture(response_obj: Any) -> None:
+            response_id = str(getattr(response_obj, "id", "") or "")
+            if response_id:
+                response_meta["response_id"] = response_id
+            conversation = getattr(response_obj, "conversation", None)
+            conversation_id = str(getattr(conversation, "id", "") or "") if conversation is not None else ""
+            if conversation_id:
+                response_meta["conversation_id"] = conversation_id
+
         try:
             stream = client.responses.create(
                 model=request.model,
@@ -196,17 +210,19 @@ class OpenAIResponsesProvider:
                         final_parts.append(delta)
                         yield OutputTextDelta(delta)
                     continue
+                if event_type in {"response.created", "response.completed", "response.incomplete"}:
+                    _capture(getattr(event, "response", None))
                 if event_type == "response.completed":
                     yield InferenceCompleted(
                         text="".join(final_parts),
                         finish_reason="completed",
-                        metadata={},
+                        metadata=dict(response_meta),
                     )
                     return
             yield InferenceCompleted(
                 text="".join(final_parts),
                 finish_reason="completed",
-                metadata={},
+                metadata=dict(response_meta),
             )
         except Exception as exc:
             yield InferenceError(error=str(exc))
@@ -248,12 +264,23 @@ class LLMService:
         if instructions:
             payload["instructions"] = instructions
 
-        input_items = self._build_request_input(list(context.input or []))
+        metadata = dict(context.metadata or {})
+        previous_response_id = str(metadata.get("previous_response_id") or "").strip()
+        conversation_id = str(metadata.get("conversation_id") or "").strip()
+        raw_items = list(context.input or [])
+        if previous_response_id or conversation_id:
+            # 模型侧连续对话：历史由 Responses API 维护，本地只喂当前轮用户消息
+            raw_items = raw_items[-1:] if raw_items else []
+        input_items = self._build_request_input(raw_items)
         if input_items:
             payload["input"] = input_items
+        if previous_response_id:
+            payload["previous_response_id"] = previous_response_id
+        if conversation_id:
+            payload["conversation"] = conversation_id
 
         payload["temperature"] = self.policy.resolve_temperature(context)
-        extra_body = dict((context.metadata or {}).get("extra_body") or {})
+        extra_body = dict(metadata.get("extra_body") or {})
         if extra_body:
             payload.update(extra_body)
 
@@ -263,8 +290,17 @@ class LLMService:
             payload=payload,
             stream=stream,
             timeout=self.policy.resolve_timeout(context),
-            metadata=dict(context.metadata or {}),
+            metadata=metadata,
         )
+
+    def _provider_for(self, context: ModelRequestContext) -> OpenAIResponsesProvider:
+        """按请求 metadata 选择端点（小模型本地端点 / 云侧兜底真实生效）。"""
+        metadata = dict(context.metadata or {})
+        api_base = str(metadata.get("api_base") or "").strip()
+        api_key = str(metadata.get("api_key") or "").strip()
+        if api_base and (api_base != self.provider.api_base or api_key != self.provider.api_key):
+            return OpenAIResponsesProvider(api_base=api_base, api_key=api_key or self.provider.api_key)
+        return self.provider
 
     def route(self, context: ModelRequestContext) -> InferenceResult:
         return self.execute(context)
@@ -274,7 +310,7 @@ class LLMService:
 
     def execute(self, context: ModelRequestContext) -> InferenceResult:
         request = self.build_request(context)
-        return self.provider.chat(request)
+        return self._provider_for(context).chat(request)
 
     def stream_generate(
             self,
@@ -283,4 +319,4 @@ class LLMService:
             stop_event: threading.Event | None = None,
     ):
         request = self.build_request(context, stream=True)
-        yield from self.provider.stream(request, stop_event=stop_event)
+        yield from self._provider_for(context).stream(request, stop_event=stop_event)

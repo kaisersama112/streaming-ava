@@ -29,11 +29,14 @@ from agents import (
     Runner,
     function_tool,
 )
+import httpx
 from openai import AsyncOpenAI
 from openai.types.responses import ResponseTextDeltaEvent
 
 from ava.domain.conversation.state import ConversationState
+from ava.domain.conversation.state_patch import apply_state_patches
 from ava.inference_runtime.types import TurnPlan
+from ava.intent import tracing_setup  # noqa: F401  安装无导出 trace provider，须在 Runner.run 前生效
 from ava.multi_turn_context_builder.types import ConversationContext
 from ava.router_selector.schema import RouteDecision
 from configs import BASE_DIR, settings
@@ -96,6 +99,7 @@ class RuntimeAgentContext:
     plan: TurnPlan
     user_message: dict[str, Any]
     stop_event: threading.Event | None = None
+    trace_id: str = ""
     pending_state_patches: list[dict[str, Any]] = field(default_factory=list)
     debug_events: list[dict[str, Any]] = field(default_factory=list)
 
@@ -175,6 +179,7 @@ def _build_agents_sdk_model(
         api_key=model_config.api_key,
         base_url=model_config.api_base,
         timeout=model_config.timeout,
+        http_client=httpx.AsyncClient(trust_env=False, timeout=model_config.timeout),
     )
     return OpenAIChatCompletionsModel(
         model=(str(getattr(settings.runtime, "agents_sdk_model", "") or "").strip() or model_config.model),
@@ -307,7 +312,17 @@ async def seed_agent_session_from_context(session: JsonFileSession, context: Con
             seed_items.append({"role": role, "content": text})
             continue
         if isinstance(content, list) and content:
-            seed_items.append({"role": role, "content": content})
+            # ChatCompletions 转换器不认识 Responses 风格的 output_text，统一转成 text
+            normalized_blocks = []
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                block = dict(block)
+                if block.get("type") == "output_text":
+                    block["type"] = "text"
+                normalized_blocks.append(block)
+            if normalized_blocks:
+                seed_items.append({"role": role, "content": normalized_blocks})
 
     existing = [_json_safe(item) for item in await session.get_items()]
     if existing == seed_items:
@@ -423,6 +438,12 @@ def _build_manager_instructions(plan: TurnPlan):
             f"audience={prompt_profile.get('audience') or '-'}",
             f"skills={','.join(skill_names) or '-'}",
         ]
+        skill_hint = ""
+        if str(runtime.decision.turn_scene or "").strip() == "education":
+            skill_hint = (
+                "\n- 教育场景可调用 skill_solve / skill_check / skill_explain / skill_assess "
+                "技能子 Agent 完成对应子任务，再把结果汇总成最终回答。"
+            )
         return (
                 f"{base_prompt}\n\n"
                 "你位于执行层，只负责把当前轮计划执行好。\n"
@@ -431,6 +452,7 @@ def _build_manager_instructions(plan: TurnPlan):
                                                             "执行要求：\n"
                                                             "- 先根据需要读取最近对话与参考材料。\n"
                                                             "- 如发现可更新的轻量教学状态，可调用 note_state_patch 提交建议。\n"
+                                                            f"{skill_hint}\n"
                                                             "- 最终直接回答用户，不暴露内部分析过程。"
         ).strip()
 
@@ -480,6 +502,38 @@ def _has_non_text_blocks(context: ConversationContext) -> bool:
         isinstance(block, dict) and str(block.get("type", "") or "").strip() != "input_text"
         for block in list(context.current.user_message.get("content") or [])
     )
+
+
+def _build_skill_agent_tools(
+        plan: TurnPlan,
+        *,
+        model: Any,
+        model_settings: ModelSettings,
+        nested_run_config: RunConfig,
+) -> list[Any]:
+    """教育场景下把解题/批改/讲解/学情评估技能子 Agent 挂为 Manager 工具。"""
+    if str(plan.decision.turn_scene or "").strip() != "education":
+        return []
+    from ava.intent.skills import EDUCATION_SKILLS, build_subagent_instructions, skill_tool_description
+
+    tools: list[Any] = []
+    for skill in EDUCATION_SKILLS:
+        skill_agent = Agent[RuntimeAgentContext](
+            name=f"Skill SubAgent {skill}",
+            instructions=build_subagent_instructions(None, skill),
+            tools=[get_turn_plan, get_recent_history, note_state_patch],
+            model=model,
+            model_settings=model_settings,
+        )
+        tools.append(
+            skill_agent.as_tool(
+                tool_name=f"skill_{skill}",
+                tool_description=skill_tool_description(skill),
+                run_config=nested_run_config,
+                max_turns=3,
+            )
+        )
+    return tools
 
 
 def _build_manager_agent(
@@ -548,6 +602,13 @@ def _build_manager_agent(
         else []
     )
 
+    skill_tools = _build_skill_agent_tools(
+        plan,
+        model=model,
+        model_settings=model_settings,
+        nested_run_config=nested_run_config,
+    )
+
     return Agent[RuntimeAgentContext](
         name="AVA Execution Manager",
         instructions=_build_manager_instructions(plan),
@@ -557,6 +618,7 @@ def _build_manager_agent(
             get_reference_materials,
             note_state_patch,
             *specialist_tools,
+            *skill_tools,
         ],
         model=model,
         model_settings=model_settings,
@@ -572,19 +634,23 @@ def _current_user_input(user_message: dict[str, Any]) -> str | list[dict[str, ob
 
 
 def _apply_pending_state_patches(runtime: RuntimeAgentContext) -> list[dict[str, Any]]:
-    """在成功结束后应用允许写入的轻量状态补丁。"""
-    applied: list[dict[str, Any]] = []
-    allowed_education_keys = {"knowledge_point", "stage", "last_problem", "level"}
-    for patch in runtime.pending_state_patches:
-        key = str(patch.get("key", "") or "").strip()
-        value = str(patch.get("value", "") or "").strip()
-        reason = str(patch.get("reason", "") or "").strip()
-        if not key or not value:
-            continue
-        if key in allowed_education_keys:
-            runtime.state.memory.set_education_state_value(key, value[:160])
-            applied.append({"key": key, "value": value[:160], "reason": reason})
-    return applied
+    """在成功结束后按白名单应用状态补丁（唯一写入点）。"""
+    result = apply_state_patches(
+        runtime.state,
+        runtime.pending_state_patches,
+        actor="agents_sdk",
+        trace_id=str(getattr(runtime, "trace_id", "") or ""),
+    )
+    for item in result["rejected"]:
+        runtime.add_event(
+            "state.patch.rejected",
+            {
+                "key": item.get("key"),
+                "reject_reason": item.get("reject_reason"),
+                "reason": item.get("reason"),
+            },
+        )
+    return list(result["applied"])
 
 
 def _timeout_seconds(timeout: int | None = None) -> int:

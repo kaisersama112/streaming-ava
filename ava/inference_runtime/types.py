@@ -61,6 +61,9 @@ class TurnPlanDebug:
     router_plan: dict[str, Any] = field(default_factory=dict)
     active_skills: list[str] = field(default_factory=list)
     prompt_package: dict[str, Any] = field(default_factory=dict)
+    context_layers: dict[str, Any] = field(default_factory=dict)
+    context_snapshot: str = ""
+    model_selection: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

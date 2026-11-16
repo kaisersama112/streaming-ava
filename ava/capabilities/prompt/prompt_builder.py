@@ -91,7 +91,9 @@ def _resolve_skill_chain(strategy: "BranchStrategy", prompt_loader: PromptSkillL
     if strategy.branch == "education":
         capability = prompt_loader.load_capability("education")
         tasks = [prompt_loader.load_task(strategy.module or "solve")]
-        knowledges = [prompt_loader.load_knowledge(strategy.subject or "general-knowledge")]
+        subject = str(strategy.subject or "").strip()
+        knowledge_name = "general-knowledge" if subject in {"", "general"} else subject
+        knowledges = [prompt_loader.load_knowledge(knowledge_name)]
         methods = [prompt_loader.load_method((strategy.pedagogy or "step-by-step").replace("_", "-"))]
         audience_name = str(getattr(strategy, "audience", "") or "").strip()
         audiences = [prompt_loader.load_audience(audience_name)] if audience_name else []
