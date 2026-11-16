@@ -1,3 +1,7 @@
+# 密钥不再写入版本库，统一由环境变量注入：
+#   cosyvoice.api_key <- STREAMING_AVA_TTS_API_KEY
+#   step_fun.api_key  <- STREAMING_AVA_STEPFUN_API_KEY
+#   dou_bao.x_api_key <- STREAMING_AVA_DOUBAO_X_API_KEY
 voice_config:
   provider: "dou_bao" # cosyvoice / step_fun / dou_bao
   volume: 50
@@ -8,18 +12,18 @@ voice_config:
   timeout: 1200
   cosyvoice:
     api_base: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-    api_key: "sk-150866734fa64b428e4d7e642db1270b"
+    api_key: ""                 # 由 STREAMING_AVA_TTS_API_KEY 注入
     model: "cosyvoice-v3-flash"
     voice: "longanhuan"
     instruction: "你说话的角色是温和客服，你说话的情感是neutral。"
   step_fun:
-    api_key: "gTWpvu3Odj7HqKzeacQOFsFmo4vAAkqVkwGKD76vdcXtn61rQQ8BvZ6x5GBxtIgI"
+    api_key: ""                 # 由 STREAMING_AVA_STEPFUN_API_KEY 注入
     ws_url: "wss://api.stepfun.com/v1/realtime/audio"
     model: "stepaudio-2.5-tts"
     voice: "cixingnansheng"
     instruction: "你说话的角色是温和客服，你说话的情感是neutral。"
   dou_bao:
-    x_api_key: "d451d376-9f73-4d04-bf4a-2873339e5832"
+    x_api_key: ""               # 由 STREAMING_AVA_DOUBAO_X_API_KEY 注入
     x_api_resource_id: "seed-tts-2.0"
     req_params:
       model: "seed-tts-2.0-standard"

@@ -51,6 +51,39 @@ runtime:
   echo_detection_window_seconds: 0.5
   echo_detection_min_chars: 4
   echo_detection_similarity_threshold: 0.85
+  trace_log_file: "state/trace.jsonl"
+  trace_enabled: true
+  multi_intent_enabled: true
+  agents_sdk_orchestration_mode: "serial"
+  context_runtime_injection: true
+  visual_continuity_max_turns: 2
+  route_cache_enabled: true
+  route_cache_ttl_seconds: 120
+  parallel_prefetch_enabled: true
+  responder_continuity_enabled: false
+  model_selection_enabled: true
+  small_model: ""
+  fallback_model: ""
+  model_selection_min_confidence: 0.75
+
+intent_config:
+  enabled: false
+  provider: "api"
+  cloud_fallback_enabled: true
+  min_confidence: 0.6
+  cache_enabled: true
+  cache_ttl_seconds: 120
+  local:
+    runtime: "llama_cpp"
+    api_base: "http://127.0.0.1:8080/v1"
+    api_key: ""
+    model: "qwen3-4b-router"
+    timeout_ms: 700
+    threads: 0
+    n_gpu_layers: 0
+    ctx_size: 4096
+    kv_cache_reuse: true
+    no_think: true
 
 speech_postprocess:
   enabled: true

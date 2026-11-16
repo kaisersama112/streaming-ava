@@ -1,7 +1,10 @@
+# 密钥不再写入版本库，统一由环境变量注入：
+#   qwen3_asr.api_key  <- STREAMING_AVA_QWEN_ASR_API_KEY
+#   dou_bao.x_api_key  <- STREAMING_AVA_DOUBAO_ASR_X_API_KEY
 asr_config:
   provider: "dou_bao" # qwen3_asr / dou_bao
   qwen3_asr:
-    api_key: "sk-150866734fa64b428e4d7e642db1270b"
+    api_key: ""                 # 由 STREAMING_AVA_QWEN_ASR_API_KEY 注入
     model: "qwen3-asr-flash-realtime"
     input_audio_format: "pcm"
     sample_rate: 16000
@@ -14,7 +17,7 @@ asr_config:
     turn_detection_threshold: 0.45
     turn_detection_silence_duration_ms: 850
   dou_bao:
-    x_api_key: "d451d376-9f73-4d04-bf4a-2873339e5832"
+    x_api_key: ""               # 由 STREAMING_AVA_DOUBAO_ASR_X_API_KEY 注入
     x_api_resource_id: "volc.seedasr.sauc.duration"
     x_api_request_id: ""
     ws_url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"

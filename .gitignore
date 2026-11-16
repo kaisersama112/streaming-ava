@@ -12,4 +12,13 @@
 /outputs/
 /configs/model_config.example.yaml
 /configs/system_config.example.yaml
+# 本地密钥覆盖文件（开发者本地放真实值，禁止提交）
+configs/**/*.local.yaml
+configs/**/*.local.yml
+.env
+.env.*
+!.env.example
 .idea/
+/.venv/
+/data/
+/edge_router/models/
