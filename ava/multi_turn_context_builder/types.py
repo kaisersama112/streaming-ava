@@ -59,6 +59,31 @@ class CompiledInstructions:
 
 
 @dataclass(frozen=True)
+class CompiledContext:
+    """分层编译结果：system / developer(runtime) / history / user。"""
+
+    system: str
+    developer: str
+    history: list[dict[str, Any]] = field(default_factory=list)
+    user: dict[str, Any] = field(default_factory=dict)
+
+    def render_instructions(self) -> str:
+        parts = [part for part in (self.system.strip(), self.developer.strip()) if part]
+        return "\n\n".join(parts)
+
+    def render_input(self) -> list[dict[str, Any]]:
+        return [*self.history, dict(self.user)]
+
+    def to_layers(self) -> dict[str, Any]:
+        return {
+            "system": self.system,
+            "developer": self.developer,
+            "history": list(self.history),
+            "user": dict(self.user),
+        }
+
+
+@dataclass(frozen=True)
 class CompiledConversationPayload:
     """最终传给模型的一轮载荷。"""
 
@@ -67,3 +92,4 @@ class CompiledConversationPayload:
     context: ConversationContext
     active_skills: list[str] = field(default_factory=list)
     sections: dict[str, Any] = field(default_factory=dict)
+    layers: dict[str, Any] = field(default_factory=dict)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from ava.capabilities.prompt.prompt_builder import (
@@ -11,8 +13,16 @@ from ava.capabilities.prompt.prompt_builder import (
 )
 from ava.capabilities.prompt.prompt_loader import PromptCenter
 from ava.domain.conversation.state import ConversationState
+from ava.domain.multimodal.continuity import (
+    ARTIFACT_BLOCK_TYPES,
+    artifact_blocks,
+    blocks_to_artifacts,
+)
+from configs import settings
 
+from .runtime import build_runtime_payload, render_runtime_section
 from .types import (
+    CompiledContext,
     CompiledConversationPayload,
     CompiledInstructions,
     ContextSession,
@@ -20,6 +30,17 @@ from .types import (
     ConversationBuildOptions,
     ConversationContext,
 )
+
+
+def context_snapshot_hash(instructions: str, input_messages: list[dict[str, Any]]) -> str:
+    """上下文快照指纹，用于 trace 关联与缓存键。"""
+    blob = json.dumps(
+        {"instructions": instructions, "input": input_messages},
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
 class ContextCompiler:
@@ -231,14 +252,47 @@ class ContextCompiler:
         policy = dict(analysis.get("prompt_context_policy", {}) or {})
         return bool(policy.get("include_history_messages", True))
 
+    @classmethod
+    def _trim_history_artifacts(
+        cls,
+        conversation: list[dict[str, Any]],
+        *,
+        state: ConversationState | None = None,
+        summarize: bool = False,
+    ) -> list[dict[str, Any]]:
+        """历史冗余上下文裁剪：历史附件块替换为占位/摘要文本，当前轮附件保持原样。"""
+        trimmed: list[dict[str, Any]] = []
+        for message in conversation:
+            content = message.get("content")
+            if not isinstance(content, list):
+                trimmed.append(dict(message))
+                continue
+            new_content: list[dict[str, Any]] = []
+            for block in content:
+                if not isinstance(block, dict) or str(block.get("type", "") or "").strip() not in ARTIFACT_BLOCK_TYPES:
+                    new_content.append(block)
+                    continue
+                block_type = str(block.get("type", "") or "").strip()
+                summary = ""
+                if summarize and state is not None:
+                    artifacts = blocks_to_artifacts([block])
+                    analysis = state.memory.cached_or_metadata_block_analysis(artifacts)
+                    summary = str(analysis.get("summary", "") or "").strip()
+                label = {"input_image": "图片", "input_audio": "音频", "input_file": "文件"}.get(block_type, "附件")
+                text = f"[历史{label}摘要] {summary}" if summary else f"[历史{label}附件]"
+                new_content.append({"type": "input_text", "text": text})
+            if new_content:
+                trimmed.append({**message, "content": new_content})
+        return trimmed
+
     def build_router_input(
         self,
         *,
         context: ConversationContext,
     ) -> list[dict[str, Any]]:
-        """构造 router 阶段输入消息数组。"""
+        """构造 router 阶段输入消息数组（历史附件裁剪为占位，当前轮保留原始多模态块）。"""
         return [
-            *list(context.conversation),
+            *self._trim_history_artifacts(list(context.conversation)),
             dict(context.current.user_message),
         ]
 
@@ -247,12 +301,13 @@ class ContextCompiler:
         *,
         context: ConversationContext,
         strategy: Any | None,
+        state: ConversationState | None = None,
     ) -> list[dict[str, Any]]:
-        """构造 responder 阶段输入消息数组。"""
+        """构造 responder 阶段输入消息数组（历史附件裁剪为缓存摘要）。"""
         if not self._include_history(strategy):
             return [dict(context.current.user_message)]
         return [
-            *list(context.conversation),
+            *self._trim_history_artifacts(list(context.conversation), state=state, summarize=True),
             dict(context.current.user_message),
         ]
 
@@ -305,8 +360,9 @@ class ContextCompiler:
         *,
         prompt_center: PromptCenter,
         context: ConversationContext,
+        state: ConversationState | None = None,
     ) -> CompiledConversationPayload:
-        """编译 router 阶段完整载荷。"""
+        """编译 router 阶段完整载荷（system + developer runtime + history + user）。"""
         instructions = self._build_instructions(
             prompt_center=prompt_center,
             context=context,
@@ -314,12 +370,23 @@ class ContextCompiler:
             decision=None,
             task="router",
         )
+        developer = self._runtime_section(state=state, context=context, profile="router")
+        sections = dict(instructions.sections)
+        if developer:
+            sections["runtime"] = developer
+        layered = CompiledContext(
+            system=instructions.text,
+            developer=developer,
+            history=self._trim_history_artifacts(list(context.conversation)),
+            user=dict(context.current.user_message),
+        )
         return CompiledConversationPayload(
-            instructions=instructions.text,
-            input=self.build_router_input(context=context),
+            instructions=layered.render_instructions(),
+            input=layered.render_input(),
             context=context,
-            sections=instructions.sections,
+            sections=sections,
             active_skills=instructions.active_skills,
+            layers=layered.to_layers(),
         )
 
     def compile_responder_payload(
@@ -329,8 +396,9 @@ class ContextCompiler:
         context: ConversationContext,
         strategy: Any | None,
         decision: Any | None,
+        state: ConversationState | None = None,
     ) -> CompiledConversationPayload:
-        """编译 responder 阶段完整载荷。"""
+        """编译 responder 阶段完整载荷（system + developer runtime + history + user）。"""
         instructions = self._build_instructions(
             prompt_center=prompt_center,
             context=context,
@@ -338,10 +406,55 @@ class ContextCompiler:
             decision=decision,
             task="responder",
         )
-        return CompiledConversationPayload(
-            instructions=instructions.text,
-            input=self.build_responder_input(context=context, strategy=strategy),
+        developer = self._runtime_section(
+            state=state,
             context=context,
-            sections=instructions.sections,
-            active_skills=instructions.active_skills,
+            profile="responder",
+            decision=decision,
+            strategy=strategy,
         )
+        sections = dict(instructions.sections)
+        if developer:
+            sections["runtime"] = developer
+        history = (
+            self._trim_history_artifacts(list(context.conversation), state=state, summarize=True)
+            if self._include_history(strategy)
+            else []
+        )
+        layered = CompiledContext(
+            system=instructions.text,
+            developer=developer,
+            history=history,
+            user=dict(context.current.user_message),
+        )
+        return CompiledConversationPayload(
+            instructions=layered.render_instructions(),
+            input=layered.render_input(),
+            context=context,
+            sections=sections,
+            active_skills=instructions.active_skills,
+            layers=layered.to_layers(),
+        )
+
+    @staticmethod
+    def _runtime_section(
+        *,
+        state: ConversationState | None,
+        context: ConversationContext,
+        profile: str,
+        decision: Any | None = None,
+        strategy: Any | None = None,
+    ) -> str:
+        if state is None or not settings.runtime.context_runtime_injection:
+            return ""
+        try:
+            payload = build_runtime_payload(
+                state=state,
+                context=context,
+                profile=profile,
+                decision=decision,
+                strategy=strategy,
+            )
+            return render_runtime_section(payload)
+        except Exception:
+            return ""

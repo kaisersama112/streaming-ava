@@ -3,21 +3,35 @@
 from __future__ import annotations
 
 from collections import deque
+from typing import Any
 
 from ava.domain.conversation.summary import summarize_turn_records
+
+_ARTIFACT_TYPES = {"input_image", "input_audio", "input_file"}
+
+
+def _visual_turn_records(turn_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in turn_records
+        if any(
+            isinstance(block, dict) and str(block.get("type", "") or "").strip() in _ARTIFACT_TYPES
+            for block in list((record.get("user_message") or {}).get("content") or [])
+        )
+    ]
 
 
 class SummaryMemory:
     def __init__(self, memory_size: int) -> None:
         self.memory_size = max(1, int(memory_size or 8))
         self.recent_topics: deque[str] = deque(maxlen=self.memory_size)
-        self.context_summary: str = "?"
-        self.multimodal_context_summary: str = "?"
+        self.context_summary: str = "无"
+        self.multimodal_context_summary: str = "无"
 
     def reset(self) -> None:
         self.recent_topics = deque(maxlen=self.memory_size)
-        self.context_summary = "?"
-        self.multimodal_context_summary = "?"
+        self.context_summary = "无"
+        self.multimodal_context_summary = "无"
 
     def load_payload(self, payload: dict | None, *, turn_records: list[dict]) -> None:
         source = dict(payload or {})
@@ -35,7 +49,7 @@ class SummaryMemory:
                 max_turns=self.memory_size,
             ),
             "multimodal_context_summary": summarize_turn_records(
-                turn_records[-self.memory_size :],
+                _visual_turn_records(turn_records)[-self.memory_size :],
                 max_turns=self.memory_size,
             ),
         }
@@ -46,7 +60,7 @@ class SummaryMemory:
             max_turns=self.memory_size,
         )
         self.multimodal_context_summary = summarize_turn_records(
-            turn_records[-self.memory_size :],
+            _visual_turn_records(turn_records)[-self.memory_size :],
             max_turns=self.memory_size,
         )
 

@@ -20,6 +20,16 @@ class SessionMemory:
         self.summary_memory = SummaryMemory(self.memory_size)
         self.retriever = MemoryRetriever()
         self.projector = MemoryProjector()
+        self.user_facts: dict[str, str] = {}
+
+    def set_user_fact(self, key: str, value: str) -> None:
+        fact_key = str(key or "").strip()[:40]
+        fact_value = str(value or "").strip()[:160]
+        if not fact_key or not fact_value:
+            return
+        if len(self.user_facts) >= 24 and fact_key not in self.user_facts:
+            self.user_facts.pop(next(iter(self.user_facts)), None)
+        self.user_facts[fact_key] = fact_value
 
     @property
     def education_state(self) -> dict[str, Any]:
@@ -45,6 +55,7 @@ class SessionMemory:
         self.education_memory.reset()
         self.message_block_store.reset()
         self.summary_memory.reset()
+        self.user_facts = {}
 
     def to_payload(
         self,
@@ -55,6 +66,7 @@ class SessionMemory:
             **self.summary_memory.to_payload(turn_records=turn_records),
             "message_block_analysis_cache": self.message_block_store.to_payload(),
             "education_state": self.education_memory.to_payload(),
+            "user_facts": dict(self.user_facts),
         }
 
     def load_payload(
@@ -67,6 +79,11 @@ class SessionMemory:
         self.summary_memory.load_payload(payload, turn_records=turn_records)
         self.message_block_store.load_payload(payload.get("message_block_analysis_cache"))
         self.education_memory.load_payload(payload.get("education_state"))
+        self.user_facts = {
+            str(key).strip()[:40]: str(value).strip()[:160]
+            for key, value in dict(payload.get("user_facts") or {}).items()
+            if str(key or "").strip() and str(value or "").strip()
+        }
 
     def refresh_summaries(
         self,
@@ -164,5 +181,6 @@ class SessionMemory:
             "context_summary": self.context_summary,
             "multimodal_context_summary": self.multimodal_context_summary,
             "education_state": dict(self.education_state),
+            "user_facts": dict(self.user_facts),
             "message_block_analysis_cache_size": len(self.message_block_analysis_cache),
         }

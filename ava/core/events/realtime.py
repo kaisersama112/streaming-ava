@@ -226,6 +226,37 @@ class MetricsDebugEvent(BaseRealtimeEvent):
 
 
 @dataclass(frozen=True)
+class PipelineDebugEvent(BaseRealtimeEvent):
+    backend: str = ""
+    model_selection: dict[str, Any] = field(default_factory=dict)
+    applied_state_patches: list[dict[str, Any]] = field(default_factory=list)
+    rejected_state_patches: list[dict[str, Any]] = field(default_factory=list)
+    orchestration: dict[str, Any] = field(default_factory=dict)
+    agent_debug_events: list[dict[str, Any]] = field(default_factory=list)
+
+    def __init__(
+            self,
+            backend: str = "",
+            model_selection: dict[str, Any] | None = None,
+            applied_state_patches: list[dict[str, Any]] | None = None,
+            rejected_state_patches: list[dict[str, Any]] | None = None,
+            orchestration: dict[str, Any] | None = None,
+            agent_debug_events: list[dict[str, Any]] | None = None,
+            turn_id: int | None = None,
+            ts: float | None = None,
+    ):
+        object.__setattr__(self, "event_type", "debug_pipeline")
+        object.__setattr__(self, "ts", time.time() if ts is None else ts)
+        object.__setattr__(self, "turn_id", turn_id)
+        object.__setattr__(self, "backend", str(backend or ""))
+        object.__setattr__(self, "model_selection", dict(model_selection or {}))
+        object.__setattr__(self, "applied_state_patches", list(applied_state_patches or []))
+        object.__setattr__(self, "rejected_state_patches", list(rejected_state_patches or []))
+        object.__setattr__(self, "orchestration", dict(orchestration or {}))
+        object.__setattr__(self, "agent_debug_events", list(agent_debug_events or []))
+
+
+@dataclass(frozen=True)
 class AssistantTokenEvent(BaseRealtimeEvent):
     token: str = ""
 
