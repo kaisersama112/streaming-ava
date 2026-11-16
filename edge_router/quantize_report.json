@@ -1,0 +1,7 @@
+{
+  "scheme": "torch dynamic INT8 (language Linear->qint8, vision tower fp32)",
+  "language_fp32_bytes": 5241356288,
+  "language_int8_bytes": 1311034713,
+  "compression_vs_fp32": 0.7499,
+  "output": "edge_router\\models\\router-vision-int8"
+}

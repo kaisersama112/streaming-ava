@@ -1,0 +1,9 @@
+{
+  "steps": 2,
+  "max_steps": 2,
+  "trainable_params": 280171520,
+  "first_loss": 0.7522351741790771,
+  "last_loss": 0.6722536087036133,
+  "saved": false,
+  "out": ""
+}
