@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ava.capabilities.prompt.loaders import PromptSkillLoader
@@ -62,10 +62,22 @@ class EducationPlanResolver:
         )
         loader = PromptSkillLoader(prompt_center)
         capability = loader.load_capability("education")
-        task = loader.load_task(plan.module)
-        knowledge_name = "general-knowledge" if plan.subject == "general" else plan.subject
-        knowledge = loader.load_knowledge(knowledge_name)
-        method = loader.load_method(plan.pedagogy.replace("_", "-"))
+
+        task_names = set(loader.list_task_names())
+        module = plan.module if plan.module in task_names else self._fallback_module(decision, task_names)
+
+        knowledge_names = set(loader.list_knowledge_names())
+        subject = self._normalize_subject(plan.subject, knowledge_names)
+
+        method_names = set(loader.list_method_names())
+        pedagogy = self._normalize_pedagogy(plan.pedagogy, method_names)
+
+        if (module, subject, pedagogy) != (plan.module, plan.subject, plan.pedagogy):
+            plan = replace(plan, module=module, subject=subject, pedagogy=pedagogy)
+
+        task = loader.load_task(module)
+        knowledge = loader.load_knowledge(subject)
+        method = loader.load_method(pedagogy.replace("_", "-"))
 
         response_contract = {
             "module": plan.module,
@@ -85,6 +97,58 @@ class EducationPlanResolver:
             response_contract=response_contract,
             speech_policy=speech_policy,
         )
+
+    @staticmethod
+    def _fallback_module(decision: RouteDecision, task_names: set[str]) -> str:
+        """模型给出非法 module（如把学科当任务）时，按意图回退到合法任务。"""
+        intent = str(decision.intent or "").lower()
+        for token, candidate in (
+            ("solve", "solve"),
+            ("check", "check"),
+            ("correct", "check"),
+            ("grade", "check"),
+            ("explain", "explain"),
+            ("assess", "assess"),
+            ("fact", "fact"),
+            ("query", "qa"),
+            ("qa", "qa"),
+        ):
+            if token in intent and candidate in task_names:
+                return candidate
+        for candidate in ("solve", "qa", "answer"):
+            if candidate in task_names:
+                return candidate
+        return next(iter(task_names), "solve")
+
+    _SUBJECT_ALIASES = {
+        "algebra": "math", "geometry": "math", "calculus": "math",
+        "trigonometry": "math", "arithmetic": "math", "statistics": "math",
+        "maths": "math", "mathematics": "math",
+        "language": "chinese", "yuwen": "chinese",
+        "programming": "cs", "computer": "cs", "coding": "cs",
+    }
+
+    @classmethod
+    def _normalize_subject(cls, subject: str, knowledge_names: set[str]) -> str:
+        value = str(subject or "").strip()
+        if value in {"", "general"}:
+            return "general-knowledge" if "general-knowledge" in knowledge_names else value
+        if value in knowledge_names:
+            return value
+        alias = cls._SUBJECT_ALIASES.get(value.lower())
+        if alias and alias in knowledge_names:
+            return alias
+        return "general-knowledge" if "general-knowledge" in knowledge_names else value
+
+    @staticmethod
+    def _normalize_pedagogy(pedagogy: str, method_names: set[str]) -> str:
+        value = str(pedagogy or "").strip() or "step_by_step"
+        normalized = value.replace("_", "-")
+        if normalized in method_names:
+            return value
+        if "step-by-step" in method_names:
+            return "step_by_step"
+        return next(iter(method_names), value).replace("-", "_")
 
     def _normalize_plan(
         self,
