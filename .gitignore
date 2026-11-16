@@ -22,3 +22,5 @@ configs/**/*.local.yml
 /.venv/
 /data/
 /edge_router/models/
+# vendored 第三方仓库（自带 .git，内容巨大，由 download 脚本/子模块获取）
+/edge_router/llama.cpp/
